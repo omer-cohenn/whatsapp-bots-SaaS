@@ -1,0 +1,1 @@
+# Migrations go here (M2). One ordered .sql per change; RLS + grants ship with each table.

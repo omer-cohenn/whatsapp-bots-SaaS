@@ -1,0 +1,36 @@
+-- ============================================================================
+-- 0000_init.sql — Bizz_up database init (PLACEHOLDER)
+-- ----------------------------------------------------------------------------
+-- Owner:   DATA agent
+-- Status:  PLACEHOLDER for the M0+M1 minimal/bootable build. INTENTIONALLY EMPTY
+--          (no DDL). This run is plumbing only: the stack boots and a WhatsApp
+--          message provably reaches the backend. There are NO real features yet
+--          (no auth / bot / leads), and therefore NO application schema yet.
+--
+-- Why empty:
+--   For M0+M1 the backend's GET /healthz only needs Postgres to be *reachable*
+--   (it runs a trivial liveness probe such as `SELECT 1`). It does NOT read or
+--   write any application table. So no tables, roles, RLS, grants, extensions,
+--   or functions are created here.
+--
+-- WHAT LANDS IN M2 (the real schema — NOT in this file):
+--   The 9 tables, the two NON-service DB roles (app_role + gateway_role),
+--   pgcrypto, the current_business_id() bridge, and RLS (USING + WITH CHECK)
+--   + per-role grants on every tenant table — all shipped together, RLS never
+--   bolted on afterwards. The crown-jewel `whatsapp_credentials` gets ZERO
+--   grant for the dashboard role.
+--   Source of truth for that schema:
+--     docs/spec/data-model.md            (FINAL — 9 tables + Redis live chat)
+--     docs/spec/roadmap-parts/data.md    (D0.1–D0.7 build sequence)
+--     docs/spec/database-schema-security-review.md  (the MUST list)
+--
+-- Connection shapes the backend uses for /healthz (Postgres + Redis) are
+-- documented in: supabase/connection-contract.md
+--
+-- Do NOT add DDL to this file. When M2 begins, author the real schema in new,
+-- ordered migrations (e.g. 0001_roles_and_extensions.sql, 0002_core_tables.sql,
+-- ...), each carrying its own RLS + grants. This 0000 file stays a no-op marker
+-- so migration history starts cleanly from an empty database.
+-- ============================================================================
+
+-- (no statements — intentionally empty for M0+M1)

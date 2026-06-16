@@ -1,0 +1,23 @@
+{
+  "name": "bizz-up-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bizz_up WhatsApp gateway (Baileys) — M0+M1 minimal RECEIVE spike",
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20 <21"
+  },
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@hapi/boom": "10.0.1",
+    "@whiskeysockets/baileys": "6.7.23",
+    "express": "4.21.2",
+    "pino": "9.6.0",
+    "qrcode": "1.5.4",
+    "undici": "6.21.1"
+  }
+}

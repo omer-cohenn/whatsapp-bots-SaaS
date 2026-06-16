@@ -1,0 +1,12 @@
+# Gateway-local ignores (root .gitignore also covers node_modules/ and .env.*)
+
+# Spike Baileys auth state — MUST never be committed (session creds).
+# Real design encrypts these in the DB; on disk is dev-spike only (M6).
+auth/
+credentials/
+
+# deps + local env
+node_modules/
+.env
+.env.*
+!.env.example

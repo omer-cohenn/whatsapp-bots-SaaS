@@ -1,0 +1,39 @@
+[project]
+name = "bizzup-backend"
+version = "0.0.1"
+description = "Bizz_up backend — M0+M1 minimal FastAPI app (boots + WhatsApp webhook landing pad)"
+requires-python = ">=3.12,<3.13"
+
+# Pinned (==) for reproducible builds. A lockfile (requirements.lock) holds the
+# full transitive pin used by the Docker image.
+dependencies = [
+    "fastapi==0.115.6",
+    "uvicorn[standard]==0.34.0",
+    "gunicorn==23.0.0",
+    "pydantic==2.10.4",
+    "pydantic-settings==2.7.1",
+    "asyncpg==0.30.0",
+    "redis==5.2.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.4",
+    "pytest-asyncio==0.25.2",
+    "httpx==0.28.1",
+    "ruff==0.8.6",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["app", "app.api", "app.core", "app.models"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

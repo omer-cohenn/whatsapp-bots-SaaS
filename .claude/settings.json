@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Write(C:/Users/עמר כהן/Desktop/last_bo/**)",
+      "Edit(C:/Users/עמר כהן/Desktop/last_bo/**)",
+      "Write(C:/Users/עמר כהן/Desktop/qr_wa_scanner/**)",
+      "Edit(C:/Users/עמר כהן/Desktop/qr_wa_scanner/**)",
+      "Write(//last_bo/**)",
+      "Edit(//last_bo/**)",
+      "Write(//qr_wa_scanner/**)",
+      "Edit(//qr_wa_scanner/**)"
+    ]
+  }
+}

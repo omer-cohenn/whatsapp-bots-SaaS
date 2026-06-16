@@ -1,0 +1,13 @@
+# Keep the build context lean and never ship secrets or local cruft.
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+tests/
+README.md
