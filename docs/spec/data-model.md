@@ -116,7 +116,7 @@ The per-business config that **moves off disk into the DB** (old `system_prompt.
 |---|---|---|
 | `id` | `uuid` **PK** | |
 | `business_id` 🏢 | `uuid` → `businesses(id)` NOT NULL **UNIQUE** | one config per business, `ON DELETE CASCADE`. |
-| `lead_steps` | `jsonb` NOT NULL def `'[]'` | **(1)** the questionnaire: ordered steps (key, question, type, validation, required, options). |
+| `lead_steps` | `jsonb` NOT NULL def `'{}'` | **(1)** the questionnaire definitions, **keyed by lead name** so one business can collect several kinds of lead: `{ "<lead_name>": { "label": "...", "steps": [ {key,question,type,validation,required,options} ] } }`. |
 | `bot_profile` | `jsonb` NOT NULL def `'{}'` | **(2)** `name`, `system_prompt`, `tone` ("warm and pleasant"), language. |
 | `handoff_keywords` | `jsonb` def `'["נציג","אדם","human","agent"]'` | words that trigger handoff. |
 | `is_published` | `boolean` NOT NULL def `false` | drives **try-me vs live**. |
@@ -133,9 +133,10 @@ them back.**
 |---|---|---|
 | `id` | `uuid` **PK** | |
 | `business_id` 🏢 | `uuid` → `businesses(id)` NOT NULL | `ON DELETE CASCADE`. |
+| `lead_name` | `text` | which questionnaire this lead answered (a key in `bot_settings.lead_steps`); lets the dashboard group lead types. Not PII. |
 | `phone` | `text` 🔒 | customer phone. **Encrypted.** |
 | `contact_name` | `text` 🔒 | customer name. **Encrypted.** |
-| `answers` | `jsonb` 🔒 | answers so far (partial or full). **Encrypted blob.** Keys map to `bot_settings.lead_steps`. |
+| `answers` | `jsonb` 🔒 | answers so far (partial or full). **Encrypted blob.** Keys map to `bot_settings.lead_steps[lead_name].steps`. |
 | `status` | `text` NOT NULL def `'in_progress'` | **`in_progress`** (started) → **`new`** (completed) / **`abandoned`** (dropped); then `read` / `archived`. |
 | `last_step_index` | `int` | how far they got (for the funnel + "resume" follow-up). |
 | `is_test` | `boolean` NOT NULL def `false` | try-me leads excluded from real stats. |
@@ -146,7 +147,7 @@ them back.**
 | `submitted_at` | `timestamptz` | when completed (null if abandoned/in_progress). |
 
 - **🔒:** `phone`, `contact_name`, `answers` · **Tenant key:** `business_id`.
-- **Indexes:** `(business_id, status)` (the "abandoned leads to follow up" list); `(business_id, submitted_at DESC)`; `(business_id, last_activity_at)` (the abandoned sweep).
+- **Indexes:** `(business_id, status)` (the "abandoned leads to follow up" list); `(business_id, submitted_at DESC)`; `(business_id, last_activity_at)` (the abandoned sweep); `(business_id, lead_name)` (group by questionnaire).
 
 ### 8. `bot_builder_messages` — AI-assist bot-builder chat · tenant table · OPTIONAL
 The owner's chat with the AI assistant (proxied to Gemini) that writes `bot_settings`. Lets the owner **resume a

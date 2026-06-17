@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { fetchHealth } from '../lib/health.js'
+import { fetchHealth, type HealthResult } from '../lib/health'
+import Button from './ui/Button'
+import Card from './ui/Card'
 
 // Maps a tri-state (true / false / null=unknown) to an accessible badge.
-function StatusBadge({ state }) {
+function StatusBadge({ state }: { state: boolean | null }) {
   if (state === true) {
     return (
       <span className="font-medium text-ok" role="img" aria-label="תקין">
@@ -25,7 +27,7 @@ function StatusBadge({ state }) {
 }
 
 // One row: a human label + its status badge.
-function CheckRow({ label, state }) {
+function CheckRow({ label, state }: { label: string; state: boolean | null }) {
   return (
     <li className="flex items-center justify-between gap-4 border-t border-slate-100 py-2 first:border-t-0">
       <span className="text-slate-700">{label}</span>
@@ -35,7 +37,7 @@ function CheckRow({ label, state }) {
 }
 
 export default function StackHealth() {
-  const [health, setHealth] = useState(null)
+  const [health, setHealth] = useState<HealthResult | null>(null)
   const [loading, setLoading] = useState(true)
 
   const check = useCallback(async () => {
@@ -46,35 +48,28 @@ export default function StackHealth() {
   }, [])
 
   useEffect(() => {
-    check()
+    void check()
   }, [check])
 
   const backendUp = health?.ok === true
 
   return (
-    <section
-      aria-labelledby="health-title"
-      className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-    >
+    <Card className="w-full max-w-md">
       <div className="mb-3 flex items-center justify-between gap-4">
-        <h2 id="health-title" className="text-lg font-bold text-slate-900">
-          בריאות המערכת
-        </h2>
-        <button
-          type="button"
-          onClick={check}
-          disabled={loading}
-          className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-dark disabled:opacity-60"
-        >
+        <h2 className="text-lg font-bold text-slate-900">בריאות המערכת</h2>
+        <Button onClick={() => void check()} disabled={loading} className="px-3 py-1.5">
           {loading ? 'בודק…' : 'רענון'}
-        </button>
+        </Button>
       </div>
 
       {/* aria-live so screen readers announce status changes after a refresh. */}
       <ul aria-live="polite" aria-busy={loading} className="text-sm">
         <CheckRow label="שרת (Backend)" state={loading ? null : backendUp} />
-        <CheckRow label="מסד נתונים (Postgres)" state={loading ? null : health?.postgres ?? null} />
-        <CheckRow label="מטמון (Redis)" state={loading ? null : health?.redis ?? null} />
+        <CheckRow
+          label="מסד נתונים (Postgres)"
+          state={loading ? null : (health?.postgres ?? null)}
+        />
+        <CheckRow label="מטמון (Redis)" state={loading ? null : (health?.redis ?? null)} />
       </ul>
 
       {/* Plain-language footer line so a beginner can see what's wrong at a glance. */}
@@ -85,6 +80,6 @@ export default function StackHealth() {
             ? 'השרת מגיב דרך ‎/healthz.'
             : `אין מענה מהשרת${health?.error ? ` (${health.error})` : ''}. ודאו ש‑backend רץ.`}
       </p>
-    </section>
+    </Card>
   )
 }

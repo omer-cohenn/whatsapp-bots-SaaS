@@ -1,5 +1,12 @@
 # Database Schema — DRAFT (Bizz_up MVP / Phase 1)
 
+> ⚠️ **SUPERSEDED (2026-06-16).** The FINAL, authoritative data model is
+> [`data-model.md`](data-model.md) (9 tables + **Redis** live-chat — decision 0006).
+> This draft's separate `conversations`/`messages` tables were **not** built; M2
+> built the `data-model.md` schema (see `supabase/migrations/0001…0004`). Kept
+> for its table-by-table rationale only. The multi-lead `lead_steps` note below
+> is carried into the final model + the built tables.
+
 > **Status:** DRAFT for review (feeds the business + security reviewers). Produced by the DATA agent on 2026-06-16.
 > **Scope:** Phase 1 MVP only — **lead collection + human handoff + AI bot builder + try-me test**, multi-tenant.
 > **Explicitly OUT of scope (later phases):** booking tables (Phase 2), RAG/pgvector tables (Phase 3). Not designed here.
@@ -179,13 +186,13 @@ The connection **state machine + progress** the dashboard shows while linking vi
 
 ### 2.6 `bot_settings` — the bot's brain config (TWO jsonb fields)  *(tenant table)*
 
-Per Omer's explicit requirement, this carries **two `jsonb` fields**: `lead_steps` (the questionnaire the bot collects) and `bot_profile` (name + system prompt + tone). This is the per-business config that **moves off disk into Supabase** (old `system_prompt.json` + `menus_chat.json`; architecture upgrade 🗂️). One row per business.
+Per Omer's explicit requirement, this carries **two `jsonb` fields**: `lead_steps` (the questionnaires the bot collects) and `bot_profile` (name + system prompt + tone). This is the per-business config that **moves off disk into Supabase** (old `system_prompt.json` + `menus_chat.json`; architecture upgrade 🗂️). One row per business.
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | `uuid` **PK** default `gen_random_uuid()` | |
 | `business_id` | `uuid` → `businesses(id)` **NOT NULL UNIQUE** | **Tenant key.** UNIQUE = one config per business. `ON DELETE CASCADE`. |
-| `lead_steps` | `jsonb` NOT NULL default `'[]'` | **(1)** The **questionnaire definition** — the ordered lead columns/steps the bot collects (each step: key, question text, type, validation, required, options…). This is the *shape* of a lead. |
+| `lead_steps` | `jsonb` NOT NULL default `'{}'` | **(1)** The **questionnaire definitions — keyed by lead name** so one business can collect **several different kinds of lead** (e.g. car vs home insurance). Shape: `{ "<lead_name>": { "label": "...", "steps": [ {key, question, type, validation, required, options…} ] } }`. Each top-level key is the questionnaire id; each `steps` array is the *shape* of that lead. (Was a single flat array — changed to support multiple leads per business.) |
 | `bot_profile` | `jsonb` NOT NULL default `'{}'` | **(2)** `name`, `system_prompt`, `tone` / type-of-talk (e.g. "warm and pleasant"), plus language/persona. The bot's personality + instructions. |
 | `handoff_keywords` | `jsonb` default `'["נציג","אדם","human","agent"]'` | Words that trigger human handoff (from old `human_escalation_keywords`). *Optional add — supports the handoff path; reviewer may fold this into `bot_profile`.* |
 | `is_published` | `boolean` NOT NULL default `false` | Drives the **try-me vs live** distinction (build → test → go-live loop). `false` = still building/testing. |
@@ -197,7 +204,8 @@ Per Omer's explicit requirement, this carries **two `jsonb` fields**: `lead_step
 - **🔒 Encrypted:** none — this is the business's *own* configuration (its prompt/tone/questions), not customer PII. (Reviewer note: the system prompt is business-authored content, not secret PII; left in plaintext so the engine + bot-builder can read/write it directly. Flag if Omer considers prompts confidential IP worth encrypting.)
 - **Tenant key:** `business_id` 🏢.
 - **Indexes:** UNIQUE(`business_id`); GIN on `lead_steps` only if we later query inside it (not needed for MVP).
-- **Why two jsonb (not normalized tables):** the questionnaire and persona are read/written **as a whole** by the bot-builder and the conversation engine, change rarely, and have a flexible shape — `jsonb` matches that and keeps the MVP simple. If we later need per-step analytics we can normalize `lead_steps` into a `lead_step_definitions` table. *(noted for reviewers.)*
+- **Why two jsonb (not normalized tables):** the questionnaires and persona are read/written **as a whole** by the bot-builder and the conversation engine, change rarely, and have a flexible shape — `jsonb` matches that and keeps the MVP simple. If we later need per-step analytics we can normalize `lead_steps` into `questionnaires` + `lead_step_definitions` tables. *(noted for reviewers.)*
+- **Multiple questionnaires per business:** `lead_steps` is an **object keyed by lead name**, not a single array, so a business can offer several lead paths (e.g. car / home insurance). The active questionnaire's key is recorded on each saved lead (`leads.lead_name`, §2.7) and on the in-progress conversation (`conversations.current_flow_state`, §2.8). *(Reviewer note: the bot-builder must keep these keys stable — renaming a questionnaire key orphans existing leads' `lead_name`. Flag a rename strategy.)*
 
 ---
 
@@ -212,7 +220,8 @@ Every customer lead the bot captures. **PII encrypted at rest** (continues the o
 | `conversation_id` | `uuid` → `conversations(id)` | Which conversation produced it (nullable; a lead can exist without a kept conversation). `ON DELETE SET NULL`. |
 | `phone` | `text` 🔒 | Customer phone. **Encrypted.** |
 | `contact_name` | `text` 🔒 | Customer name if collected. **Encrypted.** |
-| `answers` | `jsonb` 🔒 | The questionnaire answers (keys map to `bot_settings.lead_steps`). **Encrypted as a blob** — stored as ciphertext (e.g. `{"_": "<ciphertext>"}`), matching the old `data = {"_": "<fernet>"}` pattern so all PII inside is protected at rest. |
+| `lead_name` | `text` | **Which questionnaire this lead answered** — the top-level key in `bot_settings.lead_steps` (e.g. `car_insurance`). Lets the dashboard tell lead types apart and group/filter by them. Not encrypted (it's a config label, not customer PII). |
+| `answers` | `jsonb` 🔒 | The questionnaire answers (keys map to the `steps` of `bot_settings.lead_steps[lead_name]`). **Encrypted as a blob** — stored as ciphertext (e.g. `{"_": "<ciphertext>"}`), matching the old `data = {"_": "<fernet>"}` pattern so all PII inside is protected at rest. |
 | `status` | `text` NOT NULL default `'new'` | `new` / `read` / `archived` — lets the dashboard mark leads handled. |
 | `is_test` | `boolean` NOT NULL default `false` | `true` if produced by **try-me test mode** (so test leads don't pollute real lead lists/stats). |
 | `submitted_at` | `timestamptz` default `now()` | When the lead completed. |
@@ -221,7 +230,7 @@ Every customer lead the bot captures. **PII encrypted at rest** (continues the o
 - **FKs:** `business_id → businesses(id)`, `conversation_id → conversations(id)`.
 - **🔒 Encrypted:** `phone`, `contact_name`, `answers`.
 - **Tenant key:** `business_id` 🏢.
-- **Indexes:** `business_id`; composite `(business_id, submitted_at DESC)` for the dashboard list; `(business_id, status)`.
+- **Indexes:** `business_id`; composite `(business_id, submitted_at DESC)` for the dashboard list; `(business_id, status)`; `(business_id, lead_name)` for grouping/filtering by questionnaire type.
 - **Note vs old schema:** old `leads` stored `flow_id` (encrypted) + `phone` (encrypted) + a `data` blob. We replace `flow_id` with the richer `conversation_id` link and an explicit `is_test` flag. Phone-as-encrypted-blob behavior is preserved.
 
 ---
@@ -239,7 +248,7 @@ One row per (business, customer) conversation. Tracks `bot` / `human` / `closed`
 | `customer_name` | `text` 🔒 | Display name from WhatsApp (`pushName`) if present. **Encrypted.** |
 | `chat_status` | `text` NOT NULL default `'bot'` | `bot` / `human` / `closed`. The handoff state. |
 | `is_test` | `boolean` NOT NULL default `false` | `true` for **try-me** conversations (no real WhatsApp). |
-| `current_flow_state` | `jsonb` default `'{}'` | In-progress lead-collection position (which step, partial answers). **Replaces the old volatile in-memory `flow_state._flows`** (bug: lost on restart, breaks multi-worker). Persisting it here makes flows survive restarts and work across workers. *(Reviewer note: partial answers here can contain PII mid-flow — consider encrypting this blob too, or only persisting the step index. Flagged.)* |
+| `current_flow_state` | `jsonb` default `'{}'` | In-progress lead-collection position — **which questionnaire is active (`lead_name`)**, which step within it, and partial answers (e.g. `{ "lead_name": "car_insurance", "step_index": 2, "answers": {…} }`). **Replaces the old volatile in-memory `flow_state._flows`** (bug: lost on restart, breaks multi-worker). Persisting it here makes flows survive restarts and work across workers. *(Reviewer note: partial answers here can contain PII mid-flow — consider encrypting this blob too, or only persisting `lead_name` + step index. Flagged.)* |
 | `last_msg_at` | `timestamptz` | Last inbound time; drives the 60-min auto-close loop (old `close_stale_conversations`). |
 | `created_at` | `timestamptz` default `now()` | |
 | `updated_at` | `timestamptz` default `now()` | |

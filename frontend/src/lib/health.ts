@@ -5,31 +5,44 @@
 const HEALTH_PATH = '/healthz'
 const TIMEOUT_MS = 4000
 
+const TRUTHY = ['ok', 'up', 'healthy', 'true', 'connected']
+
+export type HealthResult = {
+  ok: boolean
+  status: number | null
+  postgres: boolean | null
+  redis: boolean | null
+  error: string | null
+  raw: unknown
+}
+
 // Pull a boolean-ish sub-check out of whatever shape the backend returns.
 // The contract only guarantees "200 + Postgres+Redis reachable", not an exact
 // JSON shape, so we look in a few sensible places and stay tolerant.
-function readCheck(body, keys) {
+function readCheck(body: unknown, keys: string[]): boolean | null {
   if (!body || typeof body !== 'object') return null
-  const bag = body.checks && typeof body.checks === 'object' ? body.checks : body
+  const record = body as Record<string, unknown>
+  const nested = record.checks
+  const bag: Record<string, unknown> =
+    nested && typeof nested === 'object' ? (nested as Record<string, unknown>) : record
+
   for (const key of keys) {
     if (!(key in bag)) continue
     const v = bag[key]
     if (typeof v === 'boolean') return v
-    if (typeof v === 'string') return ['ok', 'up', 'healthy', 'true', 'connected'].includes(v.toLowerCase())
+    if (typeof v === 'string') return TRUTHY.includes(v.toLowerCase())
     if (v && typeof v === 'object') {
-      const s = v.status ?? v.ok ?? v.healthy
+      const inner = v as Record<string, unknown>
+      const s = inner.status ?? inner.ok ?? inner.healthy
       if (typeof s === 'boolean') return s
-      if (typeof s === 'string') return ['ok', 'up', 'healthy', 'true', 'connected'].includes(s.toLowerCase())
+      if (typeof s === 'string') return TRUTHY.includes(s.toLowerCase())
     }
   }
   return null // unknown — caller renders this as "unknown", not pass/fail
 }
 
-/**
- * Fetch backend health.
- * @returns {Promise<{ok: boolean, status: number|null, postgres: boolean|null, redis: boolean|null, error: string|null, raw: any}>}
- */
-export async function fetchHealth() {
+/** Fetch backend health. Tolerant of body shape; HTTP status drives up/down. */
+export async function fetchHealth(): Promise<HealthResult> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
   try {
@@ -38,16 +51,15 @@ export async function fetchHealth() {
       signal: controller.signal,
     })
 
-    let body = null
+    let body: unknown = null
     try {
       body = await res.json()
     } catch {
-      // Backend answered but not with JSON — that's fine; HTTP status still tells us up/down.
       body = null
     }
 
     return {
-      ok: res.ok, // 2xx => backend process is reachable and healthy
+      ok: res.ok,
       status: res.status,
       postgres: readCheck(body, ['postgres', 'db', 'database']),
       redis: readCheck(body, ['redis', 'cache']),
@@ -55,8 +67,7 @@ export async function fetchHealth() {
       raw: body,
     }
   } catch (err) {
-    // Network error / timeout / proxy can't reach backend.
-    const error = err?.name === 'AbortError' ? 'timeout' : 'unreachable'
+    const error = (err as Error)?.name === 'AbortError' ? 'timeout' : 'unreachable'
     return { ok: false, status: null, postgres: null, redis: null, error, raw: null }
   } finally {
     clearTimeout(timer)

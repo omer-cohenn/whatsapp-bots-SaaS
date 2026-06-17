@@ -85,6 +85,42 @@ services:
       start_period: 5s
 
   # =========================================================================
+  # migrate — one-shot schema/roles/RLS apply (M2). Runs after postgres is
+  # healthy and BEFORE the backend starts, so app_role/gateway_role exist by the
+  # time the backend connects. Runs as the superuser (POSTGRES_USER) and applies
+  # every supabase/migrations/*.sql in order, injecting the two role passwords as
+  # psql variables (so no secret is baked into the SQL). Idempotent → safe to
+  # re-run. The backend depends on this completing successfully.
+  # =========================================================================
+  migrate:
+    image: postgres:16-alpine
+    restart: "no"
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      GATEWAY_DB_PASSWORD: ${GATEWAY_DB_PASSWORD}
+    volumes:
+      - ../supabase:/supabase:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        for f in /supabase/migrations/*.sql; do
+          echo "migrate: applying $$(basename $$f)"
+          psql -v ON_ERROR_STOP=1 \
+               -v app_pw="$$APP_DB_PASSWORD" \
+               -v gw_pw="$$GATEWAY_DB_PASSWORD" \
+               -f "$$f"
+        done
+        echo "migrate: done"
+
+  # =========================================================================
   # backend — FastAPI brain (:8000). Owns GET /healthz (200 + checks Postgres
   # and Redis reachable) and the FROZEN webhook  POST /webhook/whatsapp.
   # Built from ./backend (that Dockerfile is the Backend agent's deliverable).
@@ -99,13 +135,15 @@ services:
       - ../infra/.env.local
     environment:
       # Inside the network the backend reaches Postgres/Redis by service name.
-      # These point DATABASE_URL / REDIS_URL at the compose services so a fresh
-      # clone works without hand-editing hosts. (.env.local still supplies the
-      # secrets; these just wire the in-network hostnames.)
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # DATABASE_URL connects as the NON-service app_role (so RLS applies — this
+      # is the M2 cutover from the M0 superuser DSN). GATEWAY_DATABASE_URL is the
+      # crown-jewel-only role, used by the gateway path + the isolation demo.
+      # (.env.local supplies the role passwords; these just wire the hostnames.)
+      DATABASE_URL: postgresql://app_role:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      GATEWAY_DATABASE_URL: postgresql://gateway_role:${GATEWAY_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-      # GATEWAY_API_TOKEN comes from env_file — the backend uses it to verify the
-      # X-Gateway-Token header on every inbound webhook call.
+      # GATEWAY_API_TOKEN + the encryption keys (PII_DATA_KEY / WA_CRED_KEK /
+      # PHONE_HMAC_KEY) come from env_file (../infra/.env.local).
       PORT: "8000"
     ports:
       - "8000:8000"
@@ -118,6 +156,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       # Hit our own /healthz from inside the container. Python is guaranteed
       # present in the backend image; curl/wget may not be, so use urllib.

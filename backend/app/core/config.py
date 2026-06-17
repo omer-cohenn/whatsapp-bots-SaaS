@@ -43,11 +43,33 @@ class Settings(BaseSettings):
     database_url: SecretStr = Field(..., alias="DATABASE_URL")
     redis_url: SecretStr = Field(..., alias="REDIS_URL")
 
+    # --- M2 encryption keys (separate domains; fail-closed, no defaults) ---
+    # PII_DATA_KEY / WA_CRED_KEK are Fernet keys (urlsafe-base64, 32 bytes).
+    pii_data_key: SecretStr = Field(..., alias="PII_DATA_KEY")
+    wa_cred_kek: SecretStr = Field(..., alias="WA_CRED_KEK")
+    phone_hmac_key: SecretStr = Field(..., alias="PHONE_HMAC_KEY")
+
+    # --- M2 gateway-role DSN (crown-jewel access). Optional in the shared app
+    # config: only the gateway / isolation demo connects as gateway_role. ---
+    gateway_database_url: SecretStr | None = Field(default=None, alias="GATEWAY_DATABASE_URL")
+
+    # --- Auth / session (Google OAuth login). All required (fail-closed). ---
+    # google_redirect_uri is non-secret but still required + non-blank (a wrong
+    # or empty redirect breaks the whole login flow), so it gets its own check.
+    google_client_id: SecretStr = Field(..., alias="GOOGLE_CLIENT_ID")
+    google_client_secret: SecretStr = Field(..., alias="GOOGLE_CLIENT_SECRET")
+    google_redirect_uri: str = Field(..., alias="GOOGLE_REDIRECT_URI")
+    session_secret: SecretStr = Field(..., alias="SESSION_SECRET")
+
     # --- Non-secret operational knobs (safe, explicit defaults allowed) ---
     app_env: str = Field(default="dev", alias="APP_ENV")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
-    @field_validator("gateway_api_token", "database_url", "redis_url")
+    @field_validator(
+        "gateway_api_token", "database_url", "redis_url",
+        "pii_data_key", "wa_cred_kek", "phone_hmac_key",
+        "google_client_id", "google_client_secret", "session_secret",
+    )
     @classmethod
     def _reject_blank_or_placeholder(cls, value: SecretStr) -> SecretStr:
         """Reject empty / whitespace / obvious placeholder secrets.
@@ -62,6 +84,18 @@ class Settings(BaseSettings):
         banned = {"change-me", "changeme", "my-secret-token", "secret", "todo"}
         if raw.lower() in banned:
             raise ValueError("must not be a placeholder/default value (fail-closed)")
+        return value
+
+    @field_validator("google_redirect_uri")
+    @classmethod
+    def _reject_blank_redirect(cls, value: str) -> str:
+        """google_redirect_uri is non-secret but still required + non-blank.
+
+        An empty redirect URI silently breaks the OAuth round-trip, so fail
+        closed on it just like the secrets above.
+        """
+        if not value.strip():
+            raise ValueError("GOOGLE_REDIRECT_URI must be set to a non-empty value (fail-closed)")
         return value
 
 

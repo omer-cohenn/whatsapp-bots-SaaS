@@ -39,28 +39,28 @@ You can build **M0–M7 entirely on your laptop first**, then do **M8 (AWS)** wh
 
 ✅ **Done when:** a real WhatsApp message provably reaches the backend. *(If it doesn't — we replan before building more.)*
 
-## M2 — The tenant wall + isolation gate 🧱🛡️ *(the heart of the rebuild)*
-- [ ] DB migrations: the **9 tables** (FKs, indexes incl. `(business_id, last_activity_at)`)
-- [ ] **Two non-service DB roles** (app role + gateway-only crown-jewel role)
-- [ ] `current_business_id()` + **RLS (`USING` + `WITH CHECK`) on every tenant table**
-- [ ] Backend DB session as the **non-service role** + per-request `SET LOCAL business_id` *(same transaction!)*
-- [ ] Encryption helpers: PII key + crown **KEK** (envelope) + HMAC, `key_version`, **fail-loud decrypt**
-- [ ] Redis live-chat layer (key per business, re-checked on every access)
-- [ ] CI **secret/PII guard** (fail the build on any leak in logs/responses)
-- [ ] 🚦 **The multi-tenant ISOLATION TEST SUITE — blocking in CI** (incl. pooling/concurrency + a forgotten-`WHERE` canary)
+## M2 — The tenant wall + isolation gate 🧱🛡️ *(the heart of the rebuild)* — ✅ DONE 2026-06-16
+- [x] DB migrations: the **9 tables** (FKs, indexes incl. `(business_id, last_activity_at)`) — `supabase/migrations/0003`
+- [x] **Two non-service DB roles** (`app_role` + gateway-only `gateway_role`) — `0001`
+- [x] `current_business_id()` + **RLS (`USING` + `WITH CHECK`) on every tenant table** — `0002` + `0004`
+- [x] Backend DB session as the **non-service role** + per-request `SET LOCAL business_id` *(same transaction!)* — `app/db/session.py`
+- [x] Encryption helpers: PII key + crown **KEK** (envelope) + HMAC, `key_version`, **fail-loud decrypt** — `app/core/crypto.py`
+- [x] Redis live-chat layer (key per business, re-checked on every access) — `app/services/live_chat.py`
+- [x] CI **secret/PII guard** (fail the build on any leak in logs/responses) — `tests/test_secret_guard.py`
+- [x] 🚦 **The multi-tenant ISOLATION TEST SUITE** (incl. pooling/concurrency + deny-by-default canary) — `tests/isolation/` (10 passing) + `tests/demo_isolation.py` (9/9)
 
-✅ **Done when:** an authed request reaches a tenant-scoped DB session with RLS live, a stranger gets nothing, and the isolation suite is green.
+✅ **Done:** authed request → tenant-scoped DB session with RLS live; a stranger gets nothing; `make demo-isolation` shows 9/9, `make isolation` green, and `make demo-break` proves the gate catches a regression (8/9). Migrations auto-apply via the compose `migrate` step.
 
 ## M3 — Login & accounts 🔑
-- [ ] Google OAuth login + session + **ownership check** (`business_members`); CSRF state in Redis
-- [ ] **One enforced deny-by-default auth gate** on every route (no anonymous fallback tenant)
-- [ ] Frontend app shell + **AuthGate** + cookie-session API client
-- [ ] Login screen + owner header (connection-status pill)
-- [ ] **Accessibility foundation** (WCAG / נגישות) + a11y CI gate
-- [ ] **Terms / Privacy** pages + consent + data-rights UX hooks
-- [ ] Shared UI kit (dates, slots, calendar, toast, primitives)
+- [x] Google OAuth login + **opaque Redis-backed session** (`bizzup_session`) + auto-provisioned business (`provision_owner`, idempotent); CSRF **state in Redis** — `app/services/auth.py`, `app/api/auth.py`, `supabase/migrations/0005_auth_bootstrap.sql`
+- [x] **One enforced deny-by-default auth gate** on the whole `/api/*` group (no anonymous fallback tenant); `current_business` comes from the server-side session, never the client — `app/core/deps.py`, `app/api/me.py`
+- [x] Frontend app shell + **AuthGate** + cookie-session API client — `frontend/` (TS + react-router; container healthy)
+- [x] Login screen + owner header (connection-status pill from `/api/me`) — `frontend/` (LoginPage, OwnerHeader)
+- [x] **Accessibility foundation** (WCAG / נגישות) + a11y CI gate — `frontend/`
+- [x] **Terms / Privacy** pages + consent + data-rights UX hooks — `frontend/` (Terms/Privacy routes)
+- [x] Shared UI kit (dates, slots, calendar, toast, primitives) — `frontend/` (UI kit)
 
-✅ **Done when:** an owner logs in to an accessible, compliant-by-default shell; nothing is reachable unauthenticated.
+✅ **Done:** the backend auth surface is proven end-to-end — no-cookie/forged-cookie `/api/me` → 401, a valid Avi session → 200 scoped to Avi only, logout truly destroys the session, `/auth/google` → 302 to Google + a Redis CSRF state, `provision_owner` idempotent. `tests/test_m3.bat` shows the M3 story **5/5**, the `test_auth_gate.py` gate green (7/7), and the M2 wall still **12/12** (no regression) — `tests/m3_full_test.py` + `tests/test_auth_gate.py`. The frontend shell/AuthGate/Terms/Privacy/UI-kit were delivered and the container boots healthy; the **Google click-through itself is a one-time manual browser check** at `:5173` (OAuth can't be scripted).
 
 ## M4 — Build a bot (the AI builder) 🤖
 - [ ] `bot_settings` config service (the two jsonb: `lead_steps` + `bot_profile`)

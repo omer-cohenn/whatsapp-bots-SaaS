@@ -1,13 +1,15 @@
 # STATUS — read this first to resume 📍
 
-> **Last updated: 2026-06-16.** This is the single "where are we / how do I continue" file. A new session
+> **Last updated: 2026-06-17.** This is the single "where are we / how do I continue" file. A new session
 > should read this, then [`spec/mvp-checklist.md`](spec/mvp-checklist.md).
 
 ## Phase: BUILD (the MVP). Mapping + ground-up re-spec are DONE.
 - ✅ **M0** — the stack runs (one command, all services healthy).
 - ✅ **M1** — WhatsApp receive works **end-to-end** (real inbound messages reach the backend webhook).
-- ⬜ **M2 — next:** the tenant wall (9 Postgres tables + RLS + 2 DB roles + the isolation test suite).
-- Then M3→M9 per the checklist.
+- ✅ **M2** — the tenant wall: 9 tables + 2 non-service DB roles + RLS (`USING`+`WITH CHECK`) + dual-key fail-loud encryption + Redis cache isolation + the isolation suite. Migrations auto-apply via the compose `migrate` step. **Verify:** `make demo-isolation` (9/9), `make isolation` (10 passing), `make demo-break` (8/9 then restored).
+- ✅ **M3** — login & accounts: Google OAuth + opaque Redis-backed sessions (`bizzup_session`) + the **deny-by-default** `/api` gate, wired onto the M2 tenant session. `provision_owner` auto-creates a business on first login (idempotent); logout truly destroys the session. **Verify:** `tests/test_m3.bat` → M3 narrated **5/5**, the `test_auth_gate.py` pytest gate green, and the M2 wall still **12/12** (no regression). A real Google click-through is a one-time manual check at `:5173`.
+- ⬜ **M4 — next:** per the checklist.
+- Then M4→M9 per the checklist.
 
 ## What works RIGHT NOW
 - Full local stack via `run.bat` (or `make dev`): **backend `:8000` · gateway `:3000` · frontend `:5173` · postgres · redis**, health-gated startup.
@@ -29,7 +31,10 @@
 - `gateway/` — Node/Baileys: QR connect, `/healthz`, forwards inbound; **+ dev-only `/inbox` & `/send`**.
 - `frontend/` — Vite + React + Tailwind + RTL: hero + StackHealth.
 - `infra/` — `docker-compose.yml` (health-gated), `.env.local.example`; plus root `Makefile`, `run.bat`, `stop.bat`.
-- `supabase/` — placeholder migration only (real 9-table schema = M2).
+- `supabase/` — **real schema** `migrations/0001…0004` (roles+pgcrypto, RLS bridge, 9 tables, RLS+grants) + `seed.sql` (2 demo tenants). `0000_init.sql` stays an empty marker.
+- `backend/app/` — **M2 additions:** `core/crypto.py` (dual-key, fail-loud), `db/session.py` (tenant `SET LOCAL`), `services/live_chat.py` (Redis cache isolation); `core/config.py` now requires the encryption keys (fail-closed).
+- `backend/tests/` — `isolation/` suite (10 passing) + `demo_isolation.py` (the readable 9/9 story) + `test_secret_guard.py`; **M3:** `m3_full_test.py` (the 5/5 story) + `test_auth_gate.py` (strict gate).
+- `backend/app/` — **M3 additions:** `services/auth.py` (Google OAuth + opaque Redis sessions), `core/deps.py` (`current_session/current_user/current_business`), `api/auth.py` (`/auth/google|callback|logout`), `api/me.py` (gated `/api/*` group + `GET /api/me`), `models/auth.py`; `core/config.py` now also requires `GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI` + `SESSION_SECRET` (fail-closed). `supabase/migrations/0005_auth_bootstrap.sql` adds the `provision_owner` / `get_user_businesses` SECURITY DEFINER funcs.
 
 ## Fixes we already made today (don't re-hit these)
 - **Port 6379 clash** → postgres/redis are **not** published to the host (internal-only on the Docker network).
@@ -42,9 +47,21 @@
 - Baileys creds sit as files in `gateway/auth/` (spike) — must move to the **encrypted DB** (crown jewel, `whatsapp_credentials`).
 
 ## Next steps
-1. *(recommended)* a **git checkpoint** of this working state (project is not yet under git).
-2. **M2 — the tenant wall**: build with the data + security + infra agents (9 tables, RLS, roles, isolation suite).
-3. Continue M3→M9 per [`spec/mvp-checklist.md`](spec/mvp-checklist.md).
+1. *(recommended)* a **git checkpoint** of the M3 working state.
+2. **One-time manual check:** click "Sign in with Google" at `http://localhost:5173`, confirm you land logged-in on your own business, then log out (OAuth needs a real browser, so a script can't do this part).
+3. Continue M4→M9 per [`spec/mvp-checklist.md`](spec/mvp-checklist.md).
+
+## How to verify M3 (anytime)
+- Double-click `tests/test_m3.bat`, or by hand:
+  - M3 story: `docker compose --env-file infra/.env.local -f infra/docker-compose.yml run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m3_full_test.py"` → **5/5**.
+  - M3 gate: same wrapper, `pip install -q pytest pytest-asyncio && PYTHONPATH=/app python -m pytest tests/test_auth_gate.py -q`.
+  - No-regression: re-run `tests/m2_full_test.py` → still **12/12**.
+
+## How to verify M2 (anytime)
+- `make demo-isolation` → reads the 9/9 "wall holds" story (start here).
+- `make isolation` → the pytest gate (10 passing), connecting as the real non-service roles.
+- `make demo-break` → drops a `WITH CHECK`, shows the demo catch it (8/9), then restores.
+- Note: in plain Git Bash `make` may be absent; the equivalent `docker compose … run` commands are in the `Makefile`.
 
 ## The map of everything
 - **Plan:** [`spec/roadmap.md`](spec/roadmap.md) · [`spec/mvp-checklist.md`](spec/mvp-checklist.md) · [`spec/build-guide.md`](spec/build-guide.md) · [`spec/architecture.md`](spec/architecture.md) · [`spec/data-model.md`](spec/data-model.md)

@@ -18,7 +18,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.auth import router as auth_router
 from app.api.health import router as health_router
+from app.api.me import api as api_router
 from app.api.webhook import router as webhook_router
 from app.core.clients import create_pg_pool, create_redis
 from app.core.config import get_settings
@@ -58,8 +60,12 @@ def create_app() -> FastAPI:
     )
     app.state.settings = settings
 
+    # Public routes: /healthz, /webhook/*, /auth/*. The /api/* group below is
+    # gated (deny-by-default) by a router-level session dependency.
     app.include_router(health_router)
     app.include_router(webhook_router)
+    app.include_router(auth_router)
+    app.include_router(api_router)
     return app
 
 

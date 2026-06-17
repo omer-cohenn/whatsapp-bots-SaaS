@@ -18,7 +18,7 @@
 # it, compose only looks for a .env in the project dir and the URLs come out blank.
 COMPOSE := docker compose --env-file infra/.env.local -f infra/docker-compose.yml
 
-.PHONY: help dev down logs ps build test lint isolation migrate seed
+.PHONY: help dev down logs ps build test lint isolation migrate seed demo-isolation demo-break
 
 help:
 	@echo "Bizz_up dev verbs:"
@@ -29,9 +29,11 @@ help:
 	@echo "  make build      - (re)build all images without starting them"
 	@echo "  make test       - run unit/integration tests for all apps              [M0-8]"
 	@echo "  make lint       - lint/format backend + gateway + frontend             [M0-8]"
-	@echo "  make isolation  - run the multi-tenant isolation suite (the gate)      [M2]"
-	@echo "  make migrate    - apply DB migrations                                  [M2]"
-	@echo "  make seed       - seed demo tenants (is_test)                          [M2]"
+	@echo "  make migrate    - apply DB migrations (9 tables + roles + RLS)         [M2]"
+	@echo "  make seed       - seed the two demo tenants (Avi / Bella)              [M2]"
+	@echo "  make isolation  - run the multi-tenant isolation suite (the CI gate)   [M2]"
+	@echo "  make demo-isolation - WATCH the wall hold (plain-language story)       [M2]"
+	@echo "  make demo-break - prove the gate catches a regression, then restore    [M2]"
 	@echo ""
 	@echo "First run: copy infra/.env.local.example -> infra/.env.local and fill it in."
 
@@ -59,14 +61,41 @@ ps:
 build:
 	$(COMPOSE) build
 
-# --- Stubs owned by later milestones (kept so the verb is discoverable) ----
-test:
-	@echo "TODO(M0-8): run test suites (backend pytest + gateway + frontend)"
+# --- M2: the tenant wall verbs --------------------------------------------
+# `compose run --rm migrate` waits for postgres to be healthy (depends_on), then
+# applies every supabase/migrations/*.sql in order as the superuser, injecting
+# the two role passwords as psql vars. Idempotent.
+migrate:
+	$(COMPOSE) run --rm migrate
+
+# Seed the two demo tenants (Avi Insurance / Bella Barber) as the superuser, by
+# reusing the migrate image (it has psql + the /supabase mount + PG* env).
+seed: migrate
+	$(COMPOSE) run --rm --entrypoint sh migrate -c "psql -v ON_ERROR_STOP=1 -f /supabase/seed.sql"
+
+# The CI gate: the isolation suite + the runtime secret guard. Runs inside a
+# throwaway backend container (has the app deps + the app_role/gateway_role env);
+# pytest is a dev-only dep, installed on the fly so it stays out of the prod image.
+isolation: seed
+	$(COMPOSE) run --rm backend sh -c "cd /app && pip install -q pytest==8.3.4 pytest-asyncio==0.25.2 && PYTHONPATH=/app python -m pytest tests/isolation tests/test_secret_guard.py -q"
+
+# Alias kept friendly: `make test` runs the same gate for now.
+test: isolation
+
+# WATCH IT WORK: the plain-language demo (no pytest). Seeds, then tries every
+# old attack and prints ✅/❌ per line. This is the one to read.
+demo-isolation: seed
+	$(COMPOSE) run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/demo_isolation.py"
+
+# Prove the gate is real: drop the WITH CHECK on leads (a regression), run the
+# demo (expect a LEAK on the cross-tenant insert), then re-apply migrations to
+# restore the wall. The leading '-' lets the breached run report without aborting.
+demo-break: seed
+	@echo ">>> Breaking the WITH CHECK on leads (simulating a regression)..."
+	$(COMPOSE) run --rm --entrypoint sh migrate -c "psql -v ON_ERROR_STOP=1 -c \"DROP POLICY IF EXISTS p_tenant_isolation ON leads; CREATE POLICY p_tenant_isolation ON leads USING (business_id = current_business_id()) WITH CHECK (true);\""
+	-$(COMPOSE) run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/demo_isolation.py"
+	@echo ">>> Restoring the wall (re-applying migrations)..."
+	$(COMPOSE) run --rm migrate
+
 lint:
 	@echo "TODO(M0-8): run linters/formatters (ruff/black + eslint/prettier)"
-isolation:
-	@echo "TODO(M2): run tests/isolation (must connect as the non-service role)"
-migrate:
-	@echo "TODO(M2): apply supabase/migrations"
-seed:
-	@echo "TODO(M2): apply supabase/seed via the real app roles"
