@@ -16,6 +16,9 @@ dependencies = [
     "redis==5.2.1",
     "cryptography==44.0.0",
     "httpx==0.28.1",
+    # M4: Google Gemini SDK (the unified google-genai client) for the AI bot
+    # builder. Used only when GEMINI_API_KEY is set (validate-at-use).
+    "google-genai==2.6.0",
 ]
 
 [project.optional-dependencies]

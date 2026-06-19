@@ -24,5 +24,10 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy,
+    // A Windows host → Linux container bind mount does NOT deliver inotify file
+    // events, so Vite's HMR never notices host edits (the page serves stale code
+    // until the container restarts). Poll the filesystem instead so saved changes
+    // hot-reload reliably. Slightly more CPU; perfectly fine for local dev.
+    watch: { usePolling: true, interval: 300 },
   },
 })

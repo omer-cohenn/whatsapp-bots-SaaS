@@ -15,6 +15,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 
+from app.api.bot_builder import router as bot_builder_router
 from app.core.deps import current_business, current_session, current_user
 from app.db.session import tenant_connection
 from app.models.auth import MeBusiness, MeConnection, MeResponse, MeUser
@@ -22,6 +23,10 @@ from app.models.auth import MeBusiness, MeConnection, MeResponse, MeUser
 # The router-level dependency is the gate: no /api/* route is reachable without
 # a valid session.
 api = APIRouter(prefix="/api", tags=["api"], dependencies=[Depends(current_session)])
+
+# Mount the M4 bot-builder routes under /api/bot/* — they inherit the gate above
+# (deny-by-default; no per-route opt-in to forget).
+api.include_router(bot_builder_router)
 
 
 async def _connection_status(request: Request, business_id: str) -> str:

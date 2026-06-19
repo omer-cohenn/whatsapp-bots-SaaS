@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bizz_up · סקיצת ממשק</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont/dist/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme:light;
+  --font-sans:'Heebo',-apple-system,'Segoe UI',Arial,sans-serif;
+  --color-background-primary:#ffffff;
+  --color-background-secondary:#f4f3ee;
+  --color-background-tertiary:#faf9f5;
+  --color-background-success:#EAF3DE;
+  --color-background-info:#E6F1FB;
+  --color-background-warning:#FAEEDA;
+  --color-background-danger:#FCEBEB;
+  --color-text-primary:#1b1b19;
+  --color-text-secondary:#5F5E5A;
+  --color-text-tertiary:#8a8980;
+  --color-text-success:#27500A;
+  --color-text-info:#0C447C;
+  --color-text-warning:#854F0B;
+  --color-text-danger:#A32D2D;
+  --color-border-tertiary:rgba(0,0,0,.12);
+  --color-border-secondary:rgba(0,0,0,.22);
+  --color-border-danger:rgba(163,45,45,.4);
+  --border-radius-md:8px;--border-radius-lg:12px;--border-radius-xl:16px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#ece9e1;color:var(--color-text-primary);font-family:var(--font-sans);-webkit-font-smoothing:antialiased}
+.page{max-width:800px;margin:0 auto;padding:26px 16px 40px}
+.phd{text-align:center;margin-bottom:18px}
+.phd .lg{display:inline-flex;align-items:center;gap:9px;margin-bottom:6px}
+.phd .lg span{width:30px;height:30px;border-radius:9px;background:#639922;color:#fff;display:inline-flex;align-items:center;justify-content:center}
+.phd h1{font-size:20px;font-weight:500;margin:0}
+.phd p{font-size:13.5px;color:var(--color-text-secondary);margin:5px 0 0}
+.nav{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:12px;color:#C0DD97;font-size:14px;cursor:pointer}
+.nav i{font-size:19px}
+.screen{flex:1;flex-direction:column;min-width:0}
+.hd{display:flex;align-items:center;justify-content:space-between;padding:11px 16px;background:var(--color-background-primary);border-bottom:0.5px solid var(--color-border-tertiary)}
+.ht{font-size:15px;font-weight:500}
+.bd{flex:1;padding:16px;display:flex;flex-direction:column;gap:13px;min-width:0}
+.btn{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:8px 14px;font-size:13px;cursor:pointer}
+.btnO{background:transparent;border:0.5px solid var(--color-border-secondary);color:var(--color-text-primary)}
+.btnG{background:#639922;color:#fff;border:0;font-weight:500}
+.mc{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:12px;padding:11px 13px;display:flex;flex-direction:column;gap:7px}
+.chip{width:30px;height:30px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:17px}
+.mc .v{font-size:22px;font-weight:500;line-height:1}
+.mc .l{font-size:12.5px;color:var(--color-text-secondary)}
+.noti{display:flex;align-items:center;gap:12px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:12px;padding:10px 13px}
+.nicon{width:38px;height:38px;border-radius:11px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:20px;flex:0 0 auto}
+.card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:12px;padding:11px 13px}
+.tab{padding:9px 12px;font-size:13.5px;color:var(--color-text-secondary);cursor:pointer;border-bottom:2px solid transparent}
+.seg{padding:6px 12px;border-radius:999px;font-size:12.5px;cursor:pointer;color:var(--color-text-secondary);white-space:nowrap}
+.vbtn{padding:6px 13px;border-radius:999px;font-size:12.5px;cursor:pointer;color:var(--color-text-secondary)}
+.step{display:flex;gap:9px;align-items:center;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:12px;padding:9px 11px}
+.snum{width:22px;height:22px;border-radius:50%;background:var(--color-background-success);color:var(--color-text-success);font-size:12px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.cbub{max-width:78%;font-size:13.5px;padding:9px 13px;line-height:1.5}
+.badge{font-size:11.5px;padding:3px 9px;border-radius:999px;flex:0 0 auto}
+.av{width:36px;height:36px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:500;flex:0 0 auto}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 18px;margin-top:11px;padding-top:11px;border-top:0.5px solid var(--color-border-tertiary)}
+.k{font-size:11px;color:var(--color-text-tertiary)}
+.val{font-size:13px}
+.sec{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:12px;padding:14px 16px}
+.sech{font-size:14.5px;font-weight:500;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.sech i{font-size:18px;color:#639922}
+.lbl{font-size:12px;color:var(--color-text-secondary);margin-bottom:5px;display:block}
+.inp{font-size:13.5px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:8px;padding:9px 12px}
+.tin{font-size:12.5px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:6px;padding:4px 9px}
+.apt{padding:11px 13px;font-size:13.5px;cursor:pointer;border-bottom:2px solid transparent;color:var(--color-text-secondary)}
+.slot{font-size:12.5px;border:0.5px solid var(--color-border-secondary);border-radius:999px;padding:5px 11px}
+.atime{text-align:center;flex:0 0 auto}
+.ainfo{flex:1;min-width:0;border-inline-start:0.5px solid var(--color-border-tertiary);padding-inline-start:12px}
+.dayrow{display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:0.5px solid var(--color-border-tertiary)}
+.tog{width:40px;height:23px;border-radius:999px;padding:2px;display:inline-flex;align-items:center;flex:0 0 auto;background:#639922;justify-content:flex-end}
+.togk{width:19px;height:19px;border-radius:50%;background:#fff}
+@keyframes td{0%,60%,100%{opacity:.3}30%{opacity:1}}
+.tdd{width:6px;height:6px;border-radius:50%;background:var(--color-text-tertiary);display:inline-block;animation:td 1.2s infinite}
+.tdd:nth-child(2){animation-delay:.18s}.tdd:nth-child(3){animation-delay:.36s}
+@keyframes pl{0%,100%{opacity:1}50%{opacity:.3}}
+.live{width:7px;height:7px;border-radius:50%;background:var(--color-text-info);display:inline-block;animation:pl 1.4s infinite}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="phd">
+    <div class="lg"><span><i class="ti ti-message-circle" style="font-size:18px"></i></span><h1>Bizz_up · סקיצת ממשק</h1></div>
+    <p>פרוטוטייפ אינטראקטיבי — התחבר עם Google ונווט בין המסכים בתפריט הצד.</p>
+  </div>
+
+<div dir="rtl" style="background:var(--color-background-tertiary);border:0.5px solid var(--color-border-tertiary);border-radius:16px;overflow:hidden;min-height:560px">
+  <div id="loginView" style="display:flex;align-items:center;justify-content:center;min-height:560px;padding:20px">
+    <div style="text-align:center;max-width:330px;width:100%;padding:30px 26px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:16px">
+      <span style="width:54px;height:54px;border-radius:16px;background:#639922;color:#fff;display:inline-flex;align-items:center;justify-content:center;margin-bottom:15px"><i class="ti ti-message-circle" style="font-size:27px"></i></span>
+      <div style="font-size:21px;font-weight:500;margin-bottom:6px">ברוכים הבאים ל-Bizz_up</div>
+      <div style="font-size:14px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:22px">הבוט שעונה ללקוחות, אוסף לידים וקובע פגישות — אוטומטית בוואטסאפ.</div>
+      <button id="loginBtn" style="display:inline-flex;align-items:center;gap:9px;background:#639922;color:#fff;border:0;border-radius:999px;padding:12px 22px;font-size:14.5px;font-weight:500;cursor:pointer"><i class="ti ti-brand-google" style="font-size:18px"></i> התחבר עם Google</button>
+      <div style="font-size:11.5px;color:var(--color-text-tertiary);margin-top:18px">בהתחברות אתה מאשר את <span style="color:#3B6D11">התנאים</span> ו<span style="color:#3B6D11">הפרטיות</span></div>
+    </div>
+  </div>
+  <div id="appView" style="display:none;min-height:560px">
+    <aside style="width:158px;background:#27500A;padding:14px 10px;display:flex;flex-direction:column;gap:3px">
+      <div style="display:flex;align-items:center;gap:8px;padding:4px 6px 16px"><span style="width:28px;height:28px;border-radius:9px;background:#639922;color:#fff;display:inline-flex;align-items:center;justify-content:center"><i class="ti ti-message-circle" style="font-size:18px"></i></span><span style="font-size:16px;font-weight:500;color:#fff">Bizz_up</span></div>
+      <div class="nav" data-nav="home" style="background:#639922;color:#fff"><i class="ti ti-home"></i> בית</div>
+      <div class="nav" data-nav="builder"><i class="ti ti-robot"></i> בונה הבוט</div>
+      <div class="nav" data-nav="tryme"><i class="ti ti-player-play"></i> נסה אותי</div>
+      <div class="nav" data-nav="leads"><i class="ti ti-users"></i> לידים</div>
+      <div class="nav" data-nav="appts"><i class="ti ti-calendar-event"></i> ניהול פגישות</div>
+      <div class="nav" data-nav="settings"><i class="ti ti-settings"></i> הגדרות</div>
+      <div class="nav" data-logout="1" style="margin-top:auto"><i class="ti ti-logout"></i> יציאה</div>
+    </aside>
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+
+      <div class="screen" data-screen="home" style="display:flex">
+        <div class="hd"><span class="ht">בית</span><span style="width:32px;height:32px;border-radius:50%;background:#639922;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:500">DI</span></div>
+        <div class="bd">
+          <div style="font-size:20px;font-weight:500">בוקר טוב, אורי</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(108px,1fr));gap:10px">
+            <div class="mc"><span class="chip" style="background:#639922"><i class="ti ti-user-plus"></i></span><div class="v">12</div><div class="l">לידים היום</div></div>
+            <div class="mc"><span class="chip" style="background:#1D9E75"><i class="ti ti-checks"></i></span><div class="v">8</div><div class="l">הושלמו</div></div>
+            <div class="mc"><span class="chip" style="background:#D85A30"><i class="ti ti-user-off"></i></span><div class="v">3</div><div class="l">ננטשו</div></div>
+            <div class="mc"><span class="chip" style="background:#378ADD"><i class="ti ti-calendar-event"></i></span><div class="v">5</div><div class="l">פגישות</div></div>
+          </div>
+          <div style="font-size:16px;font-weight:500">התראות</div>
+          <div class="noti"><span class="nicon" style="background:#639922"><i class="ti ti-user-plus"></i></span><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">ליד חדש</div><div style="font-size:13px;color:var(--color-text-secondary)">דנה לוי — ביטוח רכב</div></div><span style="font-size:12px;color:var(--color-text-tertiary)">עכשיו</span></div>
+          <div class="noti"><span class="nicon" style="background:#378ADD"><i class="ti ti-calendar-event"></i></span><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">פגישה נקבעה</div><div style="font-size:13px;color:var(--color-text-secondary)">מחר 10:00 עם יוסי כהן</div></div><span style="font-size:12px;color:var(--color-text-tertiary)">12 דק׳</span></div>
+          <div class="noti"><span class="nicon" style="background:#D85A30"><i class="ti ti-user-off"></i></span><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">ליד ננטש</div><div style="font-size:13px;color:var(--color-text-secondary)">עצר בשאלה 3 — שווה מעקב</div></div><span style="font-size:12px;color:var(--color-text-tertiary)">40 דק׳</span></div>
+        </div>
+      </div>
+
+      <div class="screen" data-screen="builder" style="display:none">
+        <div class="hd"><span class="ht">בונה הבוט</span><div style="display:flex;gap:9px"><button class="btn btnO"><i class="ti ti-device-floppy" style="font-size:16px"></i> שמור</button><button class="btn btnG"><i class="ti ti-sparkles" style="font-size:17px"></i> עוזר ה-AI</button></div></div>
+        <div class="bd">
+          <div style="display:flex;align-items:center;gap:4px;border-bottom:0.5px solid var(--color-border-tertiary)"><div class="tab" style="color:var(--color-text-primary);font-weight:500;border-bottom-color:#639922">ביטוח רכב</div><div class="tab">ביטוח דירה</div><div class="tab">דבר עם נציג</div><button style="background:var(--color-background-success);color:var(--color-text-success);border:0;border-radius:999px;padding:6px 12px;font-size:12.5px;cursor:pointer;margin-inline-start:6px">+ מסלול</button></div>
+          <div class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span style="font-size:13.5px;font-weight:500">סוג המסלול</span><div style="display:inline-flex;background:var(--color-background-secondary);border-radius:999px;padding:3px"><span class="seg" style="background:#639922;color:#fff">איסוף ליד</span><span class="seg">בסיס ידע</span><span class="seg">מעבר לנציג</span></div></div>
+          <div class="step"><span class="snum">1</span><div><div style="font-size:13.5px;font-weight:500">שם מלא</div><div style="font-size:12.5px;color:var(--color-text-secondary)">מה השם המלא שלך?</div></div></div>
+          <div class="step"><span class="snum">2</span><div><div style="font-size:13.5px;font-weight:500">טלפון</div><div style="font-size:12.5px;color:var(--color-text-secondary)">מה מספר הטלפון שלך?</div></div></div>
+          <button style="display:flex;align-items:center;justify-content:center;gap:6px;border:1px dashed var(--color-border-secondary);background:transparent;color:var(--color-text-secondary);border-radius:12px;padding:9px;font-size:13px;cursor:pointer"><i class="ti ti-plus" style="font-size:15px"></i> הוסף שלב</button>
+        </div>
+      </div>
+
+      <div class="screen" data-screen="tryme" style="display:none">
+        <div class="hd"><span class="ht">נסה אותי</span><button class="btn btnO"><i class="ti ti-refresh" style="font-size:16px"></i> התחל מחדש</button></div>
+        <div class="bd"><div style="flex:1;display:flex;flex-direction:column;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:16px;overflow:hidden">
+          <div style="padding:9px 14px;background:var(--color-background-info);color:var(--color-text-info);font-size:12.5px;border-bottom:0.5px solid var(--color-border-tertiary)"><i class="ti ti-flask"></i> מצב בדיקה — לא נשלח ללקוחות</div>
+          <div style="flex:1;padding:14px;display:flex;flex-direction:column;gap:10px;background:var(--color-background-secondary)">
+            <div class="cbub" style="align-self:flex-start;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:4px 16px 16px 16px">שלום! 1. ביטוח רכב 2. ביטוח דירה 3. נציג</div>
+            <div class="cbub" style="align-self:flex-end;background:#639922;color:#fff;border-radius:16px 4px 16px 16px">1</div>
+            <div class="cbub" style="align-self:flex-start;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:4px 16px 16px 16px">מעולה, מה השם המלא שלך?</div>
+            <div class="cbub" style="align-self:flex-start;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:4px 16px 16px 16px;display:flex;align-items:center;gap:9px"><span style="font-size:13px;color:var(--color-text-secondary)">הסוכן מקליד</span><span style="display:inline-flex;gap:3px"><span class="tdd"></span><span class="tdd"></span><span class="tdd"></span></span></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:11px;border-top:0.5px solid var(--color-border-tertiary)"><div style="flex:1;font-size:13px;color:var(--color-text-tertiary);background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:999px;padding:10px 14px">כתוב הודעה...</div><button style="width:38px;height:38px;border-radius:50%;background:#639922;color:#fff;border:0;cursor:pointer"><i class="ti ti-arrow-up" style="font-size:19px"></i></button></div>
+        </div></div>
+      </div>
+
+      <div class="screen" data-screen="leads" style="display:none">
+        <div class="hd"><span class="ht">לידים</span><button class="btn btnO"><i class="ti ti-download" style="font-size:16px"></i> ייצוא</button></div>
+        <div class="bd">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(108px,1fr));gap:10px">
+            <div class="mc"><span class="chip" style="background:#639922"><i class="ti ti-user-plus"></i></span><div class="v">12</div><div class="l">חדשים</div></div>
+            <div class="mc"><span class="chip" style="background:#378ADD"><i class="ti ti-clock"></i></span><div class="v">4</div><div class="l">פתוחים</div></div>
+            <div class="mc"><span class="chip" style="background:#D85A30"><i class="ti ti-user-off"></i></span><div class="v">8</div><div class="l">ננטשו</div></div>
+          </div>
+          <div style="display:inline-flex;background:var(--color-background-secondary);border-radius:999px;padding:3px;align-self:flex-start"><span class="seg" style="background:var(--color-background-primary);color:var(--color-text-primary)">הכול</span><span class="seg">פתוחים</span><span class="seg">חדשים</span><span class="seg">ננטשו</span></div>
+          <div class="card" style="border-color:#85B7EB"><div style="display:flex;align-items:center;gap:11px"><span class="av" style="background:var(--color-background-info);color:var(--color-text-info)">שד</span><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">שירה דדון</div><div style="font-size:12.5px;color:var(--color-text-secondary);display:flex;align-items:center;gap:6px">ביטוח דירה · <span class="live"></span> פעיל עכשיו</div></div><span class="badge" style="background:var(--color-background-info);color:var(--color-text-info)">פתוח</span></div><div class="grid"><div><div class="k">טלפון</div><div class="val">050-555-3344</div></div><div><div class="k">עיר</div><div class="val">תל אביב</div></div></div></div>
+          <div class="card" style="border-color:#EF9F27"><div style="display:flex;align-items:center;gap:11px"><span class="av" style="background:var(--color-background-warning);color:var(--color-text-warning)">מב</span><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">מאיה ברק</div><div style="font-size:12.5px;color:var(--color-text-secondary)">ביטוח רכב · עצר ב-3/4</div></div><span class="badge" style="background:var(--color-background-warning);color:var(--color-text-warning)">ננטש</span></div><div class="grid"><div><div class="k">טלפון</div><div class="val">053-555-7788</div></div><div><div class="k">תקציב</div><div class="val" style="color:var(--color-text-tertiary)">טרם נענה</div></div></div></div>
+        </div>
+      </div>
+
+      <div class="screen" data-screen="appts" style="display:none">
+        <div class="hd"><span class="ht">ניהול פגישות</span><button class="btn btnG"><i class="ti ti-plus" style="font-size:16px"></i> הוסף</button></div>
+        <div style="display:flex;gap:4px;padding:0 16px;background:var(--color-background-primary);border-bottom:0.5px solid var(--color-border-tertiary)"><div class="apt" data-apt="cal" style="color:var(--color-text-primary);font-weight:500;border-bottom-color:#639922">יומן</div><div class="apt" data-apt="avail">זמינות</div><div class="apt" data-apt="link">קישור</div></div>
+        <div class="bd">
+          <div data-aptab="cal" style="display:block">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px"><div style="display:inline-flex;background:var(--color-background-secondary);border-radius:999px;padding:3px"><span class="vbtn" data-cv-btn="day">יום</span><span class="vbtn" data-cv-btn="week">שבוע</span><span class="vbtn" data-cv-btn="month" style="background:#639922;color:#fff">חודש</span></div><span style="font-size:13.5px;font-weight:500">יוני 2026</span></div>
+            <div data-cv="month" style="display:block"><div id="mGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:12px"></div><div class="card" style="display:flex;align-items:center;gap:12px"><div class="atime"><div style="font-size:15px;font-weight:500">10:00</div></div><div class="ainfo"><div style="font-size:14px;font-weight:500">יוסי כהן</div><div style="font-size:12.5px;color:var(--color-text-secondary)">ביטוח רכב · 17.6</div></div><span class="badge" style="background:var(--color-background-warning);color:var(--color-text-warning)">ממתין</span></div></div>
+            <div data-cv="week" style="display:none"><div style="display:flex;gap:6px"><span class="slot" style="flex:1;text-align:center;background:var(--color-background-success)">א׳17<br>2</span><span class="slot" style="flex:1;text-align:center;background:var(--color-background-warning)">ג׳19<br>3</span><span class="slot" style="flex:1;text-align:center;background:var(--color-background-success)">ה׳21<br>2</span><span class="slot" style="flex:1;text-align:center;opacity:.5">ש׳23</span></div></div>
+            <div data-cv="day" style="display:none"><div class="card"><div style="display:flex;align-items:center;gap:12px"><div class="atime"><div style="font-size:15px;font-weight:500">10:00</div></div><div class="ainfo"><div style="font-size:14px;font-weight:500">יוסי כהן</div><div style="font-size:12.5px;color:var(--color-text-secondary)">ביטוח רכב</div></div><span class="badge" style="background:var(--color-background-warning);color:var(--color-text-warning)">ממתין</span></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 14px;margin-top:10px;padding-top:10px;border-top:0.5px solid var(--color-border-tertiary)"><div><div class="k">טלפון</div><div class="val">052-555-1234</div></div><div><div class="k">אימייל</div><div class="val">yossi@mail.com</div></div><div><div class="k">הערה</div><div class="val">בוקר</div></div></div></div></div>
+          </div>
+          <div data-aptab="avail" style="display:none">
+            <div class="sec" style="margin-bottom:13px"><div class="sech"><i class="ti ti-clock-hour-4"></i> משך ושם השירות</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px"><div><span class="lbl">שם השירות</span><div class="inp">פגישת ייעוץ</div></div><div><span class="lbl">משך</span><div style="display:inline-flex;background:var(--color-background-secondary);border-radius:999px;padding:3px"><span class="seg">15</span><span class="seg" style="background:#639922;color:#fff">30</span><span class="seg">45</span><span class="seg">60</span></div></div></div></div>
+            <div class="sec"><div class="sech"><i class="ti ti-calendar-week"></i> ימי ושעות עבודה</div>
+              <div class="dayrow"><span style="width:54px;font-size:13.5px">ראשון</span><span class="tog"><span class="togk"></span></span><div style="display:flex;gap:7px"><span class="tin">09:00</span><span style="font-size:12px;color:var(--color-text-tertiary)">עד</span><span class="tin">17:00</span></div></div>
+              <div class="dayrow"><span style="width:54px;font-size:13.5px">שני</span><span class="tog"><span class="togk"></span></span><div style="display:flex;gap:7px"><span class="tin">09:00</span><span style="font-size:12px;color:var(--color-text-tertiary)">עד</span><span class="tin">17:00</span></div></div>
+              <div class="dayrow"><span style="width:54px;font-size:13.5px">שלישי</span><span class="tog"><span class="togk"></span></span><div style="display:flex;gap:7px"><span class="tin">09:00</span><span style="font-size:12px;color:var(--color-text-tertiary)">עד</span><span class="tin">17:00</span></div></div>
+              <div class="dayrow"><span style="width:54px;font-size:13.5px">רביעי</span><span class="tog"><span class="togk"></span></span><div style="display:flex;gap:7px"><span class="tin">09:00</span><span style="font-size:12px;color:var(--color-text-tertiary)">עד</span><span class="tin">17:00</span></div></div>
+              <div class="dayrow"><span style="width:54px;font-size:13.5px">חמישי</span><span class="tog"><span class="togk"></span></span><div style="display:flex;gap:7px"><span class="tin">09:00</span><span style="font-size:12px;color:var(--color-text-tertiary)">עד</span><span class="tin">17:00</span></div></div>
+              <div class="dayrow"><span style="width:54px;font-size:13.5px">שישי</span><span class="tog"><span class="togk"></span></span><div style="display:flex;gap:7px"><span class="tin">09:00</span><span style="font-size:12px;color:var(--color-text-tertiary)">עד</span><span class="tin">13:00</span></div></div>
+              <div class="dayrow" style="border:0"><span style="width:54px;font-size:13.5px;color:var(--color-text-tertiary)">שבת</span><span class="tog" style="background:var(--color-border-secondary);justify-content:flex-start"><span class="togk"></span></span><span style="font-size:12.5px;color:var(--color-text-tertiary)">סגור</span></div>
+            </div>
+          </div>
+          <div data-aptab="link" style="display:none">
+            <div class="sec" style="margin-bottom:13px"><div class="sech"><i class="ti ti-link"></i> הקישור הציבורי</div><div style="display:flex;align-items:center;gap:8px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:8px;padding:8px 12px;margin-bottom:11px"><i class="ti ti-world" style="color:var(--color-text-tertiary)"></i><span style="flex:1;font-size:13px;direction:ltr;text-align:left">bizz-up.app/book/demo-insurance</span></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btnG"><i class="ti ti-copy" style="font-size:15px"></i> העתק</button><button class="btn btnO"><i class="ti ti-brand-whatsapp" style="font-size:15px"></i> שתף</button><button class="btn btnO"><i class="ti ti-qrcode" style="font-size:15px"></i> QR</button></div></div>
+            <div class="sec"><div class="sech"><i class="ti ti-eye"></i> מה שהלקוח רואה</div><div style="border:0.5px solid var(--color-border-tertiary);border-radius:12px;overflow:hidden;max-width:300px;margin:0 auto"><div style="background:#27500A;color:#fff;padding:10px 13px;font-size:13px;font-weight:500">Demo Insurance · קביעת תור</div><div style="padding:12px;background:var(--color-background-secondary)"><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"><span class="slot">09:00</span><span class="slot" style="background:#639922;color:#fff;border-color:transparent">09:30</span><span class="slot">10:00</span><span class="slot" style="opacity:.4;text-decoration:line-through">10:30</span></div><div class="inp" style="background:var(--color-background-primary);color:var(--color-text-tertiary);margin-bottom:8px">שם מלא</div><button class="btn btnG" style="width:100%;justify-content:center">אישור הזמנה</button></div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen" data-screen="settings" style="display:none">
+        <div class="hd"><span class="ht">הגדרות</span><button class="btn btnG"><i class="ti ti-device-floppy" style="font-size:16px"></i> שמור</button></div>
+        <div class="bd">
+          <div class="sec"><div class="sech"><i class="ti ti-building-store"></i> פרטי העסק</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:11px"><div><span class="lbl">שם העסק</span><div class="inp">Demo Insurance</div></div><div><span class="lbl">תחום</span><div class="inp">ביטוח</div></div></div></div>
+          <div class="sec"><div class="sech"><i class="ti ti-robot"></i> אישיות הבוט</div><span class="lbl">טון</span><div style="display:inline-flex;background:var(--color-background-secondary);border-radius:999px;padding:3px;margin-bottom:11px"><span class="seg" style="background:#639922;color:#fff">מקצועי וחם</span><span class="seg">רשמי</span><span class="seg">ממוקד</span></div><span class="lbl">סיסטם פרומפט</span><div class="inp">אתה עוזר של סוכנות ביטוח. ענה בקצרה והובל להשאיר פרטים.</div></div>
+          <div class="sec"><div class="sech"><i class="ti ti-brand-whatsapp"></i> חיבור ופרסום</div><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><div><div style="font-size:13.5px;font-weight:500">הבוט פעיל</div><div style="font-size:12px;color:var(--color-text-secondary)">מחובר · 052-555-0000</div></div><span class="tog"><span class="togk"></span></span></div></div>
+          <div class="sec"><div class="sech"><i class="ti ti-shield-lock"></i> חשבון ופרטיות</div><div style="display:flex;gap:9px;flex-wrap:wrap"><button class="btn btnO"><i class="ti ti-download" style="font-size:15px"></i> ייצוא נתונים</button><button class="btn" style="background:transparent;border:0.5px solid var(--color-border-danger);color:var(--color-text-danger)"><i class="ti ti-trash" style="font-size:15px"></i> מחיקת חשבון</button></div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+  <div style="text-align:center;font-size:12px;color:var(--color-text-tertiary);margin-top:16px">Bizz_up — סקיצת מסכים לדיון · נתונים לדוגמה בלבד</div>
+</div>
+<script>
+(function(){
+  var loginV=document.getElementById('loginView'),appV=document.getElementById('appView');
+  var navs=[].slice.call(document.querySelectorAll('.nav')),scr=[].slice.call(document.querySelectorAll('.screen'));
+  function act(n){navs.forEach(function(x){var on=x===n;x.style.background=on?'#639922':'transparent';x.style.color=on?'#fff':'#C0DD97';});}
+  function showScreen(name){scr.forEach(function(s){s.style.display=s.getAttribute('data-screen')===name?'flex':'none';});var c=document.querySelector('.screen[data-screen="'+name+'"]');if(c){c.style.animation='none';void c.offsetWidth;c.style.animation='fade .28s ease';}act(document.querySelector('.nav[data-nav="'+name+'"]'));}
+  document.getElementById('loginBtn').addEventListener('click',function(){loginV.style.display='none';appV.style.display='flex';showScreen('home');});
+  navs.forEach(function(n){n.addEventListener('click',function(){if(n.getAttribute('data-logout')){appV.style.display='none';loginV.style.display='flex';return;}var nv=n.getAttribute('data-nav');if(nv)showScreen(nv);});});
+  var apts=[].slice.call(document.querySelectorAll('.apt')),aptv=[].slice.call(document.querySelectorAll('[data-aptab]'));
+  function showApt(n){aptv.forEach(function(v){v.style.display=v.getAttribute('data-aptab')===n?'block':'none';});apts.forEach(function(t){var on=t.getAttribute('data-apt')===n;t.style.color=on?'var(--color-text-primary)':'var(--color-text-secondary)';t.style.fontWeight=on?'500':'400';t.style.borderBottomColor=on?'#639922':'transparent';});}
+  apts.forEach(function(t){t.addEventListener('click',function(){showApt(t.getAttribute('data-apt'));});});
+  var cvb=[].slice.call(document.querySelectorAll('[data-cv-btn]')),cvv=[].slice.call(document.querySelectorAll('[data-cv]'));
+  function showCV(n){cvv.forEach(function(v){v.style.display=v.getAttribute('data-cv')===n?'block':'none';});cvb.forEach(function(b){var on=b.getAttribute('data-cv-btn')===n;b.style.background=on?'#639922':'transparent';b.style.color=on?'#fff':'var(--color-text-secondary)';});}
+  cvb.forEach(function(b){b.addEventListener('click',function(){showCV(b.getAttribute('data-cv-btn'));});});
+  var counts={3:1,5:2,9:1,12:3,17:2,18:1,19:3,21:2,24:2,26:3,30:1},heb=['א','ב','ג','ד','ה','ו','ש'],grid=document.getElementById('mGrid');
+  if(grid){heb.forEach(function(d){var h=document.createElement('div');h.textContent=d;h.style.cssText='text-align:center;font-size:11px;color:var(--color-text-tertiary)';grid.appendChild(h);});grid.appendChild(document.createElement('div'));for(var day=1;day<=30;day++){var c=counts[day]||0,cell=document.createElement('div');cell.style.cssText='aspect-ratio:1;border-radius:8px;border:0.5px solid var(--color-border-tertiary);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12.5px';if(c>=3){cell.style.background='var(--color-background-warning)';}else if(c>=1){cell.style.background='var(--color-background-success)';}if(day===17){cell.style.border='1.5px solid #639922';}var nu=document.createElement('div');nu.textContent=day;cell.appendChild(nu);if(c>0){var dd=document.createElement('div');dd.textContent=c;dd.style.cssText='font-size:10px;color:var(--color-text-secondary)';cell.appendChild(dd);}grid.appendChild(cell);}}
+  showApt('cal');showCV('month');
+})();
+</script>
+</body>
+</html>

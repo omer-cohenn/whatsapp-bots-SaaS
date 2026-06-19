@@ -61,6 +61,12 @@ class Settings(BaseSettings):
     google_redirect_uri: str = Field(..., alias="GOOGLE_REDIRECT_URI")
     session_secret: SecretStr = Field(..., alias="SESSION_SECRET")
 
+    # --- M4 AI bot builder (Gemini). OPTIONAL — validate-at-USE, not at boot. ---
+    # The stack must still boot with NO Gemini key (try-me/dev without AI). The
+    # bot-builder service checks this lazily and raises a typed error → HTTP 503
+    # when it's actually needed. So it is NOT in the fail-closed validator below.
+    gemini_api_key: SecretStr | None = Field(default=None, alias="GEMINI_API_KEY")
+
     # --- Non-secret operational knobs (safe, explicit defaults allowed) ---
     app_env: str = Field(default="dev", alias="APP_ENV")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")

@@ -9,6 +9,7 @@ import LoginPage from './pages/LoginPage'
 import TermsPage from './pages/TermsPage'
 import PrivacyPage from './pages/PrivacyPage'
 import DashboardHome from './pages/DashboardHome'
+import BotBuilderPage from './pages/BotBuilderPage'
 
 export default function App() {
   return (
@@ -26,6 +27,14 @@ export default function App() {
             element={
               <AuthGate>
                 <DashboardHome />
+              </AuthGate>
+            }
+          />
+          <Route
+            path="/bot-builder"
+            element={
+              <AuthGate>
+                <BotBuilderPage />
               </AuthGate>
             }
           />

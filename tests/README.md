@@ -139,3 +139,109 @@ docker compose --env-file infra/.env.local -f infra/docker-compose.yml \
   run --rm backend sh -c "cd /app && pip install -q pytest pytest-asyncio && \
   PYTHONPATH=/app python -m pytest tests/test_auth_gate.py -q"
 ```
+
+---
+
+# M4 — the AI bot builder
+
+**M2 built the wall, M3 built the front door, and M4 adds the bot builder:** the
+owner-facing screen + API where a business designs its WhatsApp bot — the
+question flows it asks customers and the bot's name/personality — optionally with
+an **AI helper** that suggests config changes.
+
+## The easy way
+
+1. Start Docker Desktop.
+2. Double-click **`test_m4.bat`**.
+
+At the end you want to see, in order:
+
+```
+🎉 RESULT: 9/9 checks held. The bot builder is safe ...   (the M4 test)
+... passed ...                                            (the strict M4 pytest gate)
+🎉 RESULT: 12/12 locks held. ...                          (the M2 wall, still green)
+... passed ...                                            (the isolation suite, now incl. M4 tables)
+```
+
+`test_m4.bat` runs five steps: (1) bring the stack up + migrate, (2) seed the
+two pretend businesses **and their bot configs**, (3) the **full explained M4
+test** (9 checks), (4) the **strict M4 pytest gate**, and (5) **re-runs the M2
+tenant wall + the isolation suite** to prove M4 did not weaken anything.
+
+## The one thing to understand: the AI is FAKED in the tests
+
+The AI helper talks to Google's **Gemini**. Calling the real Gemini in a test
+would need an internet key, cost money, and be flaky. So the tests plug in a
+tiny **pretend Gemini** using the seam the backend left open
+(`app.services.bot_builder_ai.get_gemini_client`):
+
+- The **narrated test** (`m4_full_test.py`) sets `get_gemini_client` to a fake
+  that returns a canned answer.
+- The **pytest gate** (`test_bot_builder.py`) does the same with
+  `monkeypatch.setattr(bot_builder_ai, "get_gemini_client", lambda: FakeClient())`.
+
+So **you do NOT need a real `GEMINI_API_KEY`** to run the M4 tests, and nothing
+hits the internet. One check on purpose runs with **no key at all** to prove the
+AI door answers `503` ("AI helper not set up") while the rest of the app stays up.
+
+## What the 9 M4 checks mean
+
+| # | In plain words | The bug it prevents |
+|---|---|---|
+| 1 | a logged-OUT stranger is locked out of every `/api/bot/*` door | anyone reading/rewriting a business's bot |
+| 2 | a logged-in owner sees their OWN bot config | (the normal allowed case) |
+| 3 | one owner CANNOT see another's bot config | the core tenant leak, now for bot configs |
+| 4 | a saved bot loads back exactly as saved | "save" silently losing/changing the config |
+| 5 | a broken bot config is refused with 422 | a dead-end bot (e.g. a choice with no options) |
+| 6 | the AI replies AND applies a good suggestion + remembers the chat | the AI assist being useless or forgetful |
+| 7 | the AI's BAD idea is dropped, chat still flows | trusting raw AI output → a broken/poisoned bot |
+| 8 | the build-chat history is private to each business | one owner reading another's AI conversation |
+| 9 | with NO AI key, the AI door says 503 (app still up) | the whole app crashing just because AI isn't set up |
+
+## What the strict pytest gate adds (`test_bot_builder.py`)
+
+The 25 pytest cases are the CI version of the above, plus extra edge cases:
+all four routes 401 without a session (parametrized) and reject a forged cookie;
+settings round-trip + tenant isolation over HTTP; **six** out-of-bounds bodies
+each rejected with 422 (missing profile, choice-without-options, lead-with-0-steps,
+human_handoff-with-steps, non-snake_case flow name, >20 flows); an over-long AI
+message → 422; the mocked AI applies a valid change and persists exactly two rows
+(`user`+`assistant`) **for that tenant only**; an invalid AI change is dropped but
+the reply + chat persist; history is oldest→newest and tenant-scoped; no key → 503;
+and pure-function unit checks for `extract_changes` / `merge_changes` (including
+that the reserved `knowledge` key for Phase-3 RAG is stripped, never written).
+
+## Where the M4 test code lives
+
+- `backend/tests/m4_full_test.py` — the full explained 9-check test (step 3).
+- `backend/tests/test_bot_builder.py` — the strict pytest gate (step 4).
+- `backend/tests/isolation/test_tenant_wall.py` — **extended**: now also proves
+  `bot_settings` and `bot_builder_messages` are tenant-isolated, run as the
+  non-service `app_role` (so RLS is really exercised).
+
+## Running by hand (no .bat)
+
+```bash
+# the full explained M4 test (uses the PRETEND Gemini; no key needed)
+docker compose --env-file infra/.env.local -f infra/docker-compose.yml \
+  run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m4_full_test.py"
+
+# the strict M4 pytest gate (Gemini mocked via monkeypatch; one case = no key → 503)
+docker compose --env-file infra/.env.local -f infra/docker-compose.yml \
+  run --rm backend sh -c "cd /app && pip install -q pytest pytest-asyncio && \
+  PYTHONPATH=/app python -m pytest tests/test_bot_builder.py -q"
+```
+
+## ⚠️ The one thing the script CANNOT test: the REAL Gemini + the browser UI
+
+The automated tests fake the AI and drive the API directly. To see the **real**
+AI helper and the **builder screen** in a browser, do this by hand once:
+
+1. Put a real `GEMINI_API_KEY` in `infra/.env.local`, then restart the stack
+   (`stop.bat` then `run.bat`). *(Without a key, the AI panel correctly shows
+   "unavailable" — that is the 503 path, by design.)*
+2. Open **http://localhost:5173**, sign in, and open **בונה הבוט** (the bot builder).
+3. Add a flow, add a step (try a "choice" step — it must demand 2–12 options),
+   and click **שמור שינויים** (save). Reload — your changes should still be there.
+4. Click **עוזר ה-AI שלך** (the AI assistant button), send a message, and confirm
+   it replies in Hebrew; if it proposes a change, confirm it appears in the editor.

@@ -1,26 +1,17 @@
-// Minimal authenticated landing page. The full dashboard is a later milestone;
-// for now we greet the owner and reuse the StackHealth panel.
+// Authenticated landing page. Renders inside <DashboardLayout> (which provides
+// the sidebar, header, skip-link and <main> landmark), so here we only supply
+// the page content: a greeting + the StackHealth panel.
 
 import { useAuth } from '../auth/AuthContext'
-import OwnerHeader from '../components/OwnerHeader'
-import SiteFooter from '../components/SiteFooter'
+import DashboardLayout from '../components/DashboardLayout'
 import StackHealth from '../components/StackHealth'
 
 export default function DashboardHome() {
   const { user, business } = useAuth()
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <a href="#main" className="skip-link">
-        דלגו לתוכן
-      </a>
-
-      <OwnerHeader />
-
-      <main
-        id="main"
-        className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center gap-10 px-6 py-12"
-      >
+    <DashboardLayout>
+      <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-10 px-6 py-12">
         <section className="text-center">
           <h1 className="text-3xl font-bold text-slate-900 sm:text-4xl">
             שלום{user?.name ? `, ${user.name}` : ''} 👋
@@ -33,9 +24,7 @@ export default function DashboardHome() {
         </section>
 
         <StackHealth />
-      </main>
-
-      <SiteFooter />
-    </div>
+      </div>
+    </DashboardLayout>
   )
 }
