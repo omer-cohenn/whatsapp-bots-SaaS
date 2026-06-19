@@ -22,6 +22,14 @@ export type IconName =
   | 'send'
   | 'x'
   | 'chevron-down'
+  | 'user-plus'
+  | 'checks'
+  | 'user-off'
+  | 'clock'
+  | 'download'
+  | 'refresh'
+  | 'world'
+  | 'eye'
 
 // Path/element markup per icon (stroke-based, inherits currentColor).
 const PATHS: Record<IconName, JSX.Element> = {
@@ -55,6 +63,20 @@ const PATHS: Record<IconName, JSX.Element> = {
   send: <path d="M12 19V5M5 12l7-7 7 7" />,
   x: <path d="M18 6L6 18M6 6l12 12" />,
   'chevron-down': <path d="M6 9l6 6 6-6" />,
+  'user-plus': (
+    <path d="M9 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM3 21v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 4 2M16 11h6M19 8v6" />
+  ),
+  checks: <path d="M2 12l5 5 5-5M9 12l5 5L22 7" />,
+  'user-off': (
+    <path d="M9 7a3 3 0 0 0 0 6M3 21v-1a5 5 0 0 1 5-5h2M3 3l18 18" />
+  ),
+  clock: <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2" />,
+  download: <path d="M12 3v12M8 11l4 4 4-4M4 19h16" />,
+  refresh: <path d="M20 11a8 8 0 1 0-2.3 5.6M20 5v6h-6" />,
+  world: (
+    <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9s1-6.5 3.5-9z" />
+  ),
+  eye: <path d="M12 5c-5 0-8.5 4.2-9.5 7 1 2.8 4.5 7 9.5 7s8.5-4.2 9.5-7c-1-2.8-4.5-7-9.5-7zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />,
 }
 
 type IconProps = SVGProps<SVGSVGElement> & {

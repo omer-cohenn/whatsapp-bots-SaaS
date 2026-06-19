@@ -55,3 +55,66 @@ notes; none is a leak or isolation gap.
 | LM-01 | Low | Crypto / data | `phone`/`contact_name` columns filled by key-name guessing; an owner-named (e.g. Hebrew) phone key lands only in the encrypted answers blob (no leak) but leaves the dedicated columns NULL — map by step `type` instead; confirm `customer_phone_hash` wiring. |
 | LM-02 | Low | Data integrity | Single-turn flow (enter+complete same turn) passes pre-turn `active_lead_id=None` to `_complete_lead`, so answers aren't finalized and the row stays in_progress — pass `new_lead_id` through. Not a leak. |
 | LM-03 | Low | Runtime config (verify) | Human-handoff silence relies on `hget` returning `str`; if the Redis client lacks `decode_responses=True` the `== 'human'` check fails and the bot talks over a human — verify client config + add an end-to-end test. |
+
+---
+
+## M7 dashboard / back-office (Bizz_up rebuild) — audit 2026-06-19
+
+> Scope: the NEW M7 READ / back-office surface — `backend\app\api\dashboard.py`,
+> `backend\app\models\dashboard.py`, the READ helpers in `backend\app\services\leads.py`
+> (`list_leads`, `_decrypt_lead_row`, `funnel_stats`, `_period_clause`), the listing/reply
+> helpers in `backend\app\services\conversation_state.py` (`list_conversations`,
+> `append_reply`, `_register`, `_index_key`), `set_published` in
+> `backend\app\services\bot_settings.py`, and the mount in `backend\app\api\me.py`.
+> Cross-checked against `app\core\deps.py`, `app\db\session.py`, `app\core\crypto.py`,
+> `app\core\logging.py`, and `supabase\migrations\0004_rls_policies_grants.sql`.
+> Read-only audit; no product code was modified.
+
+**Owner's explicit requirements — verification result:**
+
+- ✅ **TENANT ISOLATION on every READ — business_id from session only; Postgres via `tenant_connection` (RLS); Redis strictly business-scoped.** Verified. Every one of the six routes takes `business_id = Depends(current_business)` (`dashboard.py:65,103,121,147,170,187`), which resolves only from the server-side session (`deps.py:50-54`); no model exposes a `business_id` field (`models/dashboard.py`), and none of the endpoints read a tenant id from path/query/body. The two Postgres readers (`get_leads`→`list_leads`, `get_dashboard`→`funnel_stats`) run inside `tenant_connection(pool, business_id)` (`dashboard.py:79,111`), which sets transaction-local `app.business_id` so RLS scopes the rows (`db/session.py:42-49`); both queries ALSO carry `business_id = $1` explicitly (`leads.py:285,369,384`). RLS is enabled + FORCEd with USING + WITH CHECK on `leads`, `flow_events`, and `bot_settings`, and `app_role` is the non-bypassing role (`0004:50-76,104-111`). The Redis listing reads only `convindex:{business_id}` (`conversation_state.py:182-183`) and then `conv:{business_id}:{conv_id}`, re-checked by `_assert_owns` on every per-conversation read (`conversation_state.py:188-189`). Business A can never name, list, read, or write B's leads/funnel/conversations.
+- ✅ **PII decrypted ONLY for the authenticated owner of that row, only on these owner endpoints; never cross-tenant, never logged.** Verified. Decryption happens only in `_decrypt_lead_row` (`leads.py:320-352`), reached only from `list_leads`, reached only from the session-gated `GET /api/leads` over an RLS-scoped connection — so the rows decrypted are by construction this tenant's own. Each row decrypts under its OWN stamped `key_version` (`leads.py:327,337-338`), and crypto fails LOUD on a key mismatch (no plaintext fallback, `crypto.py:70-101`). The endpoint catches `DecryptionError` and returns a generic `500 "could not read leads"` with no `str(e)` (`dashboard.py:88-95`). No decrypted value is logged anywhere on the read path.
+- ✅ **Publish toggle and conversation status/reply are tenant-scoped (can't flip another tenant's bot or chat).** Verified. `PUT /api/bot/publish` → `set_published(pool, business_id, ...)` runs inside `tenant_connection` and the UPDATE/INSERT is keyed `WHERE business_id = $1` / `(business_id, is_published)` with RLS WITH CHECK on `bot_settings` (`bot_settings.py:126-151`, `0004:50-55`) — only the caller's own row can be touched. `POST /conversations/{id}/status` → `set_status` and `/reply` → `append_reply` build the key as `conv:{business_id}:{conversation_id}` and re-assert the prefix via `_assert_owns` (`conversation_state.py:151,227-230`), so a forged `conversation_id` path param cannot address another tenant's chat (a `..`-style id just yields a non-existent key under THIS tenant's prefix; it can never escape it).
+- ✅ **No secrets/PII in logs; generic errors.** Verified. `dashboard.py` has exactly one log call — `log.error("lead decryption failed")` (`dashboard.py:91`), a static string with no ids, no `str(e)`, no plaintext. The reply/status services log nothing; `append_reply` explicitly never logs the text (`conversation_state.py:226,231-234`). The JSON formatter only serializes the message + allow-listed `extra` (`logging.py:23-41`), and no `extra` carrying PII is passed on this surface. Errors are generic (the decryption path returns a fixed detail; other failures surface as framework 500s with no app-supplied detail).
+
+**Input validation — mostly enforced, ONE gap (see M7-01):**
+
+- `period` is a `Literal["week","month","all"]` on both leads + dashboard (`dashboard.py:66,104`) — invalid values are rejected `422`; the SQL interval is parameterized (`leads.py:248-258`), never interpolated.
+- `flow` is bounded `max_length=40` (`dashboard.py:68`) and bound as a `$n` param (`leads.py:299-301`) — no injection.
+- conversation `status` body value is a `Literal["bot","human","closed"]` with `extra="forbid"` (`models/dashboard.py:79-81`); `set_status` re-validates against `_VALID_STATUSES` (`conversation_state.py:149-150`). The query-side `status` filter on `/conversations` is also a `Literal` (`dashboard.py:122-124`).
+- reply `text` is `min_length=1, max_length=2000`, stripped, `extra="forbid"` (`models/dashboard.py:97-102`).
+- `is_published` is a strict `bool` with `extra="forbid"` (`models/dashboard.py:115-120`).
+- `conversation_id` path param is bounded `min_length=1, max_length=200` (`dashboard.py:146,169`).
+- ⚠️ **EXCEPTION:** the `/api/leads` `status` filter is a raw `str = Query("all", alias="status")` (`dashboard.py:67`), NOT a `Literal`. It is SAFE (no injection — the value is matched against an allow-list in `list_leads` and any unknown value falls through to "no status predicate", `leads.py:290-297`), but it is INCONSISTENT with every other validated filter and lets a typo silently return ALL statuses instead of erroring. See M7-01.
+
+**Overall verdict: PASS — the M7 back-office surface is tenant-correct and confidentiality-safe.**
+business_id comes only from the session on all six routes; Postgres reads are
+RLS-scoped + explicit-business_id; Redis listing/reply/status are strictly
+business-prefixed and re-asserted; PII is decrypted only for the owner and never
+logged; the publish/status/reply mutations cannot reach another tenant. No
+critical or medium isolation/leak issues. Findings below are LOW hardening notes.
+
+### M7-01 — `/api/leads` `status` filter is an unvalidated free `str` (silent fall-through) — LOW
+- **Where:** `backend\app\api\dashboard.py:67` (`status_filter: str = Query("all", alias="status")`) → `leads.py:290-297`.
+- **Why dangerous (mild):** Unlike `period`/`flow`/conversation-status (all `Literal`/bounded), the leads `status` accepts ANY string. There is NO injection risk — it is matched against `STATUS_OPEN`/`_REAL_STATUSES` and bound as a `$n` param, and an unrecognized value simply yields no status predicate (returns ALL statuses). The mild risk is correctness/UX: a typo (`?status=neww`) silently returns every lead instead of a `422`, and the value is also unbounded in length. Not a leak, not an isolation gap.
+- **Fix direction:** Make it a `Literal["all","new","in_progress","abandoned","open"]` (matching the other filters) so invalid values 422 instead of silently widening the result set.
+
+### M7-02 — `list_conversations` does N+1 `HGETALL` per index member with no cap — LOW (DoS/perf, not a leak)
+- **Where:** `backend\app\services\conversation_state.py:182-211`.
+- **Why dangerous (mild):** The index set `convindex:{business_id}` is read in full and one `HGETALL` is issued per member (`conversation_state.py:187-190`) with no LIMIT. The set is tenant-bounded (no cross-tenant exposure) and entries auto-expire with the index TTL, but a single very busy tenant with thousands of live conversations turns one dashboard GET into thousands of sequential Redis round-trips — a self-inflicted latency/availability hit on that owner's own request. Stale members are pruned lazily, which helps, but there is no upper bound on the working set per call.
+- **Fix direction:** Cap the listing (e.g. most-recent N) and/or pipeline the `HGETALL`s; consider a sorted-set index keyed by `last_activity_at` so the dashboard reads the top-N directly without scanning every member.
+
+### M7-03 — `_register` re-adds a conversation to the index on every status/reply write; closed/expired chats can linger until TTL — LOW (verify)
+- **Where:** `backend\app\services\conversation_state.py:138-156,214-237,242-248`.
+- **Why dangerous (mild):** `set_status(..., "closed")` and `append_reply` both call `_register`, so even a just-closed conversation is (re)added to the index and keeps a sliding TTL refreshed by each write. Only `clear_state` removes it (`conversation_state.py:121`), and listing prunes only entries whose hash has fully EXPIRED (`conversation_state.py:191-192`). Net effect: a `closed` conversation stays visible in the default (`status=None`) listing for up to the full TTL after the last touch. This is a tenant-internal UX/accuracy nit (no cross-tenant exposure), but worth confirming it matches the intended "closed disappears" behavior.
+- **Fix direction:** On `set_status == "closed"` either `srem` from the index immediately or have `list_conversations` exclude `closed` by default; confirm the intended lifecycle with the product spec.
+
+### M7 dashboard — summary table
+| ID | Severity | Area | One-line |
+|----|----------|------|----------|
+| (req 1-4 + validation) | — | Verification | PASS — business_id from session on all six routes; Postgres reads RLS-scoped + explicit business_id; Redis listing/reply/status strictly business-prefixed + `_assert_owns`; PII decrypted only for the owner, never logged; publish/status/reply mutations tenant-scoped; filters/status/reply/is_published validated; generic errors. |
+| M7-01 | Low | Input validation | `/api/leads` `status` is a free `str` (not `Literal`) — safe (allow-list + param-bound, no injection) but a typo silently returns ALL statuses; tighten to a `Literal`. |
+| M7-02 | Low | Perf / availability | `list_conversations` does an uncapped N+1 `HGETALL` per index member — a busy tenant slows its own dashboard (no cross-tenant impact); cap/pipeline or use a sorted-set top-N. |
+| M7-03 | Low | Lifecycle (verify) | `closed`/replied conversations are re-registered and linger in the index until TTL; only `clear_state` removes them — confirm intended "closed disappears" behavior. |
+
+**Top fixes:** (1) M7-01 — make the leads `status` filter a `Literal` for parity with the other filters; (2) M7-02 — bound/pipeline conversation listing before any tenant accumulates many live chats; (3) M7-03 — confirm/adjust the closed-conversation lifecycle in the index.

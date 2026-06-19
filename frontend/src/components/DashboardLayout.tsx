@@ -26,7 +26,8 @@ const NAV_ITEMS: NavSpec[] = [
   { to: '/', label: 'בית', icon: 'home', enabled: true },
   { to: '/bot-builder', label: 'בונה הבוט', icon: 'robot', enabled: true },
   { to: '/try-me', label: 'נסה אותי', icon: 'player-play', enabled: true },
-  { to: '/leads', label: 'לידים', icon: 'users', enabled: false },
+  { to: '/leads', label: 'לידים', icon: 'users', enabled: true },
+  { to: '/conversations', label: 'שיחות', icon: 'message-circle', enabled: true },
   { to: '/appointments', label: 'ניהול פגישות', icon: 'calendar-event', enabled: false },
   { to: '/settings', label: 'הגדרות', icon: 'settings', enabled: false },
 ]

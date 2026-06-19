@@ -16,6 +16,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 
 from app.api.bot_builder import router as bot_builder_router
+from app.api.dashboard import router as dashboard_router
 from app.core.deps import current_business, current_session, current_user
 from app.db.session import tenant_connection
 from app.models.auth import MeBusiness, MeConnection, MeResponse, MeUser
@@ -27,6 +28,10 @@ api = APIRouter(prefix="/api", tags=["api"], dependencies=[Depends(current_sessi
 # Mount the M4 bot-builder routes under /api/bot/* — they inherit the gate above
 # (deny-by-default; no per-route opt-in to forget).
 api.include_router(bot_builder_router)
+
+# Mount the M7 dashboard / back-office READ routes (/api/leads, /api/dashboard,
+# /api/conversations/*, /api/bot/publish). Same gate, deny-by-default.
+api.include_router(dashboard_router)
 
 
 async def _connection_status(request: Request, business_id: str) -> str:

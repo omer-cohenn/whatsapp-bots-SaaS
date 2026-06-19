@@ -22,6 +22,7 @@ import Spinner from '../components/ui/Spinner'
 import Alert from '../components/ui/Alert'
 import Icon from '../components/ui/Icon'
 import Badge from '../components/ui/Badge'
+import PublishToggle from '../components/dashboard/PublishToggle'
 import { getSettings, saveSettings } from '../lib/botClient'
 import { ApiError } from '../lib/apiClient'
 import type { BotSettings, Flow, FlowType, Step } from '../botbuilder/types'
@@ -218,6 +219,17 @@ export default function BotBuilderPage() {
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold text-slate-900">בונה הבוט</h1>
           <div className="flex items-center gap-2">
+            {config ? (
+              // Go-live: PUT /api/bot/publish persists immediately (independent of
+              // the "שמור שינויים" config save), so we update is_published in place
+              // without flipping the unsaved-changes flag.
+              <PublishToggle
+                isPublished={config.is_published}
+                onChange={(next) =>
+                  setConfig((prev) => (prev ? { ...prev, is_published: next } : prev))
+                }
+              />
+            ) : null}
             <Link
               to="/try-me"
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800 transition hover:bg-slate-200"

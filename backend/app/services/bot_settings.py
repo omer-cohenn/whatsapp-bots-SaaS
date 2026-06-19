@@ -112,3 +112,40 @@ async def save_settings(
         )
 
     return payload
+
+
+async def set_published(
+    pool: asyncpg.Pool, business_id: str, is_published: bool
+) -> bool:
+    """Flip ONLY the `is_published` go-live toggle for this tenant.
+
+    A focused single-column UPDATE (the rest of the config is untouched). If no
+    `bot_settings` row exists yet we create a minimal one so the toggle persists.
+    The tenant comes from `business_id` only; RLS scopes the write.
+    """
+    async with tenant_connection(pool, business_id) as conn:
+        updated = await conn.fetchval(
+            """
+            UPDATE bot_settings
+            SET is_published = $2, updated_at = now()
+            WHERE business_id = $1
+            RETURNING is_published
+            """,
+            business_id,
+            is_published,
+        )
+        if updated is None:
+            # No config saved yet — create a minimal row carrying just the toggle.
+            updated = await conn.fetchval(
+                """
+                INSERT INTO bot_settings (business_id, is_published)
+                VALUES ($1, $2)
+                ON CONFLICT (business_id) DO UPDATE SET
+                    is_published = EXCLUDED.is_published,
+                    updated_at   = now()
+                RETURNING is_published
+                """,
+                business_id,
+                is_published,
+            )
+    return bool(updated)

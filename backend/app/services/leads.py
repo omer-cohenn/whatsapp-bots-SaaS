@@ -33,6 +33,7 @@ attached to the same connection as the query.
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 from typing import Any
 
 import asyncpg
@@ -225,7 +226,187 @@ async def log_event(
     )
 
 
+# --- READ side (M7): list + decrypt leads for the owner dashboard ------------
+#
+# The owner is the ONE party allowed to see the plaintext: list rows are decrypted
+# HERE (phone, contact_name, and the whole answers blob) so the API can hand the
+# dashboard a readable object. Reads are RLS-scoped via the tenant-bound `conn`.
+# We NEVER log a decrypted value.
+
+# period filter → how far back to look (None == 'all', no time bound). Values are
+# datetime.timedelta so asyncpg binds them NATIVELY to a Postgres interval param.
+# (A plain str like "7 days" raises a DataError — asyncpg expects a timedelta.)
+_PERIOD_INTERVALS = {
+    "week": timedelta(days=7),
+    "month": timedelta(days=30),
+}
+
+# The status filter vocabulary the dashboard exposes. 'open' is SYNTHETIC:
+# new + in_progress (everything still actionable), not a stored status value.
+STATUS_OPEN = "open"
+_OPEN_STATUSES = (STATUS_NEW, STATUS_IN_PROGRESS)
+_REAL_STATUSES = {STATUS_NEW, STATUS_IN_PROGRESS, STATUS_ABANDONED}
+
+
+def _period_clause(period: str | None, params: list[Any], col: str) -> str:
+    """Append a `>= now() - interval` predicate for `period`, or '' for all.
+
+    Adds the interval to `params` (parameterized, never interpolated) and returns
+    the SQL fragment (e.g. " AND last_activity_at >= now() - $2::interval").
+    """
+    interval = _PERIOD_INTERVALS.get((period or "all").lower())
+    if interval is None:
+        return ""
+    params.append(interval)
+    return f" AND {col} >= now() - ${len(params)}::interval"
+
+
+async def list_leads(
+    conn: asyncpg.Connection,
+    business_id: str,
+    *,
+    period: str | None = None,
+    status: str | None = None,
+    flow: str | None = None,
+    include_test: bool = False,
+    limit: int = 500,
+) -> list[dict[str, Any]]:
+    """Return this tenant's leads (newest first), decrypted for the owner.
+
+    Filters (all optional):
+      * period — 'week' | 'month' | 'all' (anything else == 'all').
+      * status — 'new' | 'in_progress' | 'abandoned' | 'open' (= new+in_progress);
+                 'all'/None means no status filter.
+      * flow   — match a specific `lead_name` (the questionnaire).
+      * include_test — when False (default) `is_test` rows are excluded.
+
+    Each returned lead carries ALL its collected answers (full detail for the
+    owner). `business_id` is the caller's verified id; it is included in the WHERE
+    so RLS's predicate matches the tenant. NEVER logs any decrypted value.
+    """
+    params: list[Any] = [business_id]
+    where = ["business_id = $1"]
+
+    if not include_test:
+        where.append("is_test = false")
+
+    status_key = (status or "all").lower()
+    if status_key == STATUS_OPEN:
+        where.append("status = ANY($%d::text[])" % (len(params) + 1))
+        params.append(list(_OPEN_STATUSES))
+    elif status_key in _REAL_STATUSES:
+        params.append(status_key)
+        where.append(f"status = ${len(params)}")
+    # 'all'/unknown → no status predicate.
+
+    if flow:
+        params.append(flow)
+        where.append(f"lead_name = ${len(params)}")
+
+    # Time window is keyed off last_activity_at (the lead's most recent touch).
+    period_sql = _period_clause(period, params, "last_activity_at")
+
+    params.append(int(limit))
+    sql = (
+        "SELECT id, lead_name, phone, contact_name, answers, status, "
+        "       last_step_index, is_test, key_version, "
+        "       started_at, last_activity_at, submitted_at "
+        "FROM leads "
+        f"WHERE {' AND '.join(where)}{period_sql} "
+        f"ORDER BY last_activity_at DESC "
+        f"LIMIT ${len(params)}"
+    )
+    rows = await conn.fetch(sql, *params)
+    return [_decrypt_lead_row(row) for row in rows]
+
+
+def _decrypt_lead_row(row: asyncpg.Record) -> dict[str, Any]:
+    """Map one leads row → a readable dict with phone/name/answers decrypted.
+
+    The stored `answers` jsonb is the {"_": ciphertext} blob; we decrypt it back
+    to the full collected dict. The dedicated phone/contact_name columns are
+    decrypted too. A row's own stamped `key_version` selects the key (rotation).
+    """
+    key_version = row["key_version"] or crypto.CURRENT_KEY_VERSION
+    answers_blob = row["answers"]
+    if isinstance(answers_blob, str):
+        # asyncpg may hand jsonb back as text; normalize to a dict for decrypt.
+        try:
+            answers_blob = json.loads(answers_blob)
+        except (ValueError, TypeError):
+            answers_blob = None
+
+    answers = crypto.decrypt_answers(answers_blob, key_version) if answers_blob else {}
+    phone = crypto.decrypt_pii(row["phone"], key_version)
+    contact_name = crypto.decrypt_pii(row["contact_name"], key_version)
+
+    return {
+        "id": str(row["id"]),
+        "lead_name": row["lead_name"],
+        "phone": phone,
+        "contact_name": contact_name,
+        "answers": answers,
+        "status": row["status"],
+        "last_step_index": row["last_step_index"],
+        "is_test": row["is_test"],
+        "started_at": _iso(row["started_at"]),
+        "last_activity_at": _iso(row["last_activity_at"]),
+        "submitted_at": _iso(row["submitted_at"]),
+    }
+
+
+async def funnel_stats(
+    conn: asyncpg.Connection,
+    business_id: str,
+    *,
+    period: str | None = None,
+    include_test: bool = False,
+) -> dict[str, int]:
+    """Return funnel counts (started/completed/abandoned + total leads) for a period.
+
+    started/completed/abandoned come from `flow_events` (the funnel trail);
+    `total_leads` counts the lead ROWS in the window. `is_test` rows are excluded
+    unless `include_test` is True. RLS-scoped via the tenant-bound `conn`.
+    """
+    # Funnel event counts (one scan of flow_events, grouped by event).
+    ev_params: list[Any] = [business_id]
+    ev_where = ["business_id = $1"]
+    if not include_test:
+        ev_where.append("is_test = false")
+    ev_period = _period_clause(period, ev_params, "created_at")
+    ev_rows = await conn.fetch(
+        "SELECT event, count(*)::int AS n FROM flow_events "
+        f"WHERE {' AND '.join(ev_where)}{ev_period} "
+        "GROUP BY event",
+        *ev_params,
+    )
+    by_event = {r["event"]: r["n"] for r in ev_rows}
+
+    # Total lead rows in the same window (keyed off started_at).
+    ld_params: list[Any] = [business_id]
+    ld_where = ["business_id = $1"]
+    if not include_test:
+        ld_where.append("is_test = false")
+    ld_period = _period_clause(period, ld_params, "started_at")
+    total_leads = await conn.fetchval(
+        f"SELECT count(*)::int FROM leads WHERE {' AND '.join(ld_where)}{ld_period}",
+        *ld_params,
+    )
+
+    return {
+        "started": int(by_event.get(EVENT_STARTED, 0)),
+        "completed": int(by_event.get(EVENT_COMPLETED, 0)),
+        "abandoned": int(by_event.get(EVENT_ABANDONED, 0)),
+        "total_leads": int(total_leads or 0),
+    }
+
+
 # --- helpers ----------------------------------------------------------------
+
+def _iso(value: Any) -> str | None:
+    """ISO-8601 a timestamptz (or None passes through)."""
+    return value.isoformat() if value is not None else None
+
 
 def _answers_json(blob: dict[str, str]) -> str:
     """Serialize the {"_": ct} answers blob for the jsonb column.

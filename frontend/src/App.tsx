@@ -11,6 +11,8 @@ import PrivacyPage from './pages/PrivacyPage'
 import DashboardHome from './pages/DashboardHome'
 import BotBuilderPage from './pages/BotBuilderPage'
 import TryMePage from './pages/TryMePage'
+import LeadsPage from './pages/LeadsPage'
+import ConversationsPage from './pages/ConversationsPage'
 
 export default function App() {
   return (
@@ -44,6 +46,22 @@ export default function App() {
             element={
               <AuthGate>
                 <TryMePage />
+              </AuthGate>
+            }
+          />
+          <Route
+            path="/leads"
+            element={
+              <AuthGate>
+                <LeadsPage />
+              </AuthGate>
+            }
+          />
+          <Route
+            path="/conversations"
+            element={
+              <AuthGate>
+                <ConversationsPage />
               </AuthGate>
             }
           />
