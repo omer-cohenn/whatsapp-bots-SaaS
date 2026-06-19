@@ -49,7 +49,9 @@ export default function ChatPanel({
   const [sendError, setSendError] = useState<string | null>(null)
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const bottomRef = useRef<HTMLDivElement>(null)
+  // The scrollable transcript container — we scroll THIS element only, never the
+  // page (scrollIntoView would yank every scrollable ancestor, incl. the window).
+  const logRef = useRef<HTMLDivElement>(null)
   // Set while a reply is in flight, so a poll arriving mid-send doesn't wipe the
   // optimistic bubble before the server has recorded it.
   const pendingRef = useRef(false)
@@ -85,9 +87,22 @@ export default function ChatPanel({
     }
   }, [conversationId])
 
-  // Auto-scroll to the newest message whenever the list grows.
+  // On first load (spinner → messages), jump the transcript to the newest line.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: 'end' })
+    if (!loading && logRef.current) {
+      logRef.current.scrollTop = logRef.current.scrollHeight
+    }
+  }, [loading])
+
+  // On every poll/new message, keep the transcript pinned to the bottom — BUT
+  // only if the owner is already near the bottom, and ONLY by scrolling the
+  // transcript container itself (never the page). This stops the leads page from
+  // jumping on each 4s poll while the owner scrolls.
+  useEffect(() => {
+    const el = logRef.current
+    if (!el) return
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120
+    if (nearBottom) el.scrollTop = el.scrollHeight
   }, [messages])
 
   function insertEmoji(emoji: string) {
@@ -160,6 +175,7 @@ export default function ChatPanel({
     >
       {/* Transcript */}
       <div
+        ref={logRef}
         className="flex-1 space-y-2 overflow-y-auto p-4"
         role="log"
         aria-live="polite"
@@ -176,7 +192,6 @@ export default function ChatPanel({
         ) : (
           messages.map((msg, i) => <Bubble key={i} message={msg} />)
         )}
-        <div ref={bottomRef} />
       </div>
 
       {/* Composer */}
