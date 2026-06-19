@@ -55,8 +55,11 @@ export type DashboardStats = {
 
 // --- 3) GET /api/conversations -----------------------------------------------
 
-/** A live conversation's handling mode. */
-export type ConversationStatus = 'bot' | 'human' | 'closed'
+/**
+ * A live conversation's handling mode. `waiting` means the customer asked for a
+ * human and the bot has stepped aside, but no one has taken it over yet.
+ */
+export type ConversationStatus = 'bot' | 'waiting' | 'human' | 'closed'
 
 export type Conversation = {
   conversation_id: string
@@ -68,6 +71,35 @@ export type Conversation = {
 
 export type ConversationsResponse = {
   conversations: Conversation[]
+}
+
+// --- 3b) GET /api/conversations/{id} (+ /messages) ---------------------------
+
+/**
+ * One line of the transcript. `customer` is the WhatsApp sender, `bot` is an
+ * automated reply, `owner` is a manual reply the business owner queued.
+ * `at` is an ISO-8601 UTC timestamp (null if the backend has none).
+ */
+export type Message = {
+  role: 'customer' | 'bot' | 'owner'
+  body: string
+  at: string | null
+}
+
+/** GET /api/conversations/{id} — the conversation with its full transcript. */
+export type ConversationDetail = {
+  conversation_id: string
+  status: ConversationStatus
+  lead: Lead | null
+  /** Oldest → newest. */
+  messages: Message[]
+}
+
+/** GET /api/conversations/{id}/messages — just the transcript (for polling). */
+export type MessagesResponse = {
+  conversation_id: string
+  /** Oldest → newest. */
+  messages: Message[]
 }
 
 // --- 4) POST /api/conversations/{id}/status ----------------------------------

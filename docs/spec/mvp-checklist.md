@@ -103,6 +103,17 @@ You can build **M0–M7 entirely on your laptop first**, then do **M8 (AWS)** wh
 ✅ **Done when:** the owner sees leads, follows up with abandoners, takes over a chat, and flips the bot live.
    — All four met; M7 narrated **13/15** (the 2 red = the period bug above), strict gate **9 passed / 2 xfailed**.
 
+## M8 (handoff-chat) — The in-app human-handoff chat 💬 — ✅ DONE 2026-06-19
+> Per [decision 0008](../decisions/0008-m8-handoff-chat.md). (This is distinct from the AWS milestone below, which keeps its original number for the roadmap.)
+- [x] Full transcript in Redis: `conv:{business}:{conv}:log` — a LIST of `{role, body, at}`, role ∈ customer|bot|owner, **LTRIM to 200**, fully tenant-isolated (`_assert_owns` on the `:log` key) — `app/services/conversation_state.py` (`append_message`/`get_messages`).
+- [x] New status `waiting` (customer asked for a human, nobody picked up yet) in the valid set + the status journey **bot→waiting→human→closed**.
+- [x] **Bot is SILENT in `waiting` AND `human`** — and the inbound customer message is STILL appended to the transcript (role=customer) on the silent path — `app/services/bot_runtime.py`.
+- [x] Handoff sets status `waiting` (not `human`) + logs the `handed_off` funnel event (the dashboard's "ביקש נציג" light).
+- [x] Read/extend the API: `GET /api/conversations/{id}` (status + linked decrypted lead + messages) · `GET .../messages` · `POST .../reply` (also appends role=owner) · `POST .../status` (Literal widened to `waiting`) — `app/api/dashboard.py`.
+- [x] 🚦 **Isolation extended:** business A can never read B's conversation detail/messages (empty/default, no leak) — covered in `tests/test_m8.py` + `tests/m8_full_test.py`.
+
+✅ **Done:** `tests/test_m8.bat` → M8 narrated **27/27** + strict `tests/test_m8.py` **17/17**; the strict M2–M8 bundle **108 passed**; M2 **12/12** + M3 **5/5** + M4 **9/9** + M5 **18/18** + M5b **10/10** + M7 **15/15** all still green (the M5 handoff tests were updated to this locked contract — handoff → `waiting`; product source already implemented it).
+
 ## M8 — Ship to AWS ☁️ *(when ready to go public)*
 - [ ] AWS account + **region** (EU) + root **MFA** + CloudTrail
 - [ ] 💸 **Budget alarm (day one)**

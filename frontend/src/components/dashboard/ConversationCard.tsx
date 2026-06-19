@@ -1,15 +1,25 @@
-// One live conversation row: its id/preview, a status badge, a bot↔human↔closed
-// control, and — when the owner has taken it over (status === 'human') — a reply
-// box that queues a manual message via POST .../reply.
+// One live conversation as an ACCORDION ROW (the StepsEditor accordion pattern:
+// only one row is open at a time, controlled by the parent list).
 //
-// State (status change + reply send) is owned here per-row so one slow request
-// never blocks the rest of the list; the parent is told about a status change so
-// its filtered view stays correct.
+//  - Collapsed: a status chip + last-message preview + relative last-activity.
+//  - Expanded: lazily fetches GET /api/conversations/{id} to show the linked
+//    lead's details (name / phone / collected answers) and the handling actions:
+//      • "לשיחה עם הלקוח" — flips waiting/bot → human (POST status) and reveals
+//        the inline ChatPanel for this conversation.
+//      • "טופל" — flips → closed (POST status).
+//
+// Per-row state lives here so one slow request never blocks the rest of the list;
+// the parent is told about every status change so its filtered view stays correct.
+// Tenant scoping is entirely server-side — we only ever send the conversation id.
 
-import { useState } from 'react'
-import type { Conversation, ConversationStatus } from '../../dashboard/types'
+import { useEffect, useState } from 'react'
+import type {
+  Conversation,
+  ConversationDetail,
+  ConversationStatus,
+} from '../../dashboard/types'
 import {
-  replyToConversation,
+  getConversation,
   setConversationStatus,
 } from '../../lib/dashboardClient'
 import { toFriendlyError } from '../../lib/friendlyError'
@@ -17,176 +27,250 @@ import { relativeTime } from '../../lib/formatDate'
 import Badge from '../ui/Badge'
 import Button from '../ui/Button'
 import Icon from '../ui/Icon'
+import Spinner from '../ui/Spinner'
+import ChatPanel from './ChatPanel'
 
 const STATUS_META: Record<
   ConversationStatus,
-  { label: string; tone: 'leaf' | 'info' | 'neutral' }
+  { label: string; tone: 'leaf' | 'info' | 'neutral' | 'warning' }
 > = {
   bot: { label: 'בוט', tone: 'leaf' },
+  // 'waiting' = customer asked for a human, bot stepped aside, no one took it yet.
+  // Surfaced with an attention colour so the owner spots it at a glance.
+  waiting: { label: 'המתנה לנציג', tone: 'warning' },
   human: { label: 'נציג אנושי', tone: 'info' },
   closed: { label: 'סגור', tone: 'neutral' },
 }
 
-const MAX_REPLY = 2000
-
 type Props = {
   conversation: Conversation
+  /** This row is the one currently expanded in the accordion. */
+  open: boolean
+  /** Ask the parent to expand this row (and collapse the others) or collapse it. */
+  onToggle: () => void
   /** Called after a successful status change so the parent can update its list. */
   onStatusChange: (id: string, status: ConversationStatus) => void
 }
 
-export default function ConversationCard({ conversation, onStatusChange }: Props) {
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const [reply, setReply] = useState('')
-  const [sending, setSending] = useState(false)
-  const [sent, setSent] = useState(false)
-
+export default function ConversationCard({
+  conversation,
+  open,
+  onToggle,
+  onStatusChange,
+}: Props) {
   const meta = STATUS_META[conversation.status]
+  const bodyId = `conversation-body-${conversation.conversation_id}`
+
+  // Lead/detail are lazily fetched the first time the row is opened.
+  const [detail, setDetail] = useState<ConversationDetail | null>(null)
+  const [loadingDetail, setLoadingDetail] = useState(false)
+  const [detailError, setDetailError] = useState<string | null>(null)
+
+  // Status-change in flight (used to disable the action buttons).
+  const [busy, setBusy] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
+
+  // The inline chat is shown once the owner takes the conversation over, or
+  // straight away if it's already human-handled.
+  const [showChat, setShowChat] = useState(conversation.status === 'human')
+
+  // Load the detail when the row first opens (re-load if the id changes).
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    setLoadingDetail(true)
+    setDetailError(null)
+    getConversation(conversation.conversation_id)
+      .then((res) => {
+        if (!cancelled) setDetail(res)
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setDetailError(toFriendlyError(err, 'טעינת פרטי השיחה נכשלה. נסו שוב.'))
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingDetail(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, conversation.conversation_id])
+
+  // Keep the chat visible whenever the conversation is human-handled.
+  useEffect(() => {
+    if (conversation.status === 'human') setShowChat(true)
+  }, [conversation.status])
 
   async function changeStatus(next: ConversationStatus) {
     if (busy || next === conversation.status) return
     setBusy(true)
-    setError(null)
+    setActionError(null)
     try {
       const res = await setConversationStatus(conversation.conversation_id, next)
       onStatusChange(conversation.conversation_id, res.status)
+      if (res.status === 'human') setShowChat(true)
     } catch (err) {
-      setError(toFriendlyError(err, 'שינוי מצב השיחה נכשל. נסו שוב.'))
+      setActionError(toFriendlyError(err, 'שינוי מצב השיחה נכשל. נסו שוב.'))
     } finally {
       setBusy(false)
     }
   }
 
-  async function sendReply(e: React.FormEvent) {
-    e.preventDefault()
-    const text = reply.trim()
-    if (!text || sending) return
-    setSending(true)
-    setError(null)
-    setSent(false)
-    try {
-      await replyToConversation(conversation.conversation_id, text)
-      setReply('')
-      setSent(true)
-    } catch (err) {
-      setError(toFriendlyError(err, 'שליחת התגובה נכשלה. נסו שוב.'))
-    } finally {
-      setSending(false)
+  // "לשיחה עם הלקוח": take the conversation over (→ human) and reveal the chat.
+  async function takeOver() {
+    if (conversation.status !== 'human') {
+      await changeStatus('human')
+    } else {
+      setShowChat(true)
     }
   }
 
-  const isHuman = conversation.status === 'human'
+  const lead = detail?.lead ?? null
+  const answers = Object.entries(lead?.answers ?? {})
 
   return (
-    <article className="flex flex-col gap-3 rounded-xl border border-black/10 bg-white p-4">
-      <div className="flex items-center gap-3">
+    <article className="overflow-hidden rounded-xl border border-black/10 bg-white">
+      {/* Accordion header — click to expand/collapse this conversation. */}
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-controls={bodyId}
+        className="flex w-full items-center gap-3 px-4 py-3 text-right hover:bg-slate-50"
+      >
         <span
           aria-hidden="true"
           className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500"
         >
           <Icon name="message-circle" size={18} />
         </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-slate-900" dir="ltr">
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-slate-900" dir="ltr">
             {conversation.conversation_id}
-          </p>
-          <p className="truncate text-xs text-slate-500">
+          </span>
+          <span className="block truncate text-xs text-slate-500">
             {conversation.preview || 'אין הודעות עדיין'}
             {conversation.last_activity_at
               ? ` · ${relativeTime(conversation.last_activity_at)}`
               : ''}
-          </p>
-        </div>
+          </span>
+        </span>
         <Badge tone={meta.tone}>{meta.label}</Badge>
-      </div>
+        <Icon
+          name="chevron-down"
+          size={18}
+          className={`flex-shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
 
-      {/* bot ↔ human ↔ closed control */}
-      <div
-        className="flex flex-wrap items-center gap-2"
-        role="group"
-        aria-label="מצב טיפול בשיחה"
-      >
-        <span className="text-xs text-slate-500">מצב טיפול:</span>
-        <Button
-          variant={conversation.status === 'bot' ? 'primary' : 'secondary'}
-          onClick={() => void changeStatus('bot')}
-          disabled={busy}
-          aria-pressed={conversation.status === 'bot'}
-          className={
-            conversation.status === 'bot' ? '!bg-leaf px-3 py-1.5 text-xs hover:!bg-leaf-dark' : 'px-3 py-1.5 text-xs'
-          }
-        >
-          <Icon name="robot" size={14} />
-          בוט
-        </Button>
-        <Button
-          variant={isHuman ? 'primary' : 'secondary'}
-          onClick={() => void changeStatus('human')}
-          disabled={busy}
-          aria-pressed={isHuman}
-          className={isHuman ? '!bg-leaf px-3 py-1.5 text-xs hover:!bg-leaf-dark' : 'px-3 py-1.5 text-xs'}
-        >
-          <Icon name="users" size={14} />
-          נציג
-        </Button>
-        <Button
-          variant={conversation.status === 'closed' ? 'primary' : 'secondary'}
-          onClick={() => void changeStatus('closed')}
-          disabled={busy}
-          aria-pressed={conversation.status === 'closed'}
-          className={
-            conversation.status === 'closed'
-              ? '!bg-slate-700 px-3 py-1.5 text-xs hover:!bg-slate-800'
-              : 'px-3 py-1.5 text-xs'
-          }
-        >
-          <Icon name="x" size={14} />
-          סגור
-        </Button>
-      </div>
-
-      {/* Reply box: only when a human is handling this chat. */}
-      {isHuman ? (
-        <form onSubmit={sendReply} className="flex flex-col gap-2 border-t border-black/10 pt-3">
-          <label htmlFor={`reply-${conversation.conversation_id}`} className="sr-only">
-            כתיבת תגובה לשיחה
-          </label>
-          <div className="flex items-end gap-2">
-            <textarea
-              id={`reply-${conversation.conversation_id}`}
-              value={reply}
-              maxLength={MAX_REPLY}
-              rows={2}
-              onChange={(e) => {
-                setReply(e.target.value)
-                setSent(false)
-              }}
-              placeholder="כתבו תגובה ללקוח…"
-              className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
-            />
-            <Button
-              type="submit"
-              disabled={sending || !reply.trim()}
-              className="!bg-leaf text-white hover:!bg-leaf-dark"
-            >
-              <Icon name="send" size={16} />
-              {sending ? 'שולח…' : 'שלח'}
-            </Button>
-          </div>
-          {sent ? (
-            <p role="status" aria-live="polite" className="text-xs text-ok">
-              התגובה נשלחה לתור השליחה.
+      {/* Accordion body — lead details + actions + (optional) inline chat. */}
+      {open ? (
+        <div id={bodyId} className="border-t border-black/10 px-4 pb-4 pt-3">
+          {loadingDetail ? (
+            <Spinner className="py-6" label="טוען פרטי שיחה…" />
+          ) : detailError ? (
+            <p role="alert" className="text-sm text-bad">
+              {detailError}
             </p>
-          ) : null}
-        </form>
-      ) : null}
+          ) : (
+            <>
+              {/* Linked lead's details (if any lead is attached). */}
+              {lead ? (
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                    <p className="text-sm font-medium text-slate-900">
+                      {lead.contact_name || 'ליד ללא שם'}
+                    </p>
+                    {lead.phone ? (
+                      <p className="text-xs text-slate-500" dir="ltr">
+                        {lead.phone}
+                      </p>
+                    ) : null}
+                  </div>
 
-      {error ? (
-        <p role="alert" className="text-xs text-bad">
-          {error}
-        </p>
+                  {answers.length > 0 ? (
+                    <dl className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
+                      {answers.map(([key, value]) => (
+                        <div key={key} className="min-w-0">
+                          <dt className="text-[11px] text-slate-400">{key}</dt>
+                          <dd className="truncate text-sm text-slate-800" title={value}>
+                            {value || <span className="text-slate-400">טרם נענה</span>}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : (
+                    <p className="text-sm text-slate-400">עדיין לא נאספו פרטים.</p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400">לא משויך ליד לשיחה הזו.</p>
+              )}
+
+              {/* Actions */}
+              <div
+                className="mt-4 flex flex-wrap items-center gap-2"
+                role="group"
+                aria-label="טיפול בשיחה"
+              >
+                <Button
+                  type="button"
+                  onClick={() => void takeOver()}
+                  disabled={busy}
+                  className="!bg-leaf text-white hover:!bg-leaf-dark"
+                >
+                  <Icon name="users" size={16} />
+                  {busy && conversation.status !== 'human'
+                    ? 'מעביר…'
+                    : 'לשיחה עם הלקוח'}
+                </Button>
+
+                {conversation.status !== 'closed' ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => void changeStatus('closed')}
+                    disabled={busy}
+                  >
+                    <Icon name="checks" size={16} />
+                    טופל
+                  </Button>
+                ) : null}
+
+                {/* Hand back to the bot once a human is done. */}
+                {conversation.status === 'human' ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => void changeStatus('bot')}
+                    disabled={busy}
+                  >
+                    <Icon name="robot" size={16} />
+                    החזר לבוט
+                  </Button>
+                ) : null}
+              </div>
+
+              {actionError ? (
+                <p role="alert" className="mt-2 text-xs text-bad">
+                  {actionError}
+                </p>
+              ) : null}
+
+              {/* Inline chat — revealed after takeover (or if already human). */}
+              {showChat ? (
+                <div className="mt-4 h-[28rem]">
+                  <ChatPanel
+                    conversationId={conversation.conversation_id}
+                    status={conversation.status}
+                    onStatusChange={onStatusChange}
+                  />
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
       ) : null}
     </article>
   )

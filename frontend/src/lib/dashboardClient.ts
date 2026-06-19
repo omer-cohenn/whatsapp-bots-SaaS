@@ -7,12 +7,14 @@
 
 import { api } from './apiClient'
 import type {
+  ConversationDetail,
   ConversationStatus,
   ConversationsResponse,
   DashboardStats,
   LeadStatus,
   LeadStatusFilter,
   LeadsResponse,
+  MessagesResponse,
   Period,
   PublishResponse,
   ReplyResponse,
@@ -96,8 +98,32 @@ export function getConversations(
 }
 
 /**
- * POST /api/conversations/{id}/status — flip a conversation between bot/human/
- * closed. Returns the new status (422 if status is out of range).
+ * GET /api/conversations/{id} — one conversation with its lead and full
+ * transcript (oldest → newest). 404 if it isn't ours.
+ */
+export function getConversation(
+  conversationId: string,
+): Promise<ConversationDetail> {
+  return api.get<ConversationDetail>(
+    `/api/conversations/${encodeURIComponent(conversationId)}`,
+  )
+}
+
+/**
+ * GET /api/conversations/{id}/messages — just the transcript (oldest → newest).
+ * Lighter than the full detail; the chat panel polls this while open.
+ */
+export function getConversationMessages(
+  conversationId: string,
+): Promise<MessagesResponse> {
+  return api.get<MessagesResponse>(
+    `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
+  )
+}
+
+/**
+ * POST /api/conversations/{id}/status — flip a conversation between bot/waiting/
+ * human/closed. Returns the new status (422 if status is out of range).
  */
 export function setConversationStatus(
   conversationId: string,

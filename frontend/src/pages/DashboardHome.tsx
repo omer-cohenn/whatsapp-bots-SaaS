@@ -9,6 +9,7 @@
 // derived server-side from the session — never sent from here.
 
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import DashboardLayout from '../components/DashboardLayout'
 import ActivityFeed from '../components/dashboard/ActivityFeed'
@@ -17,10 +18,12 @@ import SegmentedControl, { type Segment } from '../components/dashboard/Segmente
 import PublishToggle from '../components/dashboard/PublishToggle'
 import Spinner from '../components/ui/Spinner'
 import Alert from '../components/ui/Alert'
-import { getDashboard, getLeads } from '../lib/dashboardClient'
+import Icon from '../components/ui/Icon'
+import { getDashboard, getLeads, getConversations } from '../lib/dashboardClient'
 import { getSettings } from '../lib/botClient'
 import { toFriendlyError } from '../lib/friendlyError'
-import type { DashboardStats, Lead, Period } from '../dashboard/types'
+import { relativeTime } from '../lib/formatDate'
+import type { Conversation, DashboardStats, Lead, Period } from '../dashboard/types'
 
 const PERIOD_SEGMENTS: Segment<Period>[] = [
   { value: 'week', label: 'השבוע' },
@@ -38,6 +41,10 @@ export default function DashboardHome() {
 
   // Newest leads → the "התראות" activity feed (derived client-side, no period).
   const [recentLeads, setRecentLeads] = useState<Lead[]>([])
+
+  // Conversations waiting for a human ("מחכים לך"), surfaced prominently above
+  // the feed. Loaded once; non-fatal if it fails (the block just hides).
+  const [waiting, setWaiting] = useState<Conversation[]>([])
 
   // Publish state lives here so the toggle stays in sync with the loaded config.
   const [isPublished, setIsPublished] = useState<boolean | null>(null)
@@ -74,6 +81,21 @@ export default function DashboardHome() {
       })
       .catch(() => {
         if (!cancelled) setRecentLeads([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Conversations waiting for a human, loaded once. Non-fatal.
+  useEffect(() => {
+    let cancelled = false
+    getConversations('waiting')
+      .then((res) => {
+        if (!cancelled) setWaiting(res.conversations)
+      })
+      .catch(() => {
+        if (!cancelled) setWaiting([])
       })
     return () => {
       cancelled = true
@@ -169,6 +191,64 @@ export default function DashboardHome() {
             </div>
           ) : null}
         </section>
+
+        {/* "מחכים לך" — conversations where a customer asked for a human and no
+            one has taken over yet. Each links to that conversation. */}
+        {waiting.length > 0 ? (
+          <section aria-labelledby="waiting-heading" className="flex flex-col gap-3">
+            <h2
+              id="waiting-heading"
+              className="flex items-center gap-2 text-lg font-medium text-slate-900"
+            >
+              <span
+                aria-hidden="true"
+                className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-amber-700"
+              >
+                <Icon name="users" size={15} />
+              </span>
+              מחכים לך
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                {waiting.length}
+              </span>
+            </h2>
+
+            <ul className="flex flex-col gap-2">
+              {waiting.map((conv) => (
+                <li key={conv.conversation_id}>
+                  <Link
+                    to={`/conversations?status=waiting&conversation=${encodeURIComponent(
+                      conv.conversation_id,
+                    )}`}
+                    className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2.5 outline-none transition-colors hover:bg-amber-50 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white"
+                    >
+                      <Icon name="message-circle" size={20} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-slate-900">
+                        לקוח ממתין לנציג
+                      </span>
+                      <span className="block truncate text-xs text-slate-500">
+                        {conv.preview || conv.conversation_id}
+                      </span>
+                    </span>
+                    {conv.last_activity_at ? (
+                      <time
+                        dateTime={conv.last_activity_at}
+                        className="flex-shrink-0 text-xs text-slate-400"
+                      >
+                        {relativeTime(conv.last_activity_at)}
+                      </time>
+                    ) : null}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         <ActivityFeed leads={recentLeads} />
       </div>

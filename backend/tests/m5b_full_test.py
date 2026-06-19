@@ -262,11 +262,14 @@ async def run() -> int:
                    f"{done_events}, and the final answer ({CUST_CHOICE_TEXT}) was "
                    "captured")
 
-            # ── 6 — human handoff → chat_status 'human' + bot goes SILENT ────
-            banner("6", "A human handoff flips the chat to 'human' and the bot goes silent")
+            # ── 6 — human handoff → chat_status 'waiting' + bot goes SILENT ──
+            # M8 contract: a handoff flips the chat to 'waiting' (the customer
+            # asked for a person, nobody has picked up YET), not straight to
+            # 'human'. The bot is silent in BOTH 'waiting' and 'human'.
+            banner("6", "A human handoff flips the chat to 'waiting' and the bot goes silent")
             explain("trigger handoff (run_turn), then send ANOTHER message",
-                    "once a person takes over, the bot must NOT talk over them — "
-                    "the chat status becomes 'human' in Redis and every later turn "
+                    "the customer asked for a person → status becomes 'waiting' in "
+                    "Redis and the bot must NOT talk over them — every later turn "
                     "returns no replies at all (silent).")
             ho_conv = f"sim:{secrets.token_hex(8)}"
             made_conv_ids.append((BIZ_A, ho_conv))
@@ -278,11 +281,11 @@ async def run() -> int:
             nxt = await bot_runtime.run_turn(pool, redis, BIZ_A, ho_conv,
                                              "שלום? יש מישהו?", is_test=True)
             ok = (ho["event"] == "handed_off"
-                  and status_after == conversation_state.STATUS_HUMAN
+                  and status_after == conversation_state.STATUS_WAITING
                   and nxt["silent"] is True
                   and nxt["replies"] == []
                   and nxt["event"] is None)
-            result(ok, "handoff set chat_status='human' in Redis; the next turn "
+            result(ok, "handoff set chat_status='waiting' in Redis; the next turn "
                    "was SILENT (no replies, silent=true)")
 
             # ── 7 — abandoned sweep flips a stale in_progress lead ──────────

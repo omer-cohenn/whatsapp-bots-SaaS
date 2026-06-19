@@ -14,9 +14,11 @@ here is the thin orchestrator that wraps it with the real world:
 
 Two product rules are enforced here, not in the engine:
 
-  1. HUMAN HANDOFF MEANS SILENCE. If the chat's status is 'human' (an owner took
-     over), the bot does NOT answer at all — it returns no replies. The engine is
-     never even consulted. The owner is driving; the bot must not talk over them.
+  1. HANDOFF MEANS SILENCE. If the chat's status is 'waiting' (a customer asked
+     for a human, nobody has picked up yet) or 'human' (an owner took over), the
+     bot does NOT answer at all — it returns no replies and the engine is never
+     consulted. BUT we still record the inbound customer message on the transcript
+     first, so the owner sees incoming messages while handling the chat.
   2. TEST vs REAL. `is_test=True` (the try-me/sim path) tags every lead + event
      it persists, so sandbox data never pollutes a business's real funnel.
 
@@ -79,11 +81,23 @@ async def run_turn(
           "silent":  bool,         # True ⇒ a human is handling; bot said nothing
         }
     """
-    # 1) Load the chat status. A handed-off chat ('human') means the OWNER is
-    #    driving — the bot stays completely silent and we don't run the engine.
+    # 1) Load the chat status. A chat that's 'waiting' (customer asked for a human,
+    #    not yet picked up) or 'human' (an owner took over) means the bot stays
+    #    completely silent and we don't run the engine. We STILL append the inbound
+    #    customer message to the transcript first, so the owner sees what's coming
+    #    in while they handle the chat.
     status = await conversation_state.get_status(redis, business_id, conversation_id)
-    if status == conversation_state.STATUS_HUMAN:
+    if status in (conversation_state.STATUS_WAITING, conversation_state.STATUS_HUMAN):
+        await conversation_state.append_message(
+            redis, business_id, conversation_id, "customer", message
+        )
         return {"replies": [], "event": None, "lead_id": None, "silent": True}
+
+    # 1b) Non-silent turn: record the inbound customer message on the transcript
+    #     so the in-app chat view shows it alongside the bot's replies below.
+    await conversation_state.append_message(
+        redis, business_id, conversation_id, "customer", message
+    )
 
     # 2) Load the saved engine state (fall back to a fresh conversation) + pull
     #    the runtime-only active lead_id that rides along on it.
@@ -131,10 +145,17 @@ async def run_turn(
             )
 
         elif event == "handed_off":
-            # Keyword/menu handoff → mark the chat 'human' so the bot goes silent
-            # on the NEXT turn (this turn still delivered the handoff notice).
+            # Keyword/menu handoff → the customer asked for a human. Mark the chat
+            # 'waiting' (NOT yet 'human' — nobody has picked up) so the bot goes
+            # silent on the NEXT turn; this turn still delivers the handoff notice.
             await conversation_state.set_status(
-                redis, business_id, conversation_id, conversation_state.STATUS_HUMAN
+                redis, business_id, conversation_id, conversation_state.STATUS_WAITING
+            )
+            # Log a funnel event so the dashboard can raise a "ביקש נציג" notice.
+            # Tenant-scoped via `conn`, is_test honored; carries no PII.
+            await leads_service.log_event(
+                conn, business_id, active_lead_id, None,
+                leads_service.EVENT_HANDOFF, step_index=None, is_test=is_test,
             )
         # event == "booking": Phase-2 stub in the engine; nothing to persist (M5).
 
@@ -145,6 +166,13 @@ async def run_turn(
     state_to_save = dict(next_state)
     state_to_save[_LEAD_ID_FIELD] = persist_lead_id
     await conversation_state.set_state(redis, business_id, conversation_id, state_to_save)
+
+    # 7) Mirror each bot reply onto the transcript (role="bot") so the owner's
+    #    chat view shows the full exchange — customer line + the bot's answers.
+    for reply in result["replies"]:
+        await conversation_state.append_message(
+            redis, business_id, conversation_id, "bot", reply
+        )
 
     return {
         "replies": result["replies"],

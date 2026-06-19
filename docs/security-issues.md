@@ -157,3 +157,69 @@ issues found in the polish delta.
 |----|----------|------|----------|
 | (all checks) | — | Verification | PASS — business_id from session only; status UPDATE RLS-scoped + explicit `WHERE business_id` (404 on foreign lead); status is a Literal + service re-check, param-bound (no injection); `orders` tenant-scoped w/ same is_test+period; no PII/secrets logged, generic errors; wa.me link client-side only (no server-side phone log). |
 | (none) | — | — | No new findings in the M7 polish delta. (Pre-existing M7 low notes M7-01..M7-03 stand; M7-01 appears resolved — `/api/leads` status is now a `Literal` at `dashboard.py:69-71` — verify.) |
+
+---
+
+## M8 in-app human-handoff chat (statuses + transcript) — audit 2026-06-19
+
+> Scope: the NEW M8 delta — the transcript layer in `backend\app\services\conversation_state.py`
+> (`_log_key`, `append_message`, `get_messages`, the `waiting` status, transcript mirroring in
+> `append_reply`), the silence/transcript wiring in `backend\app\services\bot_runtime.py`
+> (status-first guard + `append_message` on customer/bot lines), the read-side
+> `get_lead_by_conversation` in `backend\app\services\leads.py`, the four conversation
+> endpoints in `backend\app\api\dashboard.py` (`GET /conversations/{id}`,
+> `GET /conversations/{id}/messages`, extended `POST .../status`, extended `POST .../reply`),
+> the M8 models in `backend\app\models\dashboard.py` (`MessageItem`, `ConversationDetail`,
+> `MessagesResponse`, `waiting` in the status Literals), and the frontend
+> `frontend\src\components\dashboard\ChatPanel.tsx`, `frontend\src\pages\ConversationsPage.tsx`,
+> `frontend\src\lib\dashboardClient.ts`. Cross-checked against `app\core\deps.py`,
+> `app\api\me.py`, `app\db\session.py`. Read-only audit; no product code was modified.
+
+**M8 contract checks (S1–S4) — verification result:**
+
+- ✅ **S1 — every new endpoint is behind the session gate; `business_id` comes from `current_business` only; the `:log` key is business-prefixed and passes `_assert_owns`.** Verified. All four conversation routes live on the `dashboard_router`, mounted on the `/api` group whose router-level `dependencies=[Depends(current_session)]` is the deny-by-default gate (`me.py:26,34`) — a missing/expired session is 401 before any handler runs. Each of `get_conversation`, `get_conversation_messages`, `set_conversation_status`, `reply_to_conversation` takes `business_id = Depends(current_business)` (`dashboard.py:193,238,263,286`), resolved solely from the server-side session (`deps.py:50-54`). No M8 model carries a `business_id` field (`models/dashboard.py:96-156`); the only client-supplied identifier is `conversation_id` (path) and `status`/`text` (body). The transcript key is built as `conv:{business_id}:{conversation_id}:log` (`conversation_state.py:60-67`) and `_assert_owns(business_id, log_key)` is re-checked in BOTH `append_message` (`conversation_state.py:287-288`) and `get_messages` (`conversation_state.py:311-312`); the companion hash key is asserted alongside it.
+- ✅ **S2 — no cross-tenant path to a transcript: A can never read/write B's `conv:{}:{}:log`.** Verified. The `business_id` baked into both `_key` and `_log_key` is the caller's session-verified id, never client-derived, so A's request can only ever name `conv:{A}:...:log`. `_assert_owns` requires the key to start with `conv:{business_id}:`, so even a forged `conversation_id` containing colons or `..` cannot escape the caller's own prefix — at worst it names a non-existent key UNDER A's namespace (a transcript that doesn't exist, returned as `[]`), never B's. `get_lead_by_conversation` (`leads.py:374-402`) is the only Postgres read added; it runs inside `tenant_connection(pool, business_id)` (`dashboard.py:211`) AND carries `WHERE business_id = $1 AND cache_chat_ref = $2` with `cache_chat_ref = conv:{business_id}:{conversation_id}` (`leads.py:388,395`) — doubly tenant-scoped, so the linked lead can never resolve to B's row. Cross-checked with the QA isolation expectation: there is no code path on which A supplies B's `business_id`.
+- ✅ **S3 — input bounds; no eval/exec; SQL parameterized.** Verified. `conversation_id` is bounded `min_length=1, max_length=200` on every M8 route (`dashboard.py:192,237,262,285`). Reply `text` is `min_length=1, max_length=2000`, whitespace-stripped, `extra="forbid"` (`models/dashboard.py:147-149`). Status body is `Literal["bot","waiting","human","closed"]` with `extra="forbid"` (`models/dashboard.py:126-128`), re-checked against `_VALID_STATUSES` in `set_status` (`conversation_state.py:168-169`). Transcript `role` is validated against `_VALID_ROLES` in `append_message` (`conversation_state.py:282-283`) and the list is hard-capped by `LTRIM -TRANSCRIPT_MAX -1` (200) so it can't grow without bound (`conversation_state.py:48,294`). No `eval`/`exec`/dynamic import anywhere in the M8 code. The one new SQL statement (`get_lead_by_conversation`) is fully parameterized (`$1`/`$2`, `leads.py:389-401`) — no string interpolation. `get_messages` tolerates a single corrupt JSON line rather than failing the whole read (`conversation_state.py:317-323`).
+- ✅ **S4 — no secrets/PII/message text in logs; Gemini/DB errors stay generic.** Verified. The M8 transcript service functions (`append_message`, `get_messages`, `_log_key`) contain ZERO `log.*` calls — the message body is never logged (docstrings at `conversation_state.py:280-281,308-309` state this explicitly; `_preview` truncates for the hash but is also never logged). `bot_runtime.py` logs nothing on the customer/bot transcript path. In `dashboard.py`, `get_conversation` is the only M8 handler that can log: it catches `DecryptionError` and emits the static `log.error("lead decryption failed")` (`dashboard.py:216`) — no `str(e)`, no ids, no plaintext — then returns generic `500 "could not read conversation"` (`dashboard.py:217-220`). The `/messages`, `/status`, `/reply` handlers log nothing. No Gemini call exists on this surface. The JSON formatter only serializes the static message + allow-listed `extra`, and no PII-bearing `extra` is passed.
+
+**Frontend (informational):**
+
+- ✅ The chat panel and conversations page pass only `conversationId` + the typed status/text to the API client; `conversationId` is `encodeURIComponent`-escaped into the path (`dashboardClient.ts:107,120,133,146`), the tenant is never sent from the client (cookie-only, `credentials:'include'`), and the client-side `maxLength={2000}` mirrors the server bound (`ChatPanel.tsx:25,195`). Message bodies render via React JSX text interpolation (`ChatPanel.tsx:232,249`), which auto-escapes — no `dangerouslySetInnerHTML`, so a customer-supplied message body cannot inject script into the owner's dashboard (XSS). The `?conversation=` deep-link param only sets which row is expanded; it is not trusted for tenant scoping (the server re-resolves the tenant). The `at` timestamp is rendered, not the role-as-HTML.
+
+**Overall verdict: SHIP — the M8 in-app handoff chat is tenant-correct, input-bounded, and leak-free.**
+Every new endpoint inherits the session gate; `business_id` is taken only from the
+verified session on all four routes; the new `:log` transcript key is business-prefixed
+and `_assert_owns`-checked on both write (`append_message`) and read (`get_messages`),
+so there is NO cross-tenant path to another business's transcript; the one new SQL read
+is doubly tenant-scoped (RLS + explicit `business_id`); reply/message sizes, the
+`conversation_id` path, the `status` Literal, and the transcript `role` are all bounded;
+the transcript is LTRIM-capped at 200; nothing logs message text/PII/secrets and errors
+stay generic; the React chat view auto-escapes message bodies (no XSS). No critical or
+medium issues found in the M8 delta. The findings below are LOW hardening notes and
+inherited (pre-existing) items to keep on the radar — none is a leak or isolation gap
+introduced by M8.
+
+### S8-01 — `append_message` mirrors EVERY inbound customer line into the transcript even while a chat is closed/expired — LOW
+- **Where:** `backend\app\services\bot_runtime.py:89-100` + `conversation_state.py:264-300`.
+- **Why dangerous (mild):** `run_turn` goes silent only for `waiting`/`human`; for `closed` (or a never-set status) it still appends the inbound customer message AND runs the engine. Because `append_message` calls `_register` + refreshes TTL on every line, an inbound message can resurrect a `closed`/expired conversation back into the dashboard index and keep its (ephemeral) transcript alive. This is a tenant-internal lifecycle/accuracy nit, NOT a cross-tenant leak — the resurrected key stays under the caller's own `conv:{business_id}:` prefix. Mirrors the pre-existing M7-03 lifecycle note.
+- **Fix direction:** Confirm the intended behavior for an inbound message on a `closed` conversation (re-open vs. ignore); if "closed stays closed," gate the append/register on status, or have the runtime treat `closed` like `waiting` (record-but-silent) without re-registering.
+
+### S8-02 — transcript body is stored in Redis in plaintext (ephemeral), unlike leads which are encrypted at rest — LOW (by design; confirm)
+- **Where:** `backend\app\services\conversation_state.py:290-292` (the `{role, body, at}` JSON pushed to `:log`).
+- **Why dangerous (mild):** Customer message text (which can contain PII — a name, phone, address typed mid-conversation) is stored as plaintext in Redis, whereas the durable `leads` rows are encrypted at rest (`leads.py`). This matches decision 0006 (live chat is ephemeral, TTL'd, app-isolated in Redis, not the durable store), so it is a deliberate trade-off, not a regression — but it means anyone with direct Redis access (ops, a Redis breach, an unsecured Redis port) can read recent conversation text. Tenant isolation in-app is intact; this is a defense-in-depth/at-rest note.
+- **Fix direction:** Confirm Redis is not network-exposed and is access-controlled (auth + TLS in the deployed env); consider whether the ~60-min TTL window of plaintext customer PII is acceptable per the data-protection stance, and document the decision. No code change required if 0006 already covers this.
+
+### S8-03 — `MessageItem.role`/`body` are unconstrained `str` in the response model; trust rests entirely on `append_message`'s write-time validation — LOW
+- **Where:** `backend\app\models\dashboard.py:96-101` (`role: str`, `body: str`) vs the write-time guard in `conversation_state.py:282-283`.
+- **Why dangerous (mild):** The response model does not re-validate `role` against the allowed set or bound `body` length on the way OUT. In practice the only writer is `append_message`, which enforces `_VALID_ROLES` and the data originates from already-bounded inputs (customer message ≤ the inbound limit, owner reply ≤ 2000, bot replies engine-generated), so a malformed/oversized line cannot normally be stored. The mild risk is only if some future writer bypasses `append_message`. Not exploitable today; no cross-tenant or injection impact (the frontend auto-escapes the body).
+- **Fix direction:** Optionally tighten `MessageItem.role` to a `Literal["customer","bot","owner"]` for parity with the write-time guard; keep all transcript writes funneled through `append_message`.
+
+### M8 chat — summary table
+| ID | Severity | Area | One-line |
+|----|----------|------|----------|
+| S1–S4 | — | Verification | PASS — all four endpoints session-gated; business_id from session only; `:log` key business-prefixed + `_assert_owns` on read AND write (no cross-tenant transcript path); the one new SQL read doubly tenant-scoped; conversation_id/status/text/role all bounded, transcript LTRIM-capped at 200; no eval/exec, SQL parameterized; no message text/PII/secrets logged, errors generic; React view auto-escapes bodies (no XSS). |
+| S8-01 | Low | Lifecycle | Inbound customer line on a `closed`/expired chat is appended + re-registers/refreshes TTL, resurrecting it in the index (tenant-internal, not a leak) — confirm "closed stays closed" intent. |
+| S8-02 | Low | At-rest (by design) | Transcript bodies (may contain PII) stored as plaintext in Redis, TTL'd — deliberate per decision 0006; confirm Redis is access-controlled + the plaintext window is acceptable. |
+| S8-03 | Low | Defense-in-depth | `MessageItem.role`/`body` are free `str` on the way out; safe because all writes go through the validating `append_message` — optionally tighten `role` to a `Literal`. |
+
+**Top fixes:** (1) S8-01 — decide + enforce the `closed`-conversation behavior so an inbound line doesn't silently resurrect a closed chat (shares M7-03's root cause; one fix covers both); (2) S8-02 — document/confirm Redis access-control + the plaintext-at-rest TTL window for conversation text; (3) S8-03 — optionally make `MessageItem.role` a `Literal` and keep every transcript write funneled through `append_message`.

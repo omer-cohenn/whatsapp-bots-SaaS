@@ -8,6 +8,7 @@
 // tenant is always derived server-side from the session.
 
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import DashboardLayout from '../components/DashboardLayout'
 import ConversationCard from '../components/dashboard/ConversationCard'
 import SegmentedControl, { type Segment } from '../components/dashboard/SegmentedControl'
@@ -23,6 +24,7 @@ type StatusFilter = 'all' | ConversationStatus
 
 const FILTER_SEGMENTS: Segment<StatusFilter>[] = [
   { value: 'all', label: 'הכול' },
+  { value: 'waiting', label: 'המתנה לנציג' },
   { value: 'bot', label: 'בוט' },
   { value: 'human', label: 'נציג' },
   { value: 'closed', label: 'סגורות' },
@@ -33,6 +35,16 @@ export default function ConversationsPage() {
   const [conversations, setConversations] = useState<Conversation[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Accordion: id of the expanded row (null = all collapsed, one open at a time).
+  const [openId, setOpenId] = useState<string | null>(null)
+
+  // Deep-link support: the home "מחכים לך" notifications link here with
+  // ?conversation=<id> to open that row straight away.
+  const [searchParams] = useSearchParams()
+  const focusId = searchParams.get('conversation')
+  useEffect(() => {
+    if (focusId) setOpenId(focusId)
+  }, [focusId])
 
   const load = useCallback((statusFilter: StatusFilter) => {
     let cancelled = false
@@ -104,6 +116,12 @@ export default function ConversationsPage() {
                 <li key={conv.conversation_id}>
                   <ConversationCard
                     conversation={conv}
+                    open={openId === conv.conversation_id}
+                    onToggle={() =>
+                      setOpenId((cur) =>
+                        cur === conv.conversation_id ? null : conv.conversation_id,
+                      )
+                    }
                     onStatusChange={handleStatusChange}
                   />
                 </li>

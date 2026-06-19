@@ -78,7 +78,7 @@ class ConversationItem(BaseModel):
     """One live conversation summary (from Redis), strictly business-scoped."""
 
     conversation_id: str
-    status: str  # bot | human | closed
+    status: str  # bot | waiting | human | closed
     last_activity_at: str | None = None
     preview: str = ""
     assigned_user_id: str | None = None
@@ -90,15 +90,42 @@ class ConversationsResponse(BaseModel):
     conversations: list[ConversationItem]
 
 
+# --- GET /api/conversations/{id} (+ /messages) -------------------------------
+
+
+class MessageItem(BaseModel):
+    """One transcript line (from Redis). `role` is who said it; never logged."""
+
+    role: str  # customer | bot | owner
+    body: str
+    at: str | None = None
+
+
+class ConversationDetail(BaseModel):
+    """GET /api/conversations/{id}: status + linked lead + full transcript."""
+
+    conversation_id: str
+    status: str  # bot | waiting | human | closed
+    lead: LeadItem | None = None
+    messages: list[MessageItem] = Field(default_factory=list)
+
+
+class MessagesResponse(BaseModel):
+    """GET /api/conversations/{id}/messages: just the transcript, oldest first."""
+
+    conversation_id: str
+    messages: list[MessageItem] = Field(default_factory=list)
+
+
 # --- POST /api/conversations/{id}/status -------------------------------------
 
 
 class ConversationStatusRequest(BaseModel):
-    """Set a conversation's status. `status` is validated to the closed set."""
+    """Set a conversation's status. `status` is validated to the allowed set."""
 
     model_config = ConfigDict(extra="forbid")
 
-    status: Literal["bot", "human", "closed"]
+    status: Literal["bot", "waiting", "human", "closed"]
 
 
 class ConversationStatusResponse(BaseModel):

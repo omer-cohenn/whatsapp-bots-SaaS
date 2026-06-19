@@ -63,7 +63,12 @@ EVENT_STARTED = "started"
 EVENT_STEP = "step"
 EVENT_COMPLETED = "completed"
 EVENT_ABANDONED = "abandoned"
-_VALID_EVENTS = {EVENT_STARTED, EVENT_STEP, EVENT_COMPLETED, EVENT_ABANDONED}
+# A customer asked for a human (M8 handoff). Logged so the dashboard can surface a
+# "ביקש נציג" notification; carries no PII, only the structural signal.
+EVENT_HANDOFF = "handed_off"
+_VALID_EVENTS = {
+    EVENT_STARTED, EVENT_STEP, EVENT_COMPLETED, EVENT_ABANDONED, EVENT_HANDOFF,
+}
 
 # Keys inside the engine's `collected` dict that map to dedicated PII columns.
 # The engine stores answers under the step's machine `key`; by convention a phone
@@ -364,6 +369,37 @@ async def list_leads(
     )
     rows = await conn.fetch(sql, *params)
     return [_decrypt_lead_row(row) for row in rows]
+
+
+async def get_lead_by_conversation(
+    conn: asyncpg.Connection,
+    business_id: str,
+    conversation_id: str,
+) -> dict[str, Any] | None:
+    """Return the lead linked to THIS conversation (decrypted), or None if none.
+
+    A conversation can spawn several lead rows over time (one per flow start), so
+    we return the NEWEST match. We join via the same `cache_chat_ref` that
+    `create_lead` stamps (the live Redis conversation key). `business_id` is the
+    caller's verified id and is in the WHERE so RLS scopes the read to this tenant.
+    Reuses `_decrypt_lead_row`, so phone/name/answers come back as plaintext for
+    the owner — NEVER logged.
+    """
+    cache_chat_ref = f"conv:{business_id}:{conversation_id}"
+    row = await conn.fetchrow(
+        """
+        SELECT id, lead_name, phone, contact_name, answers, status,
+               last_step_index, is_test, key_version,
+               started_at, last_activity_at, submitted_at
+        FROM leads
+        WHERE business_id = $1 AND cache_chat_ref = $2
+        ORDER BY last_activity_at DESC
+        LIMIT 1
+        """,
+        business_id,
+        cache_chat_ref,
+    )
+    return _decrypt_lead_row(row) if row is not None else None
 
 
 def _decrypt_lead_row(row: asyncpg.Record) -> dict[str, Any]:

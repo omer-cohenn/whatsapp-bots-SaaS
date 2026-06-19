@@ -188,14 +188,18 @@ async def test_lead_lifecycle_and_encryption(http, rds, pool, cleanup_test_leads
 # --- handoff silence ---------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_handoff_sets_human_and_bot_goes_silent(rds, pool, cleanup_test_leads):
+async def test_handoff_sets_waiting_and_bot_goes_silent(rds, pool, cleanup_test_leads):
+    # M8 contract change: a handoff now flips the chat to 'waiting' (the customer
+    # asked for a human but nobody has picked up yet) — NOT straight to 'human'.
+    # The bot is silent in BOTH 'waiting' and 'human'; the owner moves it to
+    # 'human' when they take over. See docs/decisions/0008-m8-handoff-chat.md.
     conv = f"sim:{secrets.token_hex(8)}"
     try:
         ho = await bot_runtime.run_turn(pool, rds, BIZ_A, conv,
                                         "אני רוצה לדבר עם נציג", is_test=True)
         assert ho["event"] == "handed_off"
         status = await conversation_state.get_status(rds, BIZ_A, conv)
-        assert status == conversation_state.STATUS_HUMAN
+        assert status == conversation_state.STATUS_WAITING
 
         nxt = await bot_runtime.run_turn(pool, rds, BIZ_A, conv, "שלום?", is_test=True)
         assert nxt["silent"] is True

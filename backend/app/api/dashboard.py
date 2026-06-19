@@ -8,7 +8,9 @@ Endpoints:
   GET  /api/leads                          → this tenant's leads (decrypted, full).
   GET  /api/dashboard                      → funnel counts for a period.
   GET  /api/conversations                  → live conversations (Redis), scoped.
-  POST /api/conversations/{id}/status      → set bot|human|closed.
+  GET  /api/conversations/{id}             → status + linked lead + transcript.
+  GET  /api/conversations/{id}/messages    → transcript only (light/poll).
+  POST /api/conversations/{id}/status      → set bot|waiting|human|closed.
   POST /api/conversations/{id}/reply       → queue an owner manual reply (M6 sends).
   PUT  /api/bot/publish                    → focused go-live toggle.
 
@@ -35,6 +37,7 @@ from app.db.session import tenant_connection
 from app.models.dashboard import (
     BotPublishRequest,
     BotPublishResponse,
+    ConversationDetail,
     ConversationItem,
     ConversationReplyRequest,
     ConversationReplyResponse,
@@ -46,6 +49,8 @@ from app.models.dashboard import (
     LeadsResponse,
     LeadStatusRequest,
     LeadStatusResponse,
+    MessageItem,
+    MessagesResponse,
 )
 from app.services import (
     bot_settings as bot_settings_service,
@@ -160,20 +165,90 @@ async def get_dashboard(
 async def get_conversations(
     request: Request,
     business_id: str = Depends(current_business),
-    status_filter: Literal["bot", "human", "closed"] | None = Query(
+    status_filter: Literal["bot", "waiting", "human", "closed"] | None = Query(
         None, alias="status"
     ),
 ) -> ConversationsResponse:
     """List this tenant's live conversations from Redis (status + preview + time).
 
     Strictly business-scoped (see `conversation_state.list_conversations` for the
-    per-business index choice). `status` optionally filters to bot|human|closed.
+    per-business index choice). `status` optionally filters to
+    bot|waiting|human|closed.
     """
     items = await conversation_state.list_conversations(
         request.app.state.redis, business_id, status=status_filter
     )
     return ConversationsResponse(
         conversations=[ConversationItem(**item) for item in items]
+    )
+
+
+@router.get(
+    "/conversations/{conversation_id}",
+    response_model=ConversationDetail,
+)
+async def get_conversation(
+    request: Request,
+    conversation_id: str = Path(..., min_length=1, max_length=_CONV_ID_MAX),
+    business_id: str = Depends(current_business),
+) -> ConversationDetail:
+    """One conversation: live status + transcript (Redis) + its linked lead (PG).
+
+    Status and the transcript come from Redis (business-prefixed, `_assert_owns`
+    re-checked in the service). The linked lead is read RLS-scoped via
+    `tenant_connection`; if a stored value can't be decrypted we fail generic 500
+    exactly like `get_leads` (no str(e), no plaintext). We never log message text.
+    """
+    redis = request.app.state.redis
+    status_value = await conversation_state.get_status(
+        redis, business_id, conversation_id
+    )
+    raw_messages = await conversation_state.get_messages(
+        redis, business_id, conversation_id
+    )
+
+    try:
+        async with tenant_connection(request.app.state.pg_pool, business_id) as conn:
+            lead_row = await leads_service.get_lead_by_conversation(
+                conn, business_id, conversation_id
+            )
+    except DecryptionError:
+        log.error("lead decryption failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="could not read conversation",
+        ) from None
+
+    return ConversationDetail(
+        conversation_id=conversation_id,
+        # No status set yet (brand-new chat) defaults to the bot handling it.
+        status=status_value or "bot",
+        lead=LeadItem(**lead_row) if lead_row is not None else None,
+        messages=[MessageItem(**msg) for msg in raw_messages],
+    )
+
+
+@router.get(
+    "/conversations/{conversation_id}/messages",
+    response_model=MessagesResponse,
+)
+async def get_conversation_messages(
+    request: Request,
+    conversation_id: str = Path(..., min_length=1, max_length=_CONV_ID_MAX),
+    business_id: str = Depends(current_business),
+) -> MessagesResponse:
+    """Just this conversation's transcript (oldest→newest) from Redis, scoped.
+
+    Business-prefixed key, `_assert_owns` re-checked in the service. No status or
+    lead read here — this is the light endpoint for polling the chat. Never logs
+    message text.
+    """
+    raw_messages = await conversation_state.get_messages(
+        request.app.state.redis, business_id, conversation_id
+    )
+    return MessagesResponse(
+        conversation_id=conversation_id,
+        messages=[MessageItem(**msg) for msg in raw_messages],
     )
 
 
@@ -187,7 +262,7 @@ async def set_conversation_status(
     conversation_id: str = Path(..., min_length=1, max_length=_CONV_ID_MAX),
     business_id: str = Depends(current_business),
 ) -> ConversationStatusResponse:
-    """Set a conversation's status to bot|human|closed (tenant-scoped).
+    """Set a conversation's status to bot|waiting|human|closed (tenant-scoped).
 
     The value is validated by the request model (Literal); the service re-checks
     the business prefix on the key, so there is no path to another tenant's chat.

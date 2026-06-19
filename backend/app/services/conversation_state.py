@@ -33,10 +33,19 @@ import redis.asyncio as aioredis
 CONVERSATION_TTL_SECONDS = 60 * 60
 
 # The chat statuses we persist (kept tiny + explicit on purpose).
-STATUS_BOT = "bot"
-STATUS_HUMAN = "human"
-STATUS_CLOSED = "closed"
-_VALID_STATUSES = {STATUS_BOT, STATUS_HUMAN, STATUS_CLOSED}
+STATUS_BOT = "bot"          # the engine is driving.
+STATUS_WAITING = "waiting"  # customer asked for a human; nobody has picked up yet.
+STATUS_HUMAN = "human"      # an owner took over; the engine is paused.
+STATUS_CLOSED = "closed"    # finished/expired.
+# The bot must stay SILENT in 'waiting' and 'human' (see bot_runtime.run_turn).
+_VALID_STATUSES = {STATUS_BOT, STATUS_WAITING, STATUS_HUMAN, STATUS_CLOSED}
+
+# The conversation transcript roles (who said a line). Kept explicit so a bad
+# value is rejected rather than silently stored.
+_VALID_ROLES = {"customer", "bot", "owner"}
+
+# Keep at most this many messages in a conversation's transcript (LTRIM bound).
+TRANSCRIPT_MAX = 200
 
 
 class CrossTenantConversationError(Exception):
@@ -46,6 +55,16 @@ class CrossTenantConversationError(Exception):
 def _key(business_id: str, conversation_id: str) -> str:
     """The tenant-scoped Redis key for one conversation's state + status."""
     return f"conv:{business_id}:{conversation_id}"
+
+
+def _log_key(business_id: str, conversation_id: str) -> str:
+    """The tenant-scoped Redis LIST key for one conversation's transcript.
+
+    A list of JSON {role, body, at} lines, oldest→newest, capped at TRANSCRIPT_MAX.
+    Business-prefixed exactly like `_key`, so it can never name another tenant's
+    transcript; `_assert_owns` re-checks the prefix on every accessor.
+    """
+    return f"conv:{business_id}:{conversation_id}:log"
 
 
 def _index_key(business_id: str) -> str:
@@ -235,6 +254,74 @@ async def append_reply(
     await redis.expire(key, CONVERSATION_TTL_SECONDS)
     await redis.expire(outbox, CONVERSATION_TTL_SECONDS)
     await _register(redis, business_id, conversation_id)
+    # Mirror the owner's reply into the shared transcript so the in-app chat view
+    # and the (future) WhatsApp outbox stay in sync — same key both sides read.
+    await append_message(redis, business_id, conversation_id, "owner", text)
+
+
+# --- transcript (M8 in-app human-handoff chat) ------------------------------
+
+async def append_message(
+    redis: aioredis.Redis,
+    business_id: str,
+    conversation_id: str,
+    role: str,
+    body: str,
+) -> None:
+    """Append one line to THIS conversation's transcript (tenant-scoped, TTL'd).
+
+    Pushes a JSON {role, body, at} onto the per-conversation LIST, then LTRIMs to
+    the last TRANSCRIPT_MAX so the log can't grow without bound. Also bumps the
+    conversation hash's `preview` + `last_activity_at`, refreshes the TTL on BOTH
+    the list and the hash, and (re)registers the conversation in this tenant's
+    index so it shows up in the dashboard. `role` must be customer|bot|owner.
+
+    Tenant-isolated: `_assert_owns` is checked on both keys; `business_id` is the
+    caller's verified id, never client-supplied. We NEVER log the message body.
+    """
+    if role not in _VALID_ROLES:
+        raise ValueError(f"invalid transcript role: {role!r}")
+
+    key = _key(business_id, conversation_id)
+    log_key = _log_key(business_id, conversation_id)
+    _assert_owns(business_id, key)
+    _assert_owns(business_id, log_key)
+
+    line = json.dumps({"role": role, "body": body, "at": _now_iso()},
+                      ensure_ascii=False)
+    await redis.rpush(log_key, line)
+    # Keep only the last TRANSCRIPT_MAX entries (negative indices = from the tail).
+    await redis.ltrim(log_key, -TRANSCRIPT_MAX, -1)
+    await redis.hset(
+        key, mapping={"preview": _preview(body), "last_activity_at": _now_iso()}
+    )
+    await redis.expire(log_key, CONVERSATION_TTL_SECONDS)
+    await redis.expire(key, CONVERSATION_TTL_SECONDS)
+    await _register(redis, business_id, conversation_id)
+
+
+async def get_messages(
+    redis: aioredis.Redis, business_id: str, conversation_id: str
+) -> list[dict[str, Any]]:
+    """Return THIS conversation's transcript, oldest→newest (empty if none).
+
+    Each item is {role, body, at}. A single corrupt/unreadable entry is skipped
+    rather than failing the whole read. Tenant-scoped via `_assert_owns`.
+    """
+    log_key = _log_key(business_id, conversation_id)
+    _assert_owns(business_id, log_key)
+    raw_items = await redis.lrange(log_key, 0, -1)
+
+    messages: list[dict[str, Any]] = []
+    for raw in raw_items:
+        try:
+            item = json.loads(raw)
+        except (ValueError, TypeError):
+            # Tolerate a single bad line — never let it break the transcript view.
+            continue
+        if isinstance(item, dict):
+            messages.append(item)
+    return messages
 
 
 # --- internal helpers -------------------------------------------------------
