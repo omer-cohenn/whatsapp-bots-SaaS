@@ -8,8 +8,10 @@
 - ✅ **M1** — WhatsApp receive works **end-to-end** (real inbound messages reach the backend webhook).
 - ✅ **M2** — the tenant wall: 9 tables + 2 non-service DB roles + RLS (`USING`+`WITH CHECK`) + dual-key fail-loud encryption + Redis cache isolation + the isolation suite. Migrations auto-apply via the compose `migrate` step. **Verify:** `make demo-isolation` (9/9), `make isolation` (10 passing), `make demo-break` (8/9 then restored).
 - ✅ **M3** — login & accounts: Google OAuth + opaque Redis-backed sessions (`bizzup_session`) + the **deny-by-default** `/api` gate, wired onto the M2 tenant session. `provision_owner` auto-creates a business on first login (idempotent); logout truly destroys the session. **Verify:** `tests/test_m3.bat` → M3 narrated **5/5**, the `test_auth_gate.py` pytest gate green, and the M2 wall still **12/12** (no regression). A real Google click-through is a one-time manual check at `:5173`.
-- ⬜ **M4 — next:** per the checklist.
-- Then M4→M9 per the checklist.
+- ✅ **M4** — the AI bot builder (per-tenant config, validated/grounded). **Verify:** `tests/test_m4.bat` → M4 narrated **9/9**.
+- ✅ **M5** — the bot brain + leads: the **pure conversation engine** + the **lead-memory runtime** (`bot_runtime.run_turn` + `/api/bot/sim`, is_test) + **human-handoff silence** + the **abandoned sweep** (migration 0006 `sweep_abandoned_leads`). Leads walk in_progress→new/abandoned with started/step/completed/abandoned funnel events; **PII (phone/contact_name/answers) encrypted at rest — asserted on the raw columns**. **Verify:** `tests/test_m5.bat` (try-me **18/18**) + `tests/test_m5b.bat` (lead-memory narrated **10/10**, strict `test_bot_sim.py` **6/6**), with M2 **12/12** + M3 + M4 + try-me all still green. (try-me chat UI is frontend, not part of this backend verification.)
+- ⬜ **M6 — next:** per the checklist.
+- Then M6→M9 per the checklist.
 
 ## What works RIGHT NOW
 - Full local stack via `run.bat` (or `make dev`): **backend `:8000` · gateway `:3000` · frontend `:5173` · postgres · redis**, health-gated startup.

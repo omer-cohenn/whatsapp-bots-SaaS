@@ -5,6 +5,8 @@ route here inherits the deny-by-default session gate. Endpoints:
 
   GET  /api/bot/settings    → the current bot config (BotSettings-shaped).
   PUT  /api/bot/settings    → validate (untrusted input) + UPSERT the config.
+  POST /api/bot/tryme       → one PURE engine turn; no persistence (sandbox).
+  POST /api/bot/sim         → one FULL runtime turn; persists is_test leads/events.
   POST /api/bot/ai/chat     → one AI builder turn; persists user + assistant
                               messages; returns {reply, changes?}. 503 if Gemini
                               is not configured.
@@ -17,6 +19,7 @@ session), never from any body, and every DB access goes through
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -31,10 +34,17 @@ from app.models.bot_builder import (
     BotAiHistoryResponse,
     BotAiMessage,
     BotSettings,
+    BotSimRequest,
+    BotSimResponse,
     BotTryMeRequest,
     BotTryMeResponse,
 )
-from app.services import bot_builder_ai, bot_engine, bot_settings as bot_settings_service
+from app.services import (
+    bot_builder_ai,
+    bot_engine,
+    bot_runtime,
+    bot_settings as bot_settings_service,
+)
 
 router = APIRouter(prefix="/bot", tags=["bot-builder"])
 log = get_logger("app.api.bot_builder")
@@ -92,6 +102,44 @@ async def bot_tryme(
         state=result["state"],
         event=result["event"],
         lead=result["lead"],
+    )
+
+
+@router.post("/sim", response_model=BotSimResponse)
+async def bot_sim(
+    body: BotSimRequest,
+    request: Request,
+    business_id: str = Depends(current_business),
+) -> BotSimResponse:
+    """Run ONE turn through the FULL runtime in TEST mode (persists, no WhatsApp).
+
+    Where try-me is the no-save sandbox, /sim drives the real `bot_runtime`: it
+    loads/saves conversation state in Redis and persists leads + funnel events to
+    Postgres — but every persisted row is flagged is_test, so this test data never
+    mixes with a business's real leads/funnel. This proves the persistence path
+    end-to-end without WhatsApp and seeds sample data for the dashboard (M7).
+
+    The tenant is taken from the session ONLY (current_business) — never from the
+    body. `conversation_id` threads multiple turns; if absent we mint a fresh
+    sim-scoped id. We never log the message text or any reply.
+    """
+    # Mint a fresh sim conversation id when the client didn't supply one. The
+    # `sim:` prefix keeps test conversations visibly distinct from real ones.
+    conversation_id = body.conversation_id or f"sim:{uuid.uuid4().hex}"
+
+    result = await bot_runtime.run_turn(
+        request.app.state.pg_pool,
+        request.app.state.redis,
+        business_id,
+        conversation_id,
+        body.message,
+        is_test=True,
+    )
+    return BotSimResponse(
+        replies=result["replies"],
+        event=result["event"],
+        lead_id=result["lead_id"],
+        conversation_id=conversation_id,
     )
 
 

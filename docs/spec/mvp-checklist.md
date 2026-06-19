@@ -70,11 +70,11 @@ You can build **M0–M7 entirely on your laptop first**, then do **M8 (AWS)** wh
 ✅ **Done when:** an owner describes a bot to the AI and gets a saved, valid `bot_settings`.
 
 ## M5 — The bot brain + leads 🧠
-- [ ] Conversation engine (LangGraph on Redis): the **lead-collection flow** (validate → store → advance)
-- [ ] **Human handoff** logic (flip status; owner replies; flip back)
-- [ ] **Lead lifecycle**: create at start → `new`/`abandoned` + funnel events (PII encrypted, `is_test` honored)
-- [ ] **Abandoned sweep** (60-min, single-runner)
-- [ ] Try-me endpoint (same engine, no WhatsApp) + **try-me chat UI**
+- [x] Conversation engine (pure engine on Redis): the **lead-collection flow** (validate → store → advance) — verified end-to-end via `/api/bot/sim` + `bot_runtime.run_turn`
+- [x] **Human handoff** logic (flip status to 'human'; bot then silent) — verified (flip-back via owner reply lands with M6/M7 inbound)
+- [x] **Lead lifecycle**: create at start → `new`/`abandoned` + funnel events (PII **encrypted at rest, asserted on the raw columns**, `is_test` honored)
+- [x] **Abandoned sweep** (60-min, single-runner) — verified by back-dating a lead + calling the sweep directly
+- [x] Try-me endpoint (same engine, no WhatsApp) — done (M5 try-me 18/18); **try-me chat UI** is frontend (not covered by this backend run)
 
 ✅ **Done when:** in try-me, a full questionnaire runs, a lead is saved, and an abandoned one is swept — no WhatsApp needed.
 

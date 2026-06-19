@@ -14,6 +14,7 @@ that boots and the M1 webhook landing pad.
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -25,6 +26,7 @@ from app.api.webhook import router as webhook_router
 from app.core.clients import create_pg_pool, create_redis
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
+from app.services.abandoned_sweep import sweep_loop
 
 
 @asynccontextmanager
@@ -35,12 +37,26 @@ async def lifespan(app: FastAPI):
 
     app.state.pg_pool = await create_pg_pool(settings)
     app.state.redis = create_redis(settings)
+
+    # Background: the abandoned-lead sweep (M5). A single-runner loop guarded by a
+    # Redis lock so multiple workers never double-sweep. Started here, cancelled on
+    # shutdown below.
+    sweep_task = asyncio.create_task(
+        sweep_loop(app.state.pg_pool, app.state.redis)
+    )
+
     log.info("backend started", extra={"app_env": settings.app_env})
 
     try:
         yield
     finally:
-        # Dispose clients; never log connection details.
+        # Stop the sweep loop first (await its clean CancelledError exit), then
+        # dispose the infra clients. Never log connection details.
+        sweep_task.cancel()
+        try:
+            await sweep_task
+        except asyncio.CancelledError:
+            pass
         await app.state.pg_pool.close()
         await app.state.redis.aclose()
         log.info("backend stopped")

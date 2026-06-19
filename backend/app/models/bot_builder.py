@@ -313,6 +313,43 @@ class BotTryMeResponse(BaseModel):
     lead: dict | None = None
 
 
+# --- API request/response wrappers (the /sim test-drive endpoint, M5) --------
+
+# A sim turn is one short customer message; same finite bound as try-me.
+MAX_SIM_MESSAGE_CHARS = 2000
+
+
+class BotSimRequest(BaseModel):
+    """POST /api/bot/sim body — one PERSISTED test turn of the owner's own bot.
+
+    Unlike try-me (which never writes), /sim runs the full runtime so leads +
+    funnel events are actually persisted — but flagged is_test so they never mix
+    with real data. `conversation_id` is the stable id that threads multiple sim
+    turns into one conversation; null/empty on the first turn → the runtime mints
+    a fresh sim conversation. The tenant is taken from the server session ONLY —
+    never from this body — so nothing here can reach another tenant's data.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    message: str = Field(..., min_length=1, max_length=MAX_SIM_MESSAGE_CHARS)
+    conversation_id: str | None = Field(default=None, max_length=200)
+
+
+class BotSimResponse(BaseModel):
+    """POST /api/bot/sim response: the bot's replies + funnel event + lead id.
+
+    `event` is one of None | "lead_completed" | "handed_off" | "booking".
+    `lead_id` is the (test) lead row this turn touched, or null. `conversation_id`
+    is echoed back so the client can thread the next turn.
+    """
+
+    replies: list[str]
+    event: str | None = None
+    lead_id: str | None = None
+    conversation_id: str
+
+
 class BotAiMessage(BaseModel):
     """One stored build-chat message (for GET /api/bot/ai/history)."""
 
