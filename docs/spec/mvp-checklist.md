@@ -114,6 +114,16 @@ You can build **M0–M7 entirely on your laptop first**, then do **M8 (AWS)** wh
 
 ✅ **Done:** `tests/test_m8.bat` → M8 narrated **27/27** + strict `tests/test_m8.py` **17/17**; the strict M2–M8 bundle **108 passed**; M2 **12/12** + M3 **5/5** + M4 **9/9** + M5 **18/18** + M5b **10/10** + M7 **15/15** all still green (the M5 handoff tests were updated to this locked contract — handoff → `waiting`; product source already implemented it).
 
+## M9 (lead-outcomes) — Outcomes unified around the LEAD 🎯 — ✅ DONE 2026-06-19
+> Per [decision 0009](../decisions/0009-m9-lead-outcomes.md). (Distinct from the launch-readiness milestone below, which keeps its number.) The lead status is the **single source of truth** for an outcome — both outcomes reuse EXISTING endpoints; no new endpoint.
+- [x] "בוצעה עסקה" → lead status `deal` + conversation status `closed`; "סגירת פנייה" → lead status `closed` + conversation status `closed` — via `PATCH /api/leads/{id}/status` (deal|closed) + `POST /api/conversations/{id}/status` (closed).
+- [x] `GET /api/leads?status=` additionally accepts `deal` and `closed`; `list_leads` filters by them (stored lead.status values) — `app/services/leads.py` (`_REAL_STATUSES`).
+- [x] **Every handoff ALWAYS yields a lead:** when `event=='handed_off'` with no active lead, the runtime creates a minimal lead (`lead_name="פנייה לנציג"`, status `in_progress`), links it to the conversation, and attaches the `handed_off` funnel event — `app/services/bot_runtime.py`. Status still flips to `waiting`.
+- [x] The lead read (LeadItem + list_leads + `_decrypt_lead_row`) includes `conversation_id: string | null`, derived from `cache_chat_ref` by stripping the `conv:{business_id}:` prefix (null when absent).
+- [x] 🚦 **Isolation re-proved:** business A cannot read/filter/PATCH B's deal/closed leads — `tests/test_m9.py` + a negative control in `tests/m9_full_test.py`.
+
+✅ **Done:** `tests/test_m9.bat` → M9 narrated **11/11** + strict `tests/test_m9.py` **10/10**; the strict M3–M9 bundle **118 passed**; M2 **12/12** + M3 **5/5** + M4 **9/9** + M5 **18/18** + M5b **10/10** + M7 **15/15** + M8 **27/27** all still green. (No M8 handoff assertions required changing — none had assumed "handoff → no lead".)
+
 ## M8 — Ship to AWS ☁️ *(when ready to go public)*
 - [ ] AWS account + **region** (EU) + root **MFA** + CloudTrail
 - [ ] 💸 **Budget alarm (day one)**

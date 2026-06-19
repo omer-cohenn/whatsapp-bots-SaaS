@@ -71,18 +71,18 @@ async def get_leads(
     request: Request,
     business_id: str = Depends(current_business),
     period: Literal["week", "month", "all"] = Query("all"),
-    status_filter: Literal["all", "new", "in_progress", "abandoned", "open"] = Query(
-        "all", alias="status"
-    ),
+    status_filter: Literal[
+        "all", "new", "in_progress", "abandoned", "open", "deal", "closed"
+    ] = Query("all", alias="status"),
     flow: str | None = Query(None, max_length=40),
     include_test: bool = Query(False),
 ) -> LeadsResponse:
     """List this tenant's leads (newest first), decrypted, with ALL answers.
 
-    Filters: period (week|month|all), status (all|new|in_progress|abandoned|open,
-    where 'open' = new+in_progress), flow (= lead_name). `is_test` excluded unless
-    include_test=true. The tenant is the session's verified business; RLS scopes
-    every read. We never log a decrypted value.
+    Filters: period (week|month|all), status (all|new|in_progress|abandoned|open|
+    deal|closed, where 'open' = new+in_progress), flow (= lead_name). `is_test`
+    excluded unless include_test=true. The tenant is the session's verified
+    business; RLS scopes every read. We never log a decrypted value.
     """
     try:
         async with tenant_connection(request.app.state.pg_pool, business_id) as conn:

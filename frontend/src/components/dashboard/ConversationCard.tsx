@@ -17,10 +17,12 @@ import type {
   Conversation,
   ConversationDetail,
   ConversationStatus,
+  LeadStatus,
 } from '../../dashboard/types'
 import {
   getConversation,
   setConversationStatus,
+  setLeadStatus,
 } from '../../lib/dashboardClient'
 import { toFriendlyError } from '../../lib/friendlyError'
 import { relativeTime } from '../../lib/formatDate'
@@ -110,6 +112,31 @@ export default function ConversationCard({
       const res = await setConversationStatus(conversation.conversation_id, next)
       onStatusChange(conversation.conversation_id, res.status)
       if (res.status === 'human') setShowChat(true)
+    } catch (err) {
+      setActionError(toFriendlyError(err, 'שינוי מצב השיחה נכשל. נסו שוב.'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Outcome buttons (M9): a conversation is resolved as either a closed deal or
+  // a plain closed enquiry. The LEAD status is the source of truth, so we set it
+  // first (deal | closed) when a lead is attached, then always close the live
+  // conversation so the bot stays silent. If no lead is attached we just close.
+  async function resolve(leadOutcome: Extract<LeadStatus, 'deal' | 'closed'>) {
+    if (busy || conversation.status === 'closed') return
+    setBusy(true)
+    setActionError(null)
+    try {
+      const lead = detail?.lead ?? null
+      if (lead) {
+        await setLeadStatus(lead.id, leadOutcome)
+      }
+      const res = await setConversationStatus(
+        conversation.conversation_id,
+        'closed',
+      )
+      onStatusChange(conversation.conversation_id, res.status)
     } catch (err) {
       setActionError(toFriendlyError(err, 'שינוי מצב השיחה נכשל. נסו שוב.'))
     } finally {
@@ -227,15 +254,26 @@ export default function ConversationCard({
                 </Button>
 
                 {conversation.status !== 'closed' ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => void changeStatus('closed')}
-                    disabled={busy}
-                  >
-                    <Icon name="checks" size={16} />
-                    טופל
-                  </Button>
+                  <>
+                    <Button
+                      type="button"
+                      onClick={() => void resolve('deal')}
+                      disabled={busy}
+                      className="!bg-leaf text-white hover:!bg-leaf-dark"
+                    >
+                      <Icon name="checks" size={16} />
+                      בוצעה עסקה
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => void resolve('closed')}
+                      disabled={busy}
+                    >
+                      <Icon name="x" size={16} />
+                      סגירת פנייה
+                    </Button>
+                  </>
                 ) : null}
 
                 {/* Hand back to the bot once a human is done. */}

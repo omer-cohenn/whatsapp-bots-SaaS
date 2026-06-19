@@ -27,6 +27,9 @@ class LeadItem(BaseModel):
     status: str
     last_step_index: int | None = None
     is_test: bool = False
+    # The live conversation this lead belongs to (derived from cache_chat_ref);
+    # None when the lead has no linked conversation. Lets the UI jump lead→chat.
+    conversation_id: str | None = None
     started_at: str | None = None
     last_activity_at: str | None = None
     submitted_at: str | None = None

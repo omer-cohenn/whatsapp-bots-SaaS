@@ -296,7 +296,12 @@ _PERIOD_INTERVALS = {
 # new + in_progress (everything still actionable), not a stored status value.
 STATUS_OPEN = "open"
 _OPEN_STATUSES = (STATUS_NEW, STATUS_IN_PROGRESS)
-_REAL_STATUSES = {STATUS_NEW, STATUS_IN_PROGRESS, STATUS_ABANDONED}
+# The stored status values a caller may filter on directly (a plain `status = $n`).
+# 'deal' + 'closed' are owner-set outcomes (M9) and ARE stored values, so they
+# belong here too. 'open' stays SYNTHETIC (handled separately above).
+_REAL_STATUSES = {
+    STATUS_NEW, STATUS_IN_PROGRESS, STATUS_ABANDONED, STATUS_DEAL, STATUS_CLOSED,
+}
 
 
 def _period_clause(period: str | None, params: list[Any], col: str) -> str:
@@ -326,8 +331,8 @@ async def list_leads(
 
     Filters (all optional):
       * period — 'week' | 'month' | 'all' (anything else == 'all').
-      * status — 'new' | 'in_progress' | 'abandoned' | 'open' (= new+in_progress);
-                 'all'/None means no status filter.
+      * status — 'new' | 'in_progress' | 'abandoned' | 'deal' | 'closed' |
+                 'open' (= new+in_progress); 'all'/None means no status filter.
       * flow   — match a specific `lead_name` (the questionnaire).
       * include_test — when False (default) `is_test` rows are excluded.
 
@@ -360,7 +365,7 @@ async def list_leads(
     params.append(int(limit))
     sql = (
         "SELECT id, lead_name, phone, contact_name, answers, status, "
-        "       last_step_index, is_test, key_version, "
+        "       last_step_index, is_test, key_version, cache_chat_ref, "
         "       started_at, last_activity_at, submitted_at "
         "FROM leads "
         f"WHERE {' AND '.join(where)}{period_sql} "
@@ -368,7 +373,7 @@ async def list_leads(
         f"LIMIT ${len(params)}"
     )
     rows = await conn.fetch(sql, *params)
-    return [_decrypt_lead_row(row) for row in rows]
+    return [_decrypt_lead_row(row, business_id) for row in rows]
 
 
 async def get_lead_by_conversation(
@@ -389,7 +394,7 @@ async def get_lead_by_conversation(
     row = await conn.fetchrow(
         """
         SELECT id, lead_name, phone, contact_name, answers, status,
-               last_step_index, is_test, key_version,
+               last_step_index, is_test, key_version, cache_chat_ref,
                started_at, last_activity_at, submitted_at
         FROM leads
         WHERE business_id = $1 AND cache_chat_ref = $2
@@ -399,15 +404,20 @@ async def get_lead_by_conversation(
         business_id,
         cache_chat_ref,
     )
-    return _decrypt_lead_row(row) if row is not None else None
+    return _decrypt_lead_row(row, business_id) if row is not None else None
 
 
-def _decrypt_lead_row(row: asyncpg.Record) -> dict[str, Any]:
+def _decrypt_lead_row(row: asyncpg.Record, business_id: str) -> dict[str, Any]:
     """Map one leads row → a readable dict with phone/name/answers decrypted.
 
     The stored `answers` jsonb is the {"_": ciphertext} blob; we decrypt it back
     to the full collected dict. The dedicated phone/contact_name columns are
     decrypted too. A row's own stamped `key_version` selects the key (rotation).
+
+    `conversation_id` is derived from `cache_chat_ref` (which `create_lead` stamps
+    as "conv:{business_id}:{conversation_id}") by stripping this tenant's prefix;
+    None when there is no ref. `business_id` is the caller's verified id and is
+    used only to build that prefix — it never widens the read.
     """
     key_version = row["key_version"] or crypto.CURRENT_KEY_VERSION
     answers_blob = row["answers"]
@@ -422,6 +432,16 @@ def _decrypt_lead_row(row: asyncpg.Record) -> dict[str, Any]:
     phone = crypto.decrypt_pii(row["phone"], key_version)
     contact_name = crypto.decrypt_pii(row["contact_name"], key_version)
 
+    # Recover the conversation id by stripping this tenant's "conv:{bid}:" prefix
+    # from cache_chat_ref. Only strip when the prefix matches (tenant-correct);
+    # otherwise leave it None rather than expose a foreign/odd ref.
+    cache_chat_ref = row["cache_chat_ref"]
+    conversation_id: str | None = None
+    if cache_chat_ref:
+        prefix = f"conv:{business_id}:"
+        if cache_chat_ref.startswith(prefix):
+            conversation_id = cache_chat_ref[len(prefix):]
+
     return {
         "id": str(row["id"]),
         "lead_name": row["lead_name"],
@@ -431,6 +451,7 @@ def _decrypt_lead_row(row: asyncpg.Record) -> dict[str, Any]:
         "status": row["status"],
         "last_step_index": row["last_step_index"],
         "is_test": row["is_test"],
+        "conversation_id": conversation_id,
         "started_at": _iso(row["started_at"]),
         "last_activity_at": _iso(row["last_activity_at"]),
         "submitted_at": _iso(row["submitted_at"]),

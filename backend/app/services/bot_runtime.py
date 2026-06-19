@@ -151,10 +151,25 @@ async def run_turn(
             await conversation_state.set_status(
                 redis, business_id, conversation_id, conversation_state.STATUS_WAITING
             )
+            # M9: a handoff ALWAYS yields a lead, so the owner sees every "ביקש
+            # נציג" request in the leads list. If no lead is open for this chat,
+            # create a minimal one first (still inside this tenant transaction),
+            # then attach the handoff event to it. lead_name is a generic label
+            # (no PII); status defaults to 'in_progress' from create_lead.
+            handoff_lead_id = new_lead_id
+            if handoff_lead_id is None:
+                handoff_lead_id = await leads_service.create_lead(
+                    conn,
+                    business_id,
+                    lead_name="פנייה לנציג",
+                    conversation_id=conversation_id,
+                    is_test=is_test,
+                )
+                new_lead_id = handoff_lead_id
             # Log a funnel event so the dashboard can raise a "ביקש נציג" notice.
             # Tenant-scoped via `conn`, is_test honored; carries no PII.
             await leads_service.log_event(
-                conn, business_id, active_lead_id, None,
+                conn, business_id, handoff_lead_id, None,
                 leads_service.EVENT_HANDOFF, step_index=None, is_test=is_test,
             )
         # event == "booking": Phase-2 stub in the engine; nothing to persist (M5).

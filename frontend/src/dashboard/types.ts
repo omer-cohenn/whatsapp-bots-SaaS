@@ -11,8 +11,16 @@
 /** Time window for funnel + leads queries. */
 export type Period = 'week' | 'month' | 'all'
 
-/** Lead status filter. `open` = new + in_progress; `all` = everything. */
-export type LeadStatusFilter = 'all' | 'new' | 'in_progress' | 'abandoned' | 'open'
+/** Lead status filter. `open` = new + in_progress; `all` = everything.
+ * `deal`/`closed` match the stored lead.status values directly. */
+export type LeadStatusFilter =
+  | 'all'
+  | 'new'
+  | 'in_progress'
+  | 'abandoned'
+  | 'open'
+  | 'deal'
+  | 'closed'
 
 /**
  * The concrete status a single lead can carry. `deal`/`closed` are set manually
@@ -32,6 +40,9 @@ export type Lead = {
   status: LeadStatus
   last_step_index: number
   is_test: boolean
+  /** Linked live conversation id (stripped of the "conv:{business_id}:" prefix),
+   * or null when no/foreign conversation ref. Used to open the in-app chat. */
+  conversation_id: string | null
   started_at: string | null
   last_activity_at: string | null
   submitted_at: string | null

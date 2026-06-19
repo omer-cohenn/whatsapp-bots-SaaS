@@ -21,12 +21,15 @@ import { getLeads } from '../lib/dashboardClient'
 import { toFriendlyError } from '../lib/friendlyError'
 import type { Lead, LeadStatusFilter } from '../dashboard/types'
 
-// Filter chips. הושלמו maps to the backend `new` status (a completed lead);
-// פתוחים → in_progress; נטשו → abandoned. הכול shows everything (incl. deal/closed).
+// Filter chips. "ליד שלם" maps to the backend `new` status (a completed lead);
+// פתוחים → in_progress; נטשו → abandoned; "בוצעה עסקה" → deal; נסגרו → closed.
+// הכול shows everything (incl. deal/closed). deal/closed work server-side now.
 const STATUS_SEGMENTS: Segment<LeadStatusFilter>[] = [
   { value: 'all', label: 'הכול' },
   { value: 'in_progress', label: 'פתוחים' },
-  { value: 'new', label: 'הושלמו' },
+  { value: 'new', label: 'ליד שלם' },
+  { value: 'deal', label: 'בוצעה עסקה' },
+  { value: 'closed', label: 'נסגרו' },
   { value: 'abandoned', label: 'נטשו' },
 ]
 
@@ -87,8 +90,8 @@ export default function LeadsPage() {
   }, [leads, abandoned])
 
   // KPI counts off the full (status=all) picture. Only computable when the
-  // current filter is 'all' (that's when `leads` holds every lead). הושלמו = the
-  // backend `new` status; פתוחים = in_progress; ננטשו from the abandoned list.
+  // current filter is 'all' (that's when `leads` holds every lead). "ליד שלם" =
+  // the backend `new` status; פתוחים = in_progress; ננטשו from the abandoned list.
   const counts = useMemo(() => {
     const all = status === 'all' ? leads ?? [] : null
     return {
@@ -115,7 +118,7 @@ export default function LeadsPage() {
               icon="checks"
               chipClassName="bg-[#1D9E75]"
               value={counts.completedCount ?? 0}
-              label="הושלמו"
+              label="ליד שלם"
             />
             <StatCard
               icon="clock"

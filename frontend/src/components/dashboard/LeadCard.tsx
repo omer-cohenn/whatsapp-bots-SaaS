@@ -8,13 +8,18 @@
 // answers and an "abandoned" status, which the badge + step text make clear.
 
 import { useState } from 'react'
-import type { Lead, LeadStatus } from '../../dashboard/types'
+import type {
+  ConversationStatus,
+  Lead,
+  LeadStatus,
+} from '../../dashboard/types'
 import { fullDateTime, relativeTime } from '../../lib/formatDate'
 import { waLink } from '../../lib/waLink'
-import { setLeadStatus } from '../../lib/dashboardClient'
+import { getConversation, setLeadStatus } from '../../lib/dashboardClient'
 import { toFriendlyError } from '../../lib/friendlyError'
 import Badge from '../ui/Badge'
 import Icon from '../ui/Icon'
+import ChatPanel from './ChatPanel'
 
 // Status → Hebrew label + Badge tone (covers every concrete LeadStatus).
 const STATUS_META: Record<LeadStatus, { label: string; tone: 'leaf' | 'info' | 'warning' | 'neutral' }> = {
@@ -45,6 +50,35 @@ export default function LeadCard({ lead, onStatusChange }: Props) {
 
   const [saving, setSaving] = useState<LeadStatus | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+
+  // In-app chat: revealed when the owner opens it for this lead's conversation.
+  // We fetch the conversation first to learn its current handling status; if it
+  // no longer lives in Redis we fall back to 'human' so the owner can still
+  // read the (empty) panel and reply.
+  const [showChat, setShowChat] = useState(false)
+  const [openingChat, setOpeningChat] = useState(false)
+  const [chatStatus, setChatStatus] = useState<ConversationStatus>('human')
+
+  async function openInAppChat() {
+    if (!lead.conversation_id) return
+    if (showChat) {
+      setShowChat(false)
+      return
+    }
+    setOpeningChat(true)
+    setActionError(null)
+    try {
+      const detail = await getConversation(lead.conversation_id)
+      setChatStatus(detail.status)
+    } catch {
+      // Conversation gone from Redis (or not ours) — still let the owner open
+      // the panel in human mode; no PII is exposed by this fallback.
+      setChatStatus('human')
+    } finally {
+      setOpeningChat(false)
+      setShowChat(true)
+    }
+  }
 
   async function changeStatus(next: LeadStatus) {
     setSaving(next)
@@ -131,6 +165,20 @@ export default function LeadCard({ lead, onStatusChange }: Props) {
           </a>
         ) : null}
 
+        {lead.conversation_id ? (
+          <button
+            type="button"
+            onClick={() => void openInAppChat()}
+            disabled={openingChat}
+            aria-expanded={showChat}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-leaf px-3 py-1.5 text-sm font-medium text-leaf-ink outline-none transition-colors hover:bg-leaf-soft focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Icon name="message-circle" size={16} />
+            {openingChat ? 'פותח…' : "צ'אט באפליקציה"}
+            <span className="sr-only"> עם {lead.contact_name || 'הליד'}</span>
+          </button>
+        ) : null}
+
         {lead.status !== 'deal' ? (
           <button
             type="button"
@@ -160,6 +208,17 @@ export default function LeadCard({ lead, onStatusChange }: Props) {
         <p role="alert" className="mt-2 text-xs text-bad">
           {actionError}
         </p>
+      ) : null}
+
+      {/* Inline in-app chat for this lead's conversation (opened on demand). */}
+      {showChat && lead.conversation_id ? (
+        <div className="mt-3 h-[28rem]">
+          <ChatPanel
+            conversationId={lead.conversation_id}
+            status={chatStatus}
+            onStatusChange={(_id, next) => setChatStatus(next)}
+          />
+        </div>
       ) : null}
     </article>
   )
