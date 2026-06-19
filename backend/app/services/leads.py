@@ -216,6 +216,7 @@ async def set_lead_status(
     business_id: str,
     lead_id: str,
     status: str,
+    note: str | None = None,
 ) -> bool:
     """Owner-set a lead's status (e.g. → 'deal' or 'closed'). RLS-scoped.
 
@@ -225,21 +226,49 @@ async def set_lead_status(
     can only ever touch THIS tenant's row. Returns True if a row matched (lead
     exists for this tenant), False otherwise — the caller maps False → 404.
 
-    No PII is touched or logged: only the status column changes.
+    `note` (the owner's outcome note, e.g. why a deal closed) is OPTIONAL. When
+    given it is ENCRYPTED at rest into the `outcome_note` column in the SAME
+    UPDATE (and `key_version` is stamped so rotation stays possible) — just like
+    phone/answers. The note plaintext is PII and is NEVER logged. When `note` is
+    None the existing outcome_note is left untouched.
     """
     if status not in _SETTABLE_STATUSES:
         raise ValueError(f"invalid lead status: {status!r}")
 
-    result = await conn.execute(
-        """
-        UPDATE leads
-        SET status = $3, last_activity_at = now()
-        WHERE id = $1 AND business_id = $2
-        """,
-        lead_id,
-        business_id,
-        status,
-    )
+    # A whitespace-only note carries nothing — treat it as "no note" so it can't
+    # silently overwrite a real outcome note that was saved earlier.
+    if note is not None:
+        note = note.strip() or None
+
+    if note is not None:
+        # Encrypt the outcome note + restamp key_version in the same UPDATE.
+        note_ct = crypto.encrypt_pii(note)
+        result = await conn.execute(
+            """
+            UPDATE leads
+            SET status = $3,
+                outcome_note = $4,
+                key_version = $5,
+                last_activity_at = now()
+            WHERE id = $1 AND business_id = $2
+            """,
+            lead_id,
+            business_id,
+            status,
+            note_ct,
+            crypto.CURRENT_KEY_VERSION,
+        )
+    else:
+        result = await conn.execute(
+            """
+            UPDATE leads
+            SET status = $3, last_activity_at = now()
+            WHERE id = $1 AND business_id = $2
+            """,
+            lead_id,
+            business_id,
+            status,
+        )
     # asyncpg returns the command tag, e.g. "UPDATE 1" / "UPDATE 0".
     return result.rsplit(" ", 1)[-1] != "0"
 
@@ -365,8 +394,8 @@ async def list_leads(
     params.append(int(limit))
     sql = (
         "SELECT id, lead_name, phone, contact_name, answers, status, "
-        "       last_step_index, is_test, key_version, cache_chat_ref, "
-        "       started_at, last_activity_at, submitted_at "
+        "       outcome_note, last_step_index, is_test, key_version, "
+        "       cache_chat_ref, started_at, last_activity_at, submitted_at "
         "FROM leads "
         f"WHERE {' AND '.join(where)}{period_sql} "
         f"ORDER BY last_activity_at DESC "
@@ -394,8 +423,8 @@ async def get_lead_by_conversation(
     row = await conn.fetchrow(
         """
         SELECT id, lead_name, phone, contact_name, answers, status,
-               last_step_index, is_test, key_version, cache_chat_ref,
-               started_at, last_activity_at, submitted_at
+               outcome_note, last_step_index, is_test, key_version,
+               cache_chat_ref, started_at, last_activity_at, submitted_at
         FROM leads
         WHERE business_id = $1 AND cache_chat_ref = $2
         ORDER BY last_activity_at DESC
@@ -431,6 +460,9 @@ def _decrypt_lead_row(row: asyncpg.Record, business_id: str) -> dict[str, Any]:
     answers = crypto.decrypt_answers(answers_blob, key_version) if answers_blob else {}
     phone = crypto.decrypt_pii(row["phone"], key_version)
     contact_name = crypto.decrypt_pii(row["contact_name"], key_version)
+    # The owner's outcome note is encrypted at rest; decrypt for the owner (None
+    # when never set). Never logged.
+    outcome_note = crypto.decrypt_pii(row["outcome_note"], key_version)
 
     # Recover the conversation id by stripping this tenant's "conv:{bid}:" prefix
     # from cache_chat_ref. Only strip when the prefix matches (tenant-correct);
@@ -449,6 +481,7 @@ def _decrypt_lead_row(row: asyncpg.Record, business_id: str) -> dict[str, Any]:
         "contact_name": contact_name,
         "answers": answers,
         "status": row["status"],
+        "outcome_note": outcome_note,
         "last_step_index": row["last_step_index"],
         "is_test": row["is_test"],
         "conversation_id": conversation_id,

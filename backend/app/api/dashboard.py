@@ -120,14 +120,16 @@ async def set_lead_status(
 ) -> LeadStatusResponse:
     """Owner-set a lead's status (e.g. → 'deal' or 'closed'), tenant-scoped.
 
-    `status` is validated by the request model (Literal). The UPDATE is RLS-scoped
-    by the session's verified business id (never from the path/body); if no row
-    matched (wrong/foreign lead) we return 404. No PII is touched or logged.
+    `status` is validated by the request model (Literal). The optional `note` (the
+    owner's outcome note) is passed through and encrypted at rest by the service;
+    it is PII and is NEVER logged. The UPDATE is RLS-scoped by the session's
+    verified business id (never from the path/body); if no row matched
+    (wrong/foreign lead) we return 404.
     """
     try:
         async with tenant_connection(request.app.state.pg_pool, business_id) as conn:
             updated = await leads_service.set_lead_status(
-                conn, business_id, lead_id, body.status
+                conn, business_id, lead_id, body.status, note=body.note
             )
     except ValueError:
         # Defensive: the Literal already constrains status, so this is unexpected.

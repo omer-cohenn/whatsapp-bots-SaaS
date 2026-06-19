@@ -38,6 +38,9 @@ export type Lead = {
   /** Full decrypted collected answers (owner sees everything — no hiding). */
   answers: Record<string, string>
   status: LeadStatus
+  /** Owner's free-text outcome note (decrypted), required when marking a lead as
+   * deal/closed. null until one is saved. */
+  outcome_note: string | null
   last_step_index: number
   is_test: boolean
   /** Linked live conversation id (stripped of the "conv:{business_id}:" prefix),

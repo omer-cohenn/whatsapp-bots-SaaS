@@ -17,8 +17,16 @@ accessor (mirrors `live_chat.py`). The caller passes an already-verified
 `business_id` (from the request's auth context), never a raw client value, so
 there is no path to read/write another tenant's conversation.
 
-TTL is a sliding ~60 minutes: every write refreshes it; if the customer goes
-silent the entry expires and the conversation is effectively closed.
+TTL DEPENDS ON STATUS (decision 0010) — the transcript must NOT vanish while a
+human is needed:
+  * bot     → sliding ~60-min inactivity window (silence ⇒ expire).
+  * waiting → PERSIST (no expiry): the customer asked for a human; keep the chat
+              alive until a person answers.
+  * human   → PERSIST (no expiry): an owner is handling it; keep it alive.
+  * closed  → 30-day window, then swept.
+This is centralized in `_apply_ttl`, called by BOTH `set_status` and
+`append_message` so a new message can never resurrect a TTL on a chat that should
+persist.
 """
 
 from __future__ import annotations
@@ -31,6 +39,10 @@ import redis.asyncio as aioredis
 
 # Sliding inactivity window: silence for this long ⇒ the conversation expires.
 CONVERSATION_TTL_SECONDS = 60 * 60
+
+# A CLOSED conversation lingers this long before it's swept (kept so the owner can
+# still review a finished chat for a while). 30 days.
+CLOSED_TTL_SECONDS = 30 * 24 * 60 * 60
 
 # The chat statuses we persist (kept tiny + explicit on purpose).
 STATUS_BOT = "bot"          # the engine is driving.
@@ -170,8 +182,10 @@ async def set_status(
     key = _key(business_id, conversation_id)
     _assert_owns(business_id, key)
     await redis.hset(key, mapping={"status": status, "last_activity_at": _now_iso()})
-    await redis.expire(key, CONVERSATION_TTL_SECONDS)
     await _register(redis, business_id, conversation_id)
+    # Apply the TTL policy for the NEW status (persist for waiting/human, slide for
+    # bot, 30-day for closed) — NOT a flat 60-min expire (decision 0010).
+    await _apply_ttl(redis, business_id, conversation_id, status)
     return key
 
 
@@ -295,9 +309,12 @@ async def append_message(
     await redis.hset(
         key, mapping={"preview": _preview(body), "last_activity_at": _now_iso()}
     )
-    await redis.expire(log_key, CONVERSATION_TTL_SECONDS)
-    await redis.expire(key, CONVERSATION_TTL_SECONDS)
     await _register(redis, business_id, conversation_id)
+    # Apply the TTL policy for the CURRENT status, NOT an unconditional 60-min
+    # expire — otherwise a new message would resurrect a TTL on a waiting/human
+    # chat that must PERSIST (decision 0010). Default to 'bot' if none set yet.
+    current_status = await redis.hget(key, "status") or STATUS_BOT
+    await _apply_ttl(redis, business_id, conversation_id, current_status)
 
 
 async def get_messages(
@@ -325,6 +342,44 @@ async def get_messages(
 
 
 # --- internal helpers -------------------------------------------------------
+
+async def _apply_ttl(
+    redis: aioredis.Redis,
+    business_id: str,
+    conversation_id: str,
+    status: str,
+) -> None:
+    """Apply the status-driven TTL to a conversation's keys (decision 0010).
+
+    Keeps the conv hash key, its `:log` transcript list, AND this tenant's index
+    set consistent:
+      * waiting / human → PERSIST all three (no expiry) — a human is (or will be)
+        on it, so the transcript must not disappear.
+      * bot             → slide all three to CONVERSATION_TTL_SECONDS (~60 min).
+      * closed          → set all three to CLOSED_TTL_SECONDS (30 days).
+
+    Tenant-scoped: `_assert_owns` is re-checked on the conv + log keys; the index
+    key is itself business-prefixed. `status` is one of the persisted statuses;
+    an unknown value falls back to the bot (sliding) policy defensively.
+    """
+    key = _key(business_id, conversation_id)
+    log_key = _log_key(business_id, conversation_id)
+    index = _index_key(business_id)
+    _assert_owns(business_id, key)
+    _assert_owns(business_id, log_key)
+
+    if status in (STATUS_WAITING, STATUS_HUMAN):
+        # PERSIST: drop any expiry so the chat survives until a human answers.
+        await redis.persist(key)
+        await redis.persist(log_key)
+        await redis.persist(index)
+        return
+
+    ttl = CLOSED_TTL_SECONDS if status == STATUS_CLOSED else CONVERSATION_TTL_SECONDS
+    await redis.expire(key, ttl)
+    await redis.expire(log_key, ttl)
+    await redis.expire(index, ttl)
+
 
 async def _register(
     redis: aioredis.Redis, business_id: str, conversation_id: str

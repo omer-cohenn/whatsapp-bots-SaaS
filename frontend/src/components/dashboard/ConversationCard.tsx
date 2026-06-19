@@ -17,7 +17,6 @@ import type {
   Conversation,
   ConversationDetail,
   ConversationStatus,
-  LeadStatus,
 } from '../../dashboard/types'
 import {
   getConversation,
@@ -31,6 +30,7 @@ import Button from '../ui/Button'
 import Icon from '../ui/Icon'
 import Spinner from '../ui/Spinner'
 import ChatPanel from './ChatPanel'
+import OutcomeNoteDialog from './OutcomeNoteDialog'
 
 const STATUS_META: Record<
   ConversationStatus,
@@ -76,6 +76,10 @@ export default function ConversationCard({
   // straight away if it's already human-handled.
   const [showChat, setShowChat] = useState(conversation.status === 'human')
 
+  // Outcome-note dialog: marking deal/closed requires a free-text note first.
+  const [outcome, setOutcome] = useState<'deal' | 'closed' | null>(null)
+  const [outcomeError, setOutcomeError] = useState<string | null>(null)
+
   // Load the detail when the row first opens (re-load if the id changes).
   useEffect(() => {
     if (!open) return
@@ -119,26 +123,29 @@ export default function ConversationCard({
     }
   }
 
-  // Outcome buttons (M9): a conversation is resolved as either a closed deal or
-  // a plain closed enquiry. The LEAD status is the source of truth, so we set it
-  // first (deal | closed) when a lead is attached, then always close the live
-  // conversation so the bot stays silent. If no lead is attached we just close.
-  async function resolve(leadOutcome: Extract<LeadStatus, 'deal' | 'closed'>) {
-    if (busy || conversation.status === 'closed') return
+  // Outcome buttons (M9/M10): a conversation is resolved as either a closed deal
+  // or a plain closed enquiry, AND the owner must record a short outcome note.
+  // The buttons open OutcomeNoteDialog; this runs on confirm. The LEAD status is
+  // the source of truth, so we set it first (deal | closed + note) when a lead
+  // is attached, then always close the live conversation so the bot stays
+  // silent. If no lead is attached we just close.
+  async function confirmOutcome(note: string) {
+    if (!outcome || busy || conversation.status === 'closed') return
     setBusy(true)
-    setActionError(null)
+    setOutcomeError(null)
     try {
       const lead = detail?.lead ?? null
       if (lead) {
-        await setLeadStatus(lead.id, leadOutcome)
+        await setLeadStatus(lead.id, outcome, note)
       }
       const res = await setConversationStatus(
         conversation.conversation_id,
         'closed',
       )
+      setOutcome(null)
       onStatusChange(conversation.conversation_id, res.status)
     } catch (err) {
-      setActionError(toFriendlyError(err, 'שינוי מצב השיחה נכשל. נסו שוב.'))
+      setOutcomeError(toFriendlyError(err, 'שינוי מצב השיחה נכשל. נסו שוב.'))
     } finally {
       setBusy(false)
     }
@@ -257,7 +264,10 @@ export default function ConversationCard({
                   <>
                     <Button
                       type="button"
-                      onClick={() => void resolve('deal')}
+                      onClick={() => {
+                        setOutcomeError(null)
+                        setOutcome('deal')
+                      }}
                       disabled={busy}
                       className="!bg-leaf text-white hover:!bg-leaf-dark"
                     >
@@ -267,7 +277,10 @@ export default function ConversationCard({
                     <Button
                       type="button"
                       variant="secondary"
-                      onClick={() => void resolve('closed')}
+                      onClick={() => {
+                        setOutcomeError(null)
+                        setOutcome('closed')
+                      }}
                       disabled={busy}
                     >
                       <Icon name="x" size={16} />
@@ -303,9 +316,23 @@ export default function ConversationCard({
                     conversationId={conversation.conversation_id}
                     status={conversation.status}
                     onStatusChange={onStatusChange}
+                    fallbackAnswers={lead?.answers}
+                    fallbackName={lead?.contact_name}
+                    fallbackPhone={lead?.phone}
                   />
                 </div>
               ) : null}
+
+              <OutcomeNoteDialog
+                outcome={outcome ?? 'deal'}
+                open={outcome !== null}
+                saving={busy}
+                error={outcomeError}
+                onCancel={() => {
+                  if (!busy) setOutcome(null)
+                }}
+                onConfirm={(note) => void confirmOutcome(note)}
+              />
             </>
           )}
         </div>

@@ -74,16 +74,21 @@ export type LeadStatusResponse = {
 
 /**
  * PATCH /api/leads/{id}/status — manually set a lead's status (the owner uses
- * this to mark a lead as "בוצעה עסקה" / "ליד סגור"). Tenant-scoped server-side;
- * 404 if the lead isn't ours. Callers refresh the list afterwards.
+ * this to mark a lead as "בוצעה עסקה" / "ליד סגור"). An optional `note` is
+ * encrypted at rest into the lead's outcome_note; the UI requires it for
+ * deal/closed. Tenant-scoped server-side; 404 if the lead isn't ours. Callers
+ * refresh the list afterwards.
  */
 export function setLeadStatus(
   leadId: string,
   status: LeadStatus,
+  note?: string,
 ): Promise<LeadStatusResponse> {
+  // Only send `note` when provided — the API forbids extra/empty fields.
+  const body = note === undefined ? { status } : { status, note }
   return api.patch<LeadStatusResponse>(
     `/api/leads/${encodeURIComponent(leadId)}/status`,
-    { status },
+    body,
   )
 }
 

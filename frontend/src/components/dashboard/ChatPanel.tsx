@@ -33,12 +33,23 @@ type Props = {
    * parent owns the actual status mutation; here we only signal intent.
    */
   onStatusChange?: (id: string, status: ConversationStatus) => void
+  /**
+   * When the transcript is empty (e.g. it expired from Redis), fall back to a
+   * read-only summary of the lead's collected answers so the panel is never
+   * blank. Optional — passed by the parent from the linked lead.
+   */
+  fallbackAnswers?: Record<string, string>
+  fallbackName?: string | null
+  fallbackPhone?: string | null
 }
 
 export default function ChatPanel({
   conversationId,
   status,
   onStatusChange,
+  fallbackAnswers,
+  fallbackName,
+  fallbackPhone,
 }: Props) {
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(true)
@@ -186,9 +197,11 @@ export default function ChatPanel({
         ) : loadError ? (
           <Alert tone="error">{loadError}</Alert>
         ) : messages.length === 0 ? (
-          <p className="py-8 text-center text-sm text-slate-500">
-            אין הודעות בשיחה הזו עדיין.
-          </p>
+          <EmptyFallback
+            answers={fallbackAnswers}
+            name={fallbackName}
+            phone={fallbackPhone}
+          />
         ) : (
           messages.map((msg, i) => <Bubble key={i} message={msg} />)
         )}
@@ -229,6 +242,66 @@ export default function ChatPanel({
         ) : null}
       </div>
     </section>
+  )
+}
+
+// --- empty-transcript fallback ----------------------------------------------
+
+// Shown when a conversation has no messages (e.g. it expired from Redis). Rather
+// than a blank panel, we surface the lead's collected answers read-only so the
+// owner still has context before replying.
+function EmptyFallback({
+  answers,
+  name,
+  phone,
+}: {
+  answers?: Record<string, string>
+  name?: string | null
+  phone?: string | null
+}) {
+  const entries = Object.entries(answers ?? {})
+
+  if (entries.length === 0 && !name && !phone) {
+    return (
+      <p className="py-8 text-center text-sm text-slate-500">
+        אין הודעות בשיחה הזו עדיין.
+      </p>
+    )
+  }
+
+  return (
+    <div className="py-2">
+      <p className="text-center text-sm font-medium text-slate-600">
+        פרטים שנאספו
+      </p>
+      <p className="mt-1 text-center text-xs text-slate-400">
+        אין תמלול שיחה — להלן הפרטים שנאספו.
+      </p>
+      <dl className="mt-4 space-y-2 rounded-lg bg-slate-50 p-3">
+        {name ? (
+          <div className="flex gap-2">
+            <dt className="text-xs text-slate-400">שם:</dt>
+            <dd className="text-sm text-slate-800">{name}</dd>
+          </div>
+        ) : null}
+        {phone ? (
+          <div className="flex gap-2">
+            <dt className="text-xs text-slate-400">טלפון:</dt>
+            <dd className="text-sm text-slate-800" dir="ltr">
+              {phone}
+            </dd>
+          </div>
+        ) : null}
+        {entries.map(([key, value]) => (
+          <div key={key} className="flex gap-2">
+            <dt className="text-xs text-slate-400">{key}:</dt>
+            <dd className="text-sm text-slate-800">
+              {value || <span className="text-slate-400">טרם נענה</span>}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   )
 }
 

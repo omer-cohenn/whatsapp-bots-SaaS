@@ -1,8 +1,9 @@
 // One lead, expanded to show EVERY collected detail (the owner explicitly wants
 // no hiding). Header: avatar initials, contact name, flow + status badge. Body:
 // a grid of every key/value in `answers`, plus the lead's metadata (phone, step,
-// times). Footer actions (shown at ANY status): a WhatsApp chat button + a
-// control to manually mark the lead as a deal / closed.
+// times). Footer actions (shown at ANY status): a single in-app chat button + a
+// control to manually mark the lead as a deal / closed (which requires an
+// outcome note via OutcomeNoteDialog).
 //
 // Abandoned leads (the נוטשים list) reuse this card — they simply carry partial
 // answers and an "abandoned" status, which the badge + step text make clear.
@@ -14,12 +15,12 @@ import type {
   LeadStatus,
 } from '../../dashboard/types'
 import { fullDateTime, relativeTime } from '../../lib/formatDate'
-import { waLink } from '../../lib/waLink'
 import { getConversation, setLeadStatus } from '../../lib/dashboardClient'
 import { toFriendlyError } from '../../lib/friendlyError'
 import Badge from '../ui/Badge'
 import Icon from '../ui/Icon'
 import ChatPanel from './ChatPanel'
+import OutcomeNoteDialog from './OutcomeNoteDialog'
 
 // Status → Hebrew label + Badge tone (covers every concrete LeadStatus).
 const STATUS_META: Record<LeadStatus, { label: string; tone: 'leaf' | 'info' | 'warning' | 'neutral' }> = {
@@ -46,10 +47,13 @@ type Props = {
 export default function LeadCard({ lead, onStatusChange }: Props) {
   const meta = STATUS_META[lead.status]
   const answers = Object.entries(lead.answers ?? {})
-  const chatHref = waLink(lead.phone)
 
   const [saving, setSaving] = useState<LeadStatus | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+
+  // Outcome-note dialog: deal/closed require a free-text note before saving.
+  const [outcome, setOutcome] = useState<'deal' | 'closed' | null>(null)
+  const [outcomeError, setOutcomeError] = useState<string | null>(null)
 
   // In-app chat: revealed when the owner opens it for this lead's conversation.
   // We fetch the conversation first to learn its current handling status; if it
@@ -80,14 +84,18 @@ export default function LeadCard({ lead, onStatusChange }: Props) {
     }
   }
 
-  async function changeStatus(next: LeadStatus) {
-    setSaving(next)
-    setActionError(null)
+  // deal/closed go through the dialog (a note is mandatory); confirm saves the
+  // status together with the encrypted-at-rest note.
+  async function confirmOutcome(note: string) {
+    if (!outcome) return
+    setSaving(outcome)
+    setOutcomeError(null)
     try {
-      await setLeadStatus(lead.id, next)
+      await setLeadStatus(lead.id, outcome, note)
+      setOutcome(null)
       onStatusChange?.()
     } catch (err) {
-      setActionError(toFriendlyError(err, 'עדכון הסטטוס נכשל. נסו שוב.'))
+      setOutcomeError(toFriendlyError(err, 'עדכון הסטטוס נכשל. נסו שוב.'))
     } finally {
       setSaving(null)
     }
@@ -150,28 +158,25 @@ export default function LeadCard({ lead, onStatusChange }: Props) {
         ) : null}
       </div>
 
-      {/* Actions: WhatsApp chat + manual status. Shown at any status. */}
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-black/10 pt-3">
-        {chatHref ? (
-          <a
-            href={chatHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[#1D9E75] px-3 py-1.5 text-sm font-medium text-white outline-none transition-colors hover:bg-[#178060] focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2"
-          >
-            <Icon name="message-circle" size={16} />
-            פתח שיחה בוואטסאפ
-            <span className="sr-only"> עם {lead.contact_name || 'הליד'}</span>
-          </a>
-        ) : null}
+      {/* Saved outcome note (shown once the owner records one). */}
+      {lead.outcome_note ? (
+        <div className="mt-3 border-t border-black/10 pt-3">
+          <p className="text-[11px] text-slate-400">סיכום הטיפול</p>
+          <p className="whitespace-pre-wrap break-words text-sm text-slate-800">
+            {lead.outcome_note}
+          </p>
+        </div>
+      ) : null}
 
+      {/* Actions: ONE in-app chat button + manual status. Shown at any status. */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-black/10 pt-3">
         {lead.conversation_id ? (
           <button
             type="button"
             onClick={() => void openInAppChat()}
             disabled={openingChat}
             aria-expanded={showChat}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-leaf px-3 py-1.5 text-sm font-medium text-leaf-ink outline-none transition-colors hover:bg-leaf-soft focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-leaf px-3 py-1.5 text-sm font-medium text-white outline-none transition-colors hover:bg-leaf-dark focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Icon name="message-circle" size={16} />
             {openingChat ? 'פותח…' : "צ'אט באפליקציה"}
@@ -182,7 +187,10 @@ export default function LeadCard({ lead, onStatusChange }: Props) {
         {lead.status !== 'deal' ? (
           <button
             type="button"
-            onClick={() => changeStatus('deal')}
+            onClick={() => {
+              setOutcomeError(null)
+              setOutcome('deal')
+            }}
             disabled={saving !== null}
             className="inline-flex items-center gap-1.5 rounded-lg border border-leaf px-3 py-1.5 text-sm font-medium text-leaf-ink outline-none transition-colors hover:bg-leaf-soft focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
@@ -194,7 +202,10 @@ export default function LeadCard({ lead, onStatusChange }: Props) {
         {lead.status !== 'closed' ? (
           <button
             type="button"
-            onClick={() => changeStatus('closed')}
+            onClick={() => {
+              setOutcomeError(null)
+              setOutcome('closed')
+            }}
             disabled={saving !== null}
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 outline-none transition-colors hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
@@ -210,6 +221,17 @@ export default function LeadCard({ lead, onStatusChange }: Props) {
         </p>
       ) : null}
 
+      <OutcomeNoteDialog
+        outcome={outcome ?? 'deal'}
+        open={outcome !== null}
+        saving={saving !== null}
+        error={outcomeError}
+        onCancel={() => {
+          if (saving === null) setOutcome(null)
+        }}
+        onConfirm={(note) => void confirmOutcome(note)}
+      />
+
       {/* Inline in-app chat for this lead's conversation (opened on demand). */}
       {showChat && lead.conversation_id ? (
         <div className="mt-3 h-[28rem]">
@@ -217,6 +239,9 @@ export default function LeadCard({ lead, onStatusChange }: Props) {
             conversationId={lead.conversation_id}
             status={chatStatus}
             onStatusChange={(_id, next) => setChatStatus(next)}
+            fallbackAnswers={lead.answers}
+            fallbackName={lead.contact_name}
+            fallbackPhone={lead.phone}
           />
         </div>
       ) : null}

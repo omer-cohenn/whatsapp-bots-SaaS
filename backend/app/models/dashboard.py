@@ -25,6 +25,8 @@ class LeadItem(BaseModel):
     # The full collected answers (decrypted). Owner sees everything — no hiding.
     answers: dict[str, Any] = Field(default_factory=dict)
     status: str
+    # The owner's outcome note (decrypted), e.g. why a deal closed; None if unset.
+    outcome_note: str | None = None
     last_step_index: int | None = None
     is_test: bool = False
     # The live conversation this lead belongs to (derived from cache_chat_ref);
@@ -44,12 +46,22 @@ class LeadsResponse(BaseModel):
 # --- PATCH /api/leads/{lead_id}/status ---------------------------------------
 
 
-class LeadStatusRequest(BaseModel):
-    """Owner-set a lead's status. Validated to the settable status set."""
+# An outcome note is a short owner message; finite bound against oversized bodies.
+MAX_NOTE_CHARS = 2000
 
-    model_config = ConfigDict(extra="forbid")
+
+class LeadStatusRequest(BaseModel):
+    """Owner-set a lead's status. Validated to the settable status set.
+
+    `note` is OPTIONAL on the API (the UI requires it for deal/closed, but the
+    contract accepts it for any status). When present it is encrypted at rest into
+    the lead's `outcome_note`. Whitespace-stripped; bounded length.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     status: Literal["new", "in_progress", "abandoned", "deal", "closed"]
+    note: str | None = Field(default=None, max_length=MAX_NOTE_CHARS)
 
 
 class LeadStatusResponse(BaseModel):

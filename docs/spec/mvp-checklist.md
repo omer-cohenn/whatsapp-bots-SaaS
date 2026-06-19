@@ -124,6 +124,14 @@ You can build **M0–M7 entirely on your laptop first**, then do **M8 (AWS)** wh
 
 ✅ **Done:** `tests/test_m9.bat` → M9 narrated **11/11** + strict `tests/test_m9.py` **10/10**; the strict M3–M9 bundle **118 passed**; M2 **12/12** + M3 **5/5** + M4 **9/9** + M5 **18/18** + M5b **10/10** + M7 **15/15** + M8 **27/27** all still green. (No M8 handoff assertions required changing — none had assumed "handoff → no lead".)
 
+## M10 (transcript TTL by status + private outcome note) — ✅ DONE 2026-06-19
+> Per [decision 0010](../decisions/0010-m10.md). Two promises: the live transcript must **not vanish while a human is needed**, and the owner's outcome note is **encrypted + private**.
+- [x] **TTL by status** centralized in `conversation_state._apply_ttl`, applied by BOTH `set_status` AND `append_message` using the CURRENT status: `bot` → sliding ~60-min; `waiting`/`human` → **PERSIST** (no expiry); `closed` → 30-day. Covers the conv hash key, its `:log` list, and the index. `append_message` no longer unconditionally re-sets the 60-min TTL (the bug that silently deleted a waiting transcript on the next message).
+- [x] **Encrypted outcome note** (migration `0007_outcome_note.sql`, additive + idempotent): `PATCH /api/leads/{id}/status` body accepts `{status, note?}`; when present `note` is encrypted into `leads.outcome_note` (like phone/answers, key_version stamped) — **raw column is ciphertext**. `LeadItem` carries `outcome_note: string | null`, decrypted for the owner; the API takes it optionally (the UI requires it for deal/closed).
+- [x] 🚦 **Isolation re-proved:** business A cannot set or read B's `outcome_note` (PATCH → 404; not visible in A's leads list).
+
+✅ **Done:** `tests/test_m10.bat` → M10 narrated **10/10** (incl. a negative control that forces the old 60-min timer back, catches it, then restores PERSIST) + strict `tests/test_m10.py` **13/13**; the strict M3–M10 bundle **131 passed**; M2 **12/12** + M3 **5/5** + M4 **9/9** + M5 **18/18** + M5b **10/10** + M7 **15/15** + M8 **27/27** + M9 **11/11** all still green. (No old assertions required changing — product source already implemented the locked M10 contract.)
+
 ## M8 — Ship to AWS ☁️ *(when ready to go public)*
 - [ ] AWS account + **region** (EU) + root **MFA** + CloudTrail
 - [ ] 💸 **Budget alarm (day one)**
