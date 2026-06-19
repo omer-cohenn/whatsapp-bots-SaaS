@@ -21,11 +21,13 @@ import { getLeads } from '../lib/dashboardClient'
 import { toFriendlyError } from '../lib/friendlyError'
 import type { Lead, LeadStatusFilter } from '../dashboard/types'
 
+// Filter chips. הושלמו maps to the backend `new` status (a completed lead);
+// פתוחים → in_progress; נטשו → abandoned. הכול shows everything (incl. deal/closed).
 const STATUS_SEGMENTS: Segment<LeadStatusFilter>[] = [
   { value: 'all', label: 'הכול' },
-  { value: 'open', label: 'פתוחים' },
-  { value: 'new', label: 'חדשים' },
-  { value: 'abandoned', label: 'ננטשו' },
+  { value: 'in_progress', label: 'פתוחים' },
+  { value: 'new', label: 'הושלמו' },
+  { value: 'abandoned', label: 'נטשו' },
 ]
 
 export default function LeadsPage() {
@@ -68,6 +70,11 @@ export default function LeadsPage() {
 
   useEffect(() => load(status, flowParam), [load, status, flowParam])
 
+  // After a manual status change on a card, refetch the current view.
+  const refresh = useCallback(() => {
+    load(status, flowParam)
+  }, [load, status, flowParam])
+
   // Flow filter options come from whatever flows currently appear in the data.
   const flowOptions = useMemo(() => {
     const names = new Set<string>()
@@ -79,16 +86,14 @@ export default function LeadsPage() {
     ]
   }, [leads, abandoned])
 
-  // KPI counts off the full (status=all) picture: derive from both lists when the
-  // current filter isn't "all". Simpler + accurate: count from the main list when
-  // status is 'all', else show counts we know (abandoned list + current list).
+  // KPI counts off the full (status=all) picture. Only computable when the
+  // current filter is 'all' (that's when `leads` holds every lead). הושלמו = the
+  // backend `new` status; פתוחים = in_progress; ננטשו from the abandoned list.
   const counts = useMemo(() => {
     const all = status === 'all' ? leads ?? [] : null
     return {
-      newCount: all ? all.filter((l) => l.status === 'new').length : null,
-      openCount: all
-        ? all.filter((l) => l.status === 'new' || l.status === 'in_progress').length
-        : null,
+      completedCount: all ? all.filter((l) => l.status === 'new').length : null,
+      openCount: all ? all.filter((l) => l.status === 'in_progress').length : null,
       abandonedCount: abandoned.length,
     }
   }, [leads, abandoned, status])
@@ -104,13 +109,13 @@ export default function LeadsPage() {
         </div>
 
         {/* KPI cards (when we can compute them, i.e. status=all) */}
-        {counts.newCount !== null ? (
+        {counts.completedCount !== null ? (
           <div className="grid grid-cols-3 gap-3" aria-label="סיכום לידים">
             <StatCard
-              icon="user-plus"
-              chipClassName="bg-[#639922]"
-              value={counts.newCount ?? 0}
-              label="חדשים"
+              icon="checks"
+              chipClassName="bg-[#1D9E75]"
+              value={counts.completedCount ?? 0}
+              label="הושלמו"
             />
             <StatCard
               icon="clock"
@@ -158,7 +163,7 @@ export default function LeadsPage() {
             <ul className="flex flex-col gap-3">
               {leads.map((lead) => (
                 <li key={lead.id}>
-                  <LeadCard lead={lead} />
+                  <LeadCard lead={lead} onStatusChange={refresh} />
                 </li>
               ))}
             </ul>
@@ -187,7 +192,7 @@ export default function LeadsPage() {
             <ul className="flex flex-col gap-3">
               {abandoned.map((lead) => (
                 <li key={lead.id}>
-                  <LeadCard lead={lead} />
+                  <LeadCard lead={lead} onStatusChange={refresh} />
                 </li>
               ))}
             </ul>

@@ -38,6 +38,24 @@ class LeadsResponse(BaseModel):
     leads: list[LeadItem]
 
 
+# --- PATCH /api/leads/{lead_id}/status ---------------------------------------
+
+
+class LeadStatusRequest(BaseModel):
+    """Owner-set a lead's status. Validated to the settable status set."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["new", "in_progress", "abandoned", "deal", "closed"]
+
+
+class LeadStatusResponse(BaseModel):
+    """Echo the lead + its new status after a successful change."""
+
+    lead_id: str
+    status: str
+
+
 # --- GET /api/dashboard ------------------------------------------------------
 
 
@@ -49,6 +67,8 @@ class DashboardResponse(BaseModel):
     completed: int
     abandoned: int
     total_leads: int
+    # Orders = leads the owner marked as a won deal (status='deal') in the window.
+    orders: int
 
 
 # --- GET /api/conversations --------------------------------------------------

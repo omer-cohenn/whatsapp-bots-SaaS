@@ -14,8 +14,11 @@ export type Period = 'week' | 'month' | 'all'
 /** Lead status filter. `open` = new + in_progress; `all` = everything. */
 export type LeadStatusFilter = 'all' | 'new' | 'in_progress' | 'abandoned' | 'open'
 
-/** The concrete status a single lead can carry. */
-export type LeadStatus = 'new' | 'in_progress' | 'abandoned'
+/**
+ * The concrete status a single lead can carry. `deal`/`closed` are set manually
+ * by the owner from the lead card (PATCH /api/leads/{id}/status).
+ */
+export type LeadStatus = 'new' | 'in_progress' | 'abandoned' | 'deal' | 'closed'
 
 // --- 1) GET /api/leads -------------------------------------------------------
 
@@ -46,6 +49,8 @@ export type DashboardStats = {
   completed: number
   abandoned: number
   total_leads: number
+  /** Count of leads the owner manually marked as a closed deal (status="deal"). */
+  orders: number
 }
 
 // --- 3) GET /api/conversations -----------------------------------------------

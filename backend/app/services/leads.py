@@ -41,9 +41,22 @@ import asyncpg
 from app.core import crypto
 
 # Lead statuses (mirrors the leads.status column comment in 0003_tables.sql).
+# The status column is free text, so the two OWNER-SETTABLE outcomes below need no
+# migration — they are just new string values the owner can stamp from the UI.
 STATUS_IN_PROGRESS = "in_progress"
 STATUS_NEW = "new"
 STATUS_ABANDONED = "abandoned"
+STATUS_DEAL = "deal"      # owner marked it won — Hebrew label "בוצעה עסקה".
+STATUS_CLOSED = "closed"  # owner closed/dismissed the lead — Hebrew "ליד סגור".
+
+# The statuses an owner may manually set on a lead via the dashboard.
+_SETTABLE_STATUSES = {
+    STATUS_IN_PROGRESS,
+    STATUS_NEW,
+    STATUS_ABANDONED,
+    STATUS_DEAL,
+    STATUS_CLOSED,
+}
 
 # flow_events.event values (the funnel vocabulary).
 EVENT_STARTED = "started"
@@ -191,6 +204,39 @@ async def complete_lead(
         STATUS_NEW,
         crypto.CURRENT_KEY_VERSION,
     )
+
+
+async def set_lead_status(
+    conn: asyncpg.Connection,
+    business_id: str,
+    lead_id: str,
+    status: str,
+) -> bool:
+    """Owner-set a lead's status (e.g. → 'deal' or 'closed'). RLS-scoped.
+
+    `status` must be one of the settable values (in_progress|new|abandoned|deal|
+    closed) — anything else is a programming/validation error and raises. The
+    `business_id` is the caller's verified id; including it in the WHERE means RLS
+    can only ever touch THIS tenant's row. Returns True if a row matched (lead
+    exists for this tenant), False otherwise — the caller maps False → 404.
+
+    No PII is touched or logged: only the status column changes.
+    """
+    if status not in _SETTABLE_STATUSES:
+        raise ValueError(f"invalid lead status: {status!r}")
+
+    result = await conn.execute(
+        """
+        UPDATE leads
+        SET status = $3, last_activity_at = now()
+        WHERE id = $1 AND business_id = $2
+        """,
+        lead_id,
+        business_id,
+        status,
+    )
+    # asyncpg returns the command tag, e.g. "UPDATE 1" / "UPDATE 0".
+    return result.rsplit(" ", 1)[-1] != "0"
 
 
 async def log_event(
@@ -362,10 +408,11 @@ async def funnel_stats(
     period: str | None = None,
     include_test: bool = False,
 ) -> dict[str, int]:
-    """Return funnel counts (started/completed/abandoned + total leads) for a period.
+    """Return funnel counts (started/completed/abandoned + total + orders) for a period.
 
     started/completed/abandoned come from `flow_events` (the funnel trail);
-    `total_leads` counts the lead ROWS in the window. `is_test` rows are excluded
+    `total_leads` counts the lead ROWS in the window; `orders` counts the lead rows
+    the owner marked as a closed deal (status='deal'). `is_test` rows are excluded
     unless `include_test` is True. RLS-scoped via the tenant-bound `conn`.
     """
     # Funnel event counts (one scan of flow_events, grouped by event).
@@ -393,11 +440,24 @@ async def funnel_stats(
         *ld_params,
     )
 
+    # Orders = leads the owner marked as a won deal, in the SAME window + is_test
+    # filter as total_leads (own param list — its own period interval bind).
+    or_params: list[Any] = [business_id]
+    or_where = ["business_id = $1", "status = 'deal'"]
+    if not include_test:
+        or_where.append("is_test = false")
+    or_period = _period_clause(period, or_params, "started_at")
+    orders = await conn.fetchval(
+        f"SELECT count(*)::int FROM leads WHERE {' AND '.join(or_where)}{or_period}",
+        *or_params,
+    )
+
     return {
         "started": int(by_event.get(EVENT_STARTED, 0)),
         "completed": int(by_event.get(EVENT_COMPLETED, 0)),
         "abandoned": int(by_event.get(EVENT_ABANDONED, 0)),
         "total_leads": int(total_leads or 0),
+        "orders": int(orders or 0),
     }
 
 

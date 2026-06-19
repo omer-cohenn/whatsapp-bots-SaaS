@@ -10,6 +10,7 @@ import type {
   ConversationStatus,
   ConversationsResponse,
   DashboardStats,
+  LeadStatus,
   LeadStatusFilter,
   LeadsResponse,
   Period,
@@ -60,6 +61,27 @@ export function getLeads(opts: {
       flow: opts.flow,
       include_test: opts.includeTest,
     })}`,
+  )
+}
+
+/** Response of PATCH /api/leads/{id}/status. */
+export type LeadStatusResponse = {
+  lead_id: string
+  status: string
+}
+
+/**
+ * PATCH /api/leads/{id}/status — manually set a lead's status (the owner uses
+ * this to mark a lead as "בוצעה עסקה" / "ליד סגור"). Tenant-scoped server-side;
+ * 404 if the lead isn't ours. Callers refresh the list afterwards.
+ */
+export function setLeadStatus(
+  leadId: string,
+  status: LeadStatus,
+): Promise<LeadStatusResponse> {
+  return api.patch<LeadStatusResponse>(
+    `/api/leads/${encodeURIComponent(leadId)}/status`,
+    { status },
   )
 }
 

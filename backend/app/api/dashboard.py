@@ -44,6 +44,8 @@ from app.models.dashboard import (
     DashboardResponse,
     LeadItem,
     LeadsResponse,
+    LeadStatusRequest,
+    LeadStatusResponse,
 )
 from app.services import (
     bot_settings as bot_settings_service,
@@ -97,6 +99,43 @@ async def get_leads(
         ) from None
 
     return LeadsResponse(leads=[LeadItem(**row) for row in rows])
+
+
+# A lead id is a UUID supplied in the path; bound its length so it can't be an
+# unreasonably large value (the service still scopes the UPDATE by business_id).
+_LEAD_ID_MAX = 64
+
+
+@router.patch("/leads/{lead_id}/status", response_model=LeadStatusResponse)
+async def set_lead_status(
+    body: LeadStatusRequest,
+    request: Request,
+    lead_id: str = Path(..., min_length=1, max_length=_LEAD_ID_MAX),
+    business_id: str = Depends(current_business),
+) -> LeadStatusResponse:
+    """Owner-set a lead's status (e.g. → 'deal' or 'closed'), tenant-scoped.
+
+    `status` is validated by the request model (Literal). The UPDATE is RLS-scoped
+    by the session's verified business id (never from the path/body); if no row
+    matched (wrong/foreign lead) we return 404. No PII is touched or logged.
+    """
+    try:
+        async with tenant_connection(request.app.state.pg_pool, business_id) as conn:
+            updated = await leads_service.set_lead_status(
+                conn, business_id, lead_id, body.status
+            )
+    except ValueError:
+        # Defensive: the Literal already constrains status, so this is unexpected.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="invalid status",
+        ) from None
+
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="lead not found"
+        )
+    return LeadStatusResponse(lead_id=lead_id, status=body.status)
 
 
 @router.get("/dashboard", response_model=DashboardResponse)

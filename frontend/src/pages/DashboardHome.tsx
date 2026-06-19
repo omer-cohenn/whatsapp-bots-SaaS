@@ -1,25 +1,26 @@
 // Authenticated landing page (M7). Renders inside <DashboardLayout> (sidebar,
 // header, skip-link, <main> landmark). Shows a greeting, a go-live publish
-// toggle, the funnel/KPI cards (started → completed → abandoned + total) with a
-// week / month / all period filter, and the stack-health panel.
+// toggle, the funnel/KPI cards (orders → completed → abandoned → started) with a
+// week / month / all period filter, and a "התראות" recent-activity feed.
 //
-// Two reads on mount: GET /api/dashboard (funnel, re-fetched when the period
-// changes) and GET /api/bot/settings (for the current publish state). The tenant
-// is always derived server-side from the session — never sent from here.
+// Three reads on mount: GET /api/dashboard (funnel, re-fetched when the period
+// changes), GET /api/leads (newest leads → the activity feed) and
+// GET /api/bot/settings (for the current publish state). The tenant is always
+// derived server-side from the session — never sent from here.
 
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import DashboardLayout from '../components/DashboardLayout'
-import StackHealth from '../components/StackHealth'
+import ActivityFeed from '../components/dashboard/ActivityFeed'
 import StatCard from '../components/dashboard/StatCard'
 import SegmentedControl, { type Segment } from '../components/dashboard/SegmentedControl'
 import PublishToggle from '../components/dashboard/PublishToggle'
 import Spinner from '../components/ui/Spinner'
 import Alert from '../components/ui/Alert'
-import { getDashboard } from '../lib/dashboardClient'
+import { getDashboard, getLeads } from '../lib/dashboardClient'
 import { getSettings } from '../lib/botClient'
 import { toFriendlyError } from '../lib/friendlyError'
-import type { DashboardStats, Period } from '../dashboard/types'
+import type { DashboardStats, Lead, Period } from '../dashboard/types'
 
 const PERIOD_SEGMENTS: Segment<Period>[] = [
   { value: 'week', label: 'השבוע' },
@@ -34,6 +35,9 @@ export default function DashboardHome() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Newest leads → the "התראות" activity feed (derived client-side, no period).
+  const [recentLeads, setRecentLeads] = useState<Lead[]>([])
 
   // Publish state lives here so the toggle stays in sync with the loaded config.
   const [isPublished, setIsPublished] = useState<boolean | null>(null)
@@ -59,6 +63,22 @@ export default function DashboardHome() {
   }, [])
 
   useEffect(() => loadStats(period), [loadStats, period])
+
+  // Recent activity: the newest leads (status=all), loaded once. Non-fatal — if
+  // it fails the feed just shows its empty state.
+  useEffect(() => {
+    let cancelled = false
+    getLeads({ status: 'all' })
+      .then((res) => {
+        if (!cancelled) setRecentLeads(res.leads)
+      })
+      .catch(() => {
+        if (!cancelled) setRecentLeads([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Publish state: loaded once.
   useEffect(() => {
@@ -141,16 +161,16 @@ export default function DashboardHome() {
                 label="ננטשו"
               />
               <StatCard
-                icon="users"
+                icon="checks"
                 chipClassName="bg-[#378ADD]"
-                value={stats.total_leads}
-                label="סך הלידים"
+                value={stats.orders}
+                label="הזמנות"
               />
             </div>
           ) : null}
         </section>
 
-        <StackHealth />
+        <ActivityFeed leads={recentLeads} />
       </div>
     </DashboardLayout>
   )

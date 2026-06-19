@@ -96,7 +96,7 @@ critical or medium isolation/leak issues. Findings below are LOW hardening notes
 
 ### M7-01 — `/api/leads` `status` filter is an unvalidated free `str` (silent fall-through) — LOW
 - **Where:** `backend\app\api\dashboard.py:67` (`status_filter: str = Query("all", alias="status")`) → `leads.py:290-297`.
-- **Why dangerous (mild):** Unlike `period`/`flow`/conversation-status (all `Literal`/bounded), the leads `status` accepts ANY string. There is NO injection risk — it is matched against `STATUS_OPEN`/`_REAL_STATUSES` and bound as a `$n` param, and an unrecognized value simply yields no status predicate (returns ALL statuses). The mild risk is correctness/UX: a typo (`?status=neww`) silently returns every lead instead of a `422`, and the value is also unbounded in length. Not a leak, not an isolation gap.
+- **Why dangerous (mild):** Unlike `period`/`flow`/conversation-status (all `Literal`/bounded), the leads `status` accepts ANY string. There is NO injection risk — it is matched against `STATUS_OPEN`/`_REAL_STATUSES` and bound as a `$n` param, and an unrecognized value simply yields no status predicate (returns ALL statuses). The mild risk is correctness/UX: a typo (`?status=neww`) silently returns every lead instead of a `422`, and the value is also unbounded in length. Not a leak, not an isolation gap. (Note: as of the M7 polish this filter IS now a `Literal` at `dashboard.py:69-71` — verify M7-01 is resolved.)
 - **Fix direction:** Make it a `Literal["all","new","in_progress","abandoned","open"]` (matching the other filters) so invalid values 422 instead of silently widening the result set.
 
 ### M7-02 — `list_conversations` does N+1 `HGETALL` per index member with no cap — LOW (DoS/perf, not a leak)
@@ -118,3 +118,42 @@ critical or medium isolation/leak issues. Findings below are LOW hardening notes
 | M7-03 | Low | Lifecycle (verify) | `closed`/replied conversations are re-registered and linger in the index until TTL; only `clear_state` removes them — confirm intended "closed disappears" behavior. |
 
 **Top fixes:** (1) M7-01 — make the leads `status` filter a `Literal` for parity with the other filters; (2) M7-02 — bound/pipeline conversation listing before any tenant accumulates many live chats; (3) M7-03 — confirm/adjust the closed-conversation lifecycle in the index.
+
+---
+
+## M7 polish — lead status mutation + orders metric — audit 2026-06-19
+
+> Scope: the M7 POLISH delta only — `PATCH /api/leads/{lead_id}/status` in
+> `backend\app\api\dashboard.py:104-138`; `set_lead_status` + the `orders` add to
+> `funnel_stats` in `backend\app\services\leads.py:46-59,209-239,404-461`;
+> `LeadStatusRequest`/`LeadStatusResponse` + `orders` in `backend\app\models\dashboard.py:44-71`.
+> Frontend (informational): `frontend\src\components\dashboard\LeadCard.tsx` +
+> `frontend\src\lib\waLink.ts`. Cross-checked against `app\core\deps.py` and `app\api\me.py`.
+> Read-only audit; no product code was modified.
+
+**Owner's explicit requirements — verification result:**
+
+- ✅ **`business_id` comes ONLY from `current_business` (never path/body).** Verified. The route signature takes `business_id: str = Depends(current_business)` (`dashboard.py:114`), resolved solely from the server-side session (`deps.py:50-54`). `LeadStatusRequest` has only a `status` field with `extra="forbid"` (`models/dashboard.py:44-49`) — no `business_id` can be smuggled in the body. The only path param is `lead_id` (a bounded `str`); the tenant id is never read from path/query/body.
+- ✅ **The UPDATE is RLS-scoped AND carries `business_id` (A cannot change B's lead).** Verified. The endpoint opens `tenant_connection(pool, business_id)` (`dashboard.py:123`), which sets the transaction-local `app.business_id` so RLS's USING + WITH CHECK scopes the row. `set_lead_status` ALSO carries the predicate explicitly: `UPDATE leads SET status=$3 ... WHERE id=$1 AND business_id=$2` (`leads.py:228-237`), with `business_id` = the caller's verified id ($2). Both layers must agree, so business A targeting business B's `lead_id` matches zero rows → command tag `UPDATE 0` → `set_lead_status` returns `False` → endpoint returns `404 "lead not found"` (`dashboard.py:134-137`). No cross-tenant write is possible, and the 404 (not 403) avoids confirming the foreign lead's existence.
+- ✅ **The status value is validated (Literal) — no injection.** Verified. `LeadStatusRequest.status` is `Literal["new","in_progress","abandoned","deal","closed"]` (`models/dashboard.py:49`) — any other value is rejected `422` before the handler runs. Defense-in-depth: `set_lead_status` re-checks membership in `_SETTABLE_STATUSES` and raises `ValueError` otherwise (`leads.py:225-226`), which the endpoint maps to `422` (`dashboard.py:127-132`). The value is bound as a `$3` parameter (`leads.py:236`), never string-interpolated — no SQL injection. `lead_id` is bounded `min_length=1, max_length=64` (`dashboard.py:113`) and is also a bound `$1` param.
+- ✅ **No PII/secrets logged; generic errors.** Verified. The new handler and `set_lead_status` contain ZERO `log.*` calls — no `lead_id`, no status, no PII is logged on this path. Errors are generic and static: `404 "lead not found"`, `422 "invalid status"`; no `str(e)`, no row data, no stack detail is surfaced to the client.
+- ✅ **`orders` count is tenant-scoped.** Verified. The `orders` branch of `funnel_stats` runs on the same RLS-bound `conn` and uses its OWN param list with `business_id = $1` plus `status = 'deal'` (`leads.py:445-453`); it applies the same `is_test = false` (default) and the same `started_at`-keyed period window as `total_leads`, with the interval bound as a parameter via `_period_clause` (`leads.py:449`, never interpolated). The literal `'deal'` is a fixed constant in the SQL (not user input). `DashboardResponse.orders: int` is populated via the unchanged `**stats` spread (`dashboard.py:156`, `models/dashboard.py:71`). Counts cannot cross tenants.
+
+**Frontend (informational) — wa.me phone surface:**
+
+- ✅ **No phone is logged server-side on this surface; the wa.me link is client-side only.** Verified. `waLink(lead.phone)` (`waLink.ts:8-17`) builds `https://wa.me/{digits}` purely in the browser from the already-decrypted `lead.phone` the owner received via `GET /api/leads`; `LeadCard.tsx:44,121-132` renders it as a plain `<a target="_blank" rel="noopener noreferrer">`. Clicking it navigates the user's own browser to wa.me — it does NOT hit the Bizz_up backend, so no server-side log entry carries the phone. The status mutation triggered from the same card (`setLeadStatus(lead.id, next)`, `LeadCard.tsx:53`) sends only `lead.id` + the Literal status, never the phone. The phone IS visible in the owner's DOM (by design — the owner is the authorized viewer of their own leads), which is expected, not a leak.
+
+**Overall verdict: PASS — the M7 polish is tenant-correct, injection-safe, and leak-free.**
+`business_id` is taken only from the verified session; the status UPDATE is doubly
+scoped (RLS context + explicit `WHERE business_id`) and returns 404 on a foreign/
+missing lead; `status` is a Literal (plus a service-layer re-check) and bound as a
+parameter; `orders` is tenant-scoped with the same is_test + period semantics as the
+other counts; nothing logs PII or secrets and errors are generic; the wa.me link is
+client-side only with no server-side phone logging. No critical, medium, or new low
+issues found in the polish delta.
+
+### M7 polish — summary table
+| ID | Severity | Area | One-line |
+|----|----------|------|----------|
+| (all checks) | — | Verification | PASS — business_id from session only; status UPDATE RLS-scoped + explicit `WHERE business_id` (404 on foreign lead); status is a Literal + service re-check, param-bound (no injection); `orders` tenant-scoped w/ same is_test+period; no PII/secrets logged, generic errors; wa.me link client-side only (no server-side phone log). |
+| (none) | — | — | No new findings in the M7 polish delta. (Pre-existing M7 low notes M7-01..M7-03 stand; M7-01 appears resolved — `/api/leads` status is now a `Literal` at `dashboard.py:69-71` — verify.) |
