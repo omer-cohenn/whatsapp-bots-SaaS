@@ -25,7 +25,7 @@ type NavSpec = {
 const NAV_ITEMS: NavSpec[] = [
   { to: '/', label: 'בית', icon: 'home', enabled: true },
   { to: '/bot-builder', label: 'בונה הבוט', icon: 'robot', enabled: true },
-  { to: '/try-me', label: 'נסה אותי', icon: 'player-play', enabled: false },
+  { to: '/try-me', label: 'נסה אותי', icon: 'player-play', enabled: true },
   { to: '/leads', label: 'לידים', icon: 'users', enabled: false },
   { to: '/appointments', label: 'ניהול פגישות', icon: 'calendar-event', enabled: false },
   { to: '/settings', label: 'הגדרות', icon: 'settings', enabled: false },

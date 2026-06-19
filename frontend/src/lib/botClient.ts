@@ -9,6 +9,8 @@ import type {
   BotAiChatResponse,
   BotAiHistoryResponse,
   BotSettings,
+  BotTryMeResponse,
+  ConvState,
 } from '../botbuilder/types'
 
 /**
@@ -54,4 +56,24 @@ export function aiChat(
  */
 export function aiHistory(): Promise<BotAiHistoryResponse> {
   return api.get<BotAiHistoryResponse>('/api/bot/ai/history')
+}
+
+/**
+ * POST /api/bot/tryme — one turn of the deterministic test-chat engine ("נסה
+ * אותי"). The owner types as if they were a customer; the bot replies come back
+ * in `replies`.
+ *
+ *   * `message` empty ('') → the "open" turn (greeting + menu).
+ *   * `state` null → the engine starts fresh; otherwise pass back EXACTLY the
+ *     `state` returned by the previous turn (it is opaque — never inspected or
+ *     trusted, and never used to scope the tenant; that comes from the session).
+ *
+ * No data is persisted: `lead` (only present on event 'lead_completed') is just
+ * this conversation's own typed answers, shown in test mode and discarded.
+ */
+export function tryMe(
+  message: string,
+  state: ConvState,
+): Promise<BotTryMeResponse> {
+  return api.post<BotTryMeResponse>('/api/bot/tryme', { message, state })
 }

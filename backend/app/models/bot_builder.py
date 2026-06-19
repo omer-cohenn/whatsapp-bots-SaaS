@@ -215,7 +215,7 @@ class BotSettings(BaseModel):
 
 # Hard cap on a single builder message (defense against oversized request bodies
 # / prompt-stuffing). Generous for normal chat, finite against abuse.
-MAX_CHAT_MESSAGE_CHARS = 8000
+MAX_CHAT_MESSAGE_CHARS = 4000
 # Hard cap on the working-config prompt context sent with each AI turn. Stops an
 # authenticated owner (or a stolen session) from posting a multi-megabyte /
 # deeply-nested blob that would inflate the Gemini prompt (memory/CPU pressure +
@@ -261,6 +261,56 @@ class BotAiChatResponse(BaseModel):
     reply: str
     # Present only when the model proposed a (validated) config change.
     changes: dict | None = None
+
+
+# --- API request/response wrappers (the try-me engine endpoint, M5) ----------
+
+# Hard cap on a single try-me message (a customer turn is short; finite vs abuse).
+MAX_TRYME_MESSAGE_CHARS = 2000
+
+
+class BotTryMeRequest(BaseModel):
+    """POST /api/bot/tryme body — one turn of the owner's own bot, in test mode.
+
+    `message` may be EMPTY (the "open" turn returns the greeting + menu). `state`
+    is the opaque conversation state the engine returned last turn (or null/empty
+    on the first turn → the engine starts fresh). The tenant is taken from the
+    server session ONLY — never from this body or from `state`; nothing in here
+    can scope or reveal another conversation's or another tenant's data.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    message: str = Field(default="", max_length=MAX_TRYME_MESSAGE_CHARS)
+    state: dict | None = Field(default=None)
+
+    @field_validator("state")
+    @classmethod
+    def _bound_state(cls, value: dict | None) -> dict | None:
+        """Cap the conversation-state size (anti-DoS), reusing the §M4 byte bound."""
+        if value is None:
+            return None
+        try:
+            size = len(json.dumps(value, ensure_ascii=False))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("state must be JSON-serializable") from exc
+        if size > MAX_CHAT_CONFIG_BYTES:
+            raise ValueError(f"state too large (> {MAX_CHAT_CONFIG_BYTES} bytes)")
+        return value
+
+
+class BotTryMeResponse(BaseModel):
+    """POST /api/bot/tryme response: the bot's reply(ies) + the next state.
+
+    `event` is one of None | "lead_completed" | "handed_off" | "booking".
+    `lead` is the collected answers ONLY on "lead_completed" (else null). Nothing
+    is persisted — try-me never writes a lead, event, or message.
+    """
+
+    replies: list[str]
+    state: dict
+    event: str | None = None
+    lead: dict | None = None
 
 
 class BotAiMessage(BaseModel):

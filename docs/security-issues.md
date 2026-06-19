@@ -119,3 +119,43 @@ Legend for file refs: `path:line`. Secret values are shown only by variable name
 | L2 | Low | Config | `WEBHOOK_VERIFY_TOKEN=secret` is trivially guessable. |
 | L3 | Low | Logging / errors | Raw exception text returned to clients and rendered in OAuth callback HTML. |
 | L4 | Low | Config | Hardcoded absolute path with username in `run_ngrok.ps1`. |
+
+---
+
+## M5 try-me (Bizz_up rebuild) — audit 2026-06-19
+
+> Scope: the NEW `bizz_up` backend M5 try-me feature only — the pure bot engine
+> `backend\app\services\bot_engine.py`, the `POST /api/bot/tryme` endpoint in
+> `backend\app\api\bot_builder.py`, and its request/response models +
+> `bot_settings` loader. Read-only audit; no product code was modified. Findings
+> are for the main build loop to fix.
+
+**Owner's explicit requirements — verification result:**
+
+- ✅ **Bot can NEVER reveal classified/sensitive customer info.** Verified. The engine (`bot_engine.advance`) reads ONLY the two arguments it is handed — `settings` (this tenant's own config) and the current conversation `state` — and emits only the current conversation's own typed answers. There is no code path that reads a stored lead, another conversation, or another tenant: no DB call, no network, no file I/O, no module-level state anywhere in `bot_engine.py`. The `lead` returned on completion is built solely from `state["collected"]` (engine lines 150-163), i.e. exactly what the user just typed this session.
+- ✅ **No LLM in the engine → no prompt-injection / exfiltration path.** Verified. `bot_engine.py` imports only `re` and `typing` (lines 28-29). The free-text fallback is a fixed menu nudge (`_DEFAULT_NUDGE` + `_menu_list`, engine lines 183-186), not a model call. The endpoint `bot_tryme` calls only `bot_settings_service.get_settings(...)` then `bot_engine.advance(...)` — no `bot_builder_ai` / Gemini call (`bot_builder.py:84-95`).
+- ✅ **Tenant isolation — business_id from server session only.** Verified. `bot_tryme` takes `business_id: str = Depends(current_business)` (`bot_builder.py:74`), which resolves from the Redis session (`deps.py:50-54`), never from the body or state. `BotTryMeRequest` has no `business_id` field and `model_config = extra="ignore"` (`models/bot_builder.py:272-285`), so a `business_id` in the body is dropped. `get_settings` runs inside `tenant_connection(pool, business_id)` with `WHERE business_id = $1` (`bot_settings.py:52-60`).
+- ✅ **try-me writes NOTHING to the DB.** Verified. `bot_tryme` performs a single READ (`get_settings`) and no INSERT/UPDATE/UPSERT. Contrast with `/api/bot/ai/chat`, which DOES persist via `_persist_turn`; try-me deliberately does not. The engine is pure, so it cannot write either.
+- ✅ **Input bounds.** Verified. `message` is capped at `MAX_TRYME_MESSAGE_CHARS = 2000` (`models/bot_builder.py:269,284`); `state` is JSON-size-bounded to `MAX_CHAT_CONFIG_BYTES = 65536` via `_bound_state` (`models/bot_builder.py:287-299`). The engine's `_normalize_state` (`bot_engine.py:383-408`) coerces any malformed/huge/wrong-typed state into a safe known shape, so a crafted `state` cannot crash the engine (see T-02 for the one residual concern).
+- ✅ **No secrets/PII in logs; errors generic.** Verified for the try-me path: `bot_tryme` logs nothing at all (no `log.*` calls in the handler), so neither message text, collected answers, nor secrets are logged. Settings/secrets are never logged by `get_settings`.
+
+**Overall verdict: PASS — the M5 try-me path meets all six owner requirements.**
+No critical or medium issues. The engine is genuinely pure and tenant-safe; try-me
+is read-only and LLM-free. Two LOW / hardening notes below; neither is a leak.
+
+### T-01 — try-me uses the SAVED config, including unpublished flows (by design; confirm intent) — LOW
+- **Where:** `backend\app\api\bot_builder.py:84-89` (loads `get_settings` and runs the engine regardless of `is_published`).
+- **Why dangerous (mild):** try-me runs against whatever is persisted for THIS tenant, even if `is_published` is false. That is correct for an owner testing their own draft (no cross-tenant exposure — still scoped by `business_id`). The only note: try-me reflects the *saved* draft, not the in-browser unsaved working copy. Not a security leak; flagged only so the team confirms this is the intended UX and that `is_published` is enforced on the REAL inbound WhatsApp path (out of M5 scope — *needs verification* when the live bot loop is built).
+- **Fix direction:** No code change required for security. Document that try-me = saved config; ensure the future production bot loop refuses to answer when `is_published` is false.
+
+### T-02 — `step_index` upper bound not capped at request validation (engine handles it, but defense-in-depth) — LOW
+- **Where:** `backend\app\models\bot_builder.py:287-299` (`_bound_state` checks JSON byte size only); `backend\app\services\bot_engine.py:397-399` (`_normalize_state` accepts any non-negative int `step_index`).
+- **Why dangerous (mild):** A crafted `state` with a huge `step_index` (e.g. 10**9) passes validation (it's a small JSON). The engine is safe — `_advance_in_flow` guards `state["step_index"] >= len(steps)` and falls back to the menu (`bot_engine.py:141-142`), and `_advance_menu` uses bounded index math — so there is no crash, OOB read, or leak. This is purely a defense-in-depth note: an absurd index should arguably be rejected/clamped at the edge rather than relied on being caught downstream.
+- **Fix direction:** Optionally clamp/validate `step_index` (and `phase`/`active_flow` types) in `_bound_state`, or add a max bound. Low priority — current behavior is already safe.
+
+### M5 try-me — summary table
+| ID | Severity | Area | One-line |
+|----|----------|------|----------|
+| (req 1-6) | — | Verification | All six owner requirements PASS — engine is pure, LLM-free, tenant-scoped from session, no DB writes, input-bounded, no secret/PII logging. |
+| T-01 | Low | Scope / UX | try-me runs the saved config incl. unpublished drafts (tenant-scoped, not a leak); confirm `is_published` is enforced on the future live bot loop. |
+| T-02 | Low | Input validation | Oversized `step_index` in `state` passes the size check; engine handles it safely — optional edge clamping for defense-in-depth. |

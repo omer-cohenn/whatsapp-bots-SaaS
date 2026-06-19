@@ -86,3 +86,22 @@ export type BotAiMessage = {
 export type BotAiHistoryResponse = {
   messages: BotAiMessage[]
 }
+
+// --- "try-me" test-chat wire types (M5) --------------------------------------
+// The engine's conversation state is OPAQUE to the client: we receive it in a
+// response and echo it back unchanged on the next turn. We never read or trust
+// it (the tenant is always derived server-side from the session).
+export type ConvState = unknown
+
+export type TryMeEvent = 'lead_completed' | 'handed_off' | 'booking'
+
+export type BotTryMeResponse = {
+  /** One or more bot messages to show this turn. */
+  replies: string[]
+  /** The next conversation state — persist client-side, send back next turn. */
+  state: ConvState
+  /** null normally; a terminal/notable event otherwise. */
+  event: TryMeEvent | null
+  /** Populated ONLY on 'lead_completed' — this conversation's own answers. */
+  lead: Record<string, string> | null
+}

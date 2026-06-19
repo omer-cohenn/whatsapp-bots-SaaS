@@ -31,8 +31,10 @@ from app.models.bot_builder import (
     BotAiHistoryResponse,
     BotAiMessage,
     BotSettings,
+    BotTryMeRequest,
+    BotTryMeResponse,
 )
-from app.services import bot_builder_ai, bot_settings as bot_settings_service
+from app.services import bot_builder_ai, bot_engine, bot_settings as bot_settings_service
 
 router = APIRouter(prefix="/bot", tags=["bot-builder"])
 log = get_logger("app.api.bot_builder")
@@ -63,6 +65,34 @@ async def put_bot_settings(
     """
     await bot_settings_service.save_settings(request.app.state.pg_pool, business_id, settings)
     return settings
+
+
+@router.post("/tryme", response_model=BotTryMeResponse)
+async def bot_tryme(
+    body: BotTryMeRequest,
+    request: Request,
+    business_id: str = Depends(current_business),
+) -> BotTryMeResponse:
+    """Run ONE turn of THIS tenant's bot against the owner's own config (try-me).
+
+    Read-only: it loads this business's settings and runs the PURE bot engine.
+    It NEVER writes to the DB (no leads, events, or messages) and never logs the
+    message text. The business id comes from the session ONLY — never from the
+    body or the conversation state — so there is no path to another tenant's
+    config or another conversation's data.
+    """
+    settings = await bot_settings_service.get_settings(
+        request.app.state.pg_pool, business_id
+    )
+    # A null/empty client state means a fresh conversation.
+    state = body.state if body.state else bot_engine.initial_state()
+    result = bot_engine.advance(settings, state, body.message)
+    return BotTryMeResponse(
+        replies=result["replies"],
+        state=result["state"],
+        event=result["event"],
+        lead=result["lead"],
+    )
 
 
 @router.post("/ai/chat", response_model=BotAiChatResponse)
