@@ -22,11 +22,14 @@ from fastapi import FastAPI
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
 from app.api.me import api as api_router
+from app.api.public_booking import router as public_booking_router
 from app.api.webhook import router as webhook_router
 from app.core.clients import create_pg_pool, create_redis
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
+from app.services import google_calendar
 from app.services.abandoned_sweep import sweep_loop
+from app.services.booking_reminders import sweep_loop as booking_reminders_loop
 
 
 @asynccontextmanager
@@ -38,6 +41,13 @@ async def lifespan(app: FastAPI):
     app.state.pg_pool = await create_pg_pool(settings)
     app.state.redis = create_redis(settings)
 
+    # M11: register the Google Calendar sync hook with the booking core. The hook
+    # captures the pool (it opens its own tenant_connection per call) and fires
+    # AFTER each booking mutation commits. It no-ops for businesses that haven't
+    # connected Google and swallows any Google failure, so this never affects
+    # booking reliability even when calendar isn't configured.
+    google_calendar.register(app.state.pg_pool)
+
     # Background: the abandoned-lead sweep (M5). A single-runner loop guarded by a
     # Redis lock so multiple workers never double-sweep. Started here, cancelled on
     # shutdown below.
@@ -45,18 +55,27 @@ async def lifespan(app: FastAPI):
         sweep_loop(app.state.pg_pool, app.state.redis)
     )
 
+    # Background: the M11 booking-reminders sweep. Same single-runner pattern —
+    # queues confirmations + day-before reminders into the Redis outbox (sent for
+    # real once M6 WhatsApp sending is wired). Cancelled on shutdown below.
+    booking_reminders_task = asyncio.create_task(
+        booking_reminders_loop(app.state.pg_pool, app.state.redis)
+    )
+
     log.info("backend started", extra={"app_env": settings.app_env})
 
     try:
         yield
     finally:
-        # Stop the sweep loop first (await its clean CancelledError exit), then
-        # dispose the infra clients. Never log connection details.
+        # Stop the background loops first (await their clean CancelledError exit),
+        # then dispose the infra clients. Never log connection details.
         sweep_task.cancel()
-        try:
-            await sweep_task
-        except asyncio.CancelledError:
-            pass
+        booking_reminders_task.cancel()
+        for task in (sweep_task, booking_reminders_task):
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
         await app.state.pg_pool.close()
         await app.state.redis.aclose()
         log.info("backend stopped")
@@ -76,11 +95,16 @@ def create_app() -> FastAPI:
     )
     app.state.settings = settings
 
-    # Public routes: /healthz, /webhook/*, /auth/*. The /api/* group below is
-    # gated (deny-by-default) by a router-level session dependency.
+    # Public routes: /healthz, /webhook/*, /auth/*, and the M11 public booking
+    # page (/api/book/*). The /api/* group below is gated (deny-by-default) by a
+    # router-level session dependency. The public booking router is mounted
+    # SEPARATELY here (on the app root, NOT under the gated api_router) precisely
+    # because customers have no session — it secures itself by resolving the
+    # tenant from the verified slug + RLS (see app/api/public_booking.py).
     app.include_router(health_router)
     app.include_router(webhook_router)
     app.include_router(auth_router)
+    app.include_router(public_booking_router)
     app.include_router(api_router)
     return app
 

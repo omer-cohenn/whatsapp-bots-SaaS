@@ -35,10 +35,12 @@ from typing import Any
 import asyncpg
 import redis.asyncio as aioredis
 
+from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.db.session import tenant_connection
 from app.services import (
     bot_engine,
+    booking as booking_service,
     bot_settings as bot_settings_service,
     conversation_state,
     leads as leads_service,
@@ -126,6 +128,11 @@ async def run_turn(
     # 5) PERSIST everything this turn implies, in ONE tenant-scoped transaction so
     #    a create + its 'started' event (etc.) commit together or not at all.
     new_lead_id = active_lead_id
+    # When the engine fires a "booking" event, we rewrite the demo link in the
+    # reply with this tenant's REAL public booking URL (fix B7). Resolved inside
+    # the transaction (the slug read is RLS-scoped); applied to the replies in
+    # step 7 below. None ⇒ no rewrite (not a booking turn).
+    real_booking_link: str | None = None
     async with tenant_connection(pool, business_id) as conn:
         if entered_flow:
             new_lead_id = await _start_lead(
@@ -172,7 +179,30 @@ async def run_turn(
                 conn, business_id, handoff_lead_id, None,
                 leads_service.EVENT_HANDOFF, step_index=None, is_test=is_test,
             )
-        # event == "booking": Phase-2 stub in the engine; nothing to persist (M5).
+
+        elif event == "booking":
+            # M11 (fix B7): a real booking flow. The customer picked the booking
+            # option; the bot must send the REAL public booking link (built from
+            # booking_settings.slug), not the engine's demo placeholder. We also
+            # create/link a LEAD so the request shows in the owner's pipeline
+            # (consistent with M9/M10), then the customer books on the web page.
+            booking_lead_id = new_lead_id
+            if booking_lead_id is None:
+                booking_lead_id = await leads_service.create_lead(
+                    conn,
+                    business_id,
+                    lead_name="בקשת תור",
+                    conversation_id=conversation_id,
+                    is_test=is_test,
+                )
+                new_lead_id = booking_lead_id
+            # Resolve this tenant's public booking slug (RLS-scoped read) and
+            # build the real link to swap into the reply in step 7.
+            booking_settings = await booking_service.get_settings(conn, business_id)
+            slug = booking_settings.get("slug")
+            if slug:
+                base = get_settings().public_base_url.rstrip("/")
+                real_booking_link = f"{base}/book/{slug}"
 
     # 6) Save the next ConvState back to Redis, re-attaching the active lead_id so
     #    the NEXT turn knows which lead row to grow. (When the flow ended/handed
@@ -182,15 +212,26 @@ async def run_turn(
     state_to_save[_LEAD_ID_FIELD] = persist_lead_id
     await conversation_state.set_state(redis, business_id, conversation_id, state_to_save)
 
+    # 6b) On a booking turn, swap the engine's DEMO link for this tenant's REAL
+    #     public booking URL (fix B7). The engine already substituted its demo
+    #     placeholder into the reply; we replace that exact placeholder so the
+    #     customer receives a working link. If the slug couldn't be resolved we
+    #     leave the demo text rather than send a broken URL.
+    replies = list(result["replies"])
+    if real_booking_link:
+        replies = [
+            r.replace(bot_engine.DEMO_BOOKING_LINK, real_booking_link) for r in replies
+        ]
+
     # 7) Mirror each bot reply onto the transcript (role="bot") so the owner's
     #    chat view shows the full exchange — customer line + the bot's answers.
-    for reply in result["replies"]:
+    for reply in replies:
         await conversation_state.append_message(
             redis, business_id, conversation_id, "bot", reply
         )
 
     return {
-        "replies": result["replies"],
+        "replies": replies,
         "event": event,
         "lead_id": new_lead_id,
         "silent": False,

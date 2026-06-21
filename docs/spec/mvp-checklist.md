@@ -132,6 +132,17 @@ You can build **M0–M7 entirely on your laptop first**, then do **M8 (AWS)** wh
 
 ✅ **Done:** `tests/test_m10.bat` → M10 narrated **10/10** (incl. a negative control that forces the old 60-min timer back, catches it, then restores PERSIST) + strict `tests/test_m10.py` **13/13**; the strict M3–M10 bundle **131 passed**; M2 **12/12** + M3 **5/5** + M4 **9/9** + M5 **18/18** + M5b **10/10** + M7 **15/15** + M8 **27/27** + M9 **11/11** all still green. (No old assertions required changing — product source already implemented the locked M10 contract.)
 
+## M11 (public booking + Google Calendar) — Appointment booking 📅 — ✅ DONE 2026-06-21
+> Per [decision 0011](../decisions/0011-m11-appointments-booking.md). Phase-2 booking, built now: a public booking page + per-business (optional) Google Calendar. (Distinct from the launch-readiness milestone below, which keeps its number.)
+- [x] **Four tables** (`booking_settings`/`services`/`bookings`/`google_credentials`) — migrations `0008_booking` + `0009_rls_booking` (RLS ENABLE+FORCE + `p_tenant_isolation` on all four; `app_role` full CRUD, `gateway_role` nothing) + `0010_booking_slug_resolve` (the public slug→tenant + the PII-free reminder read, both SECURITY DEFINER). Additive + idempotent; auto-apply via the compose `migrate`.
+- [x] **Slot algorithm:** SPLIT working-hours ranges per weekday (Sun=0), per-service durations, the rules `min_notice_minutes` / `buffer_minutes` / `max_days_ahead` — computed in **Asia/Jerusalem**, stored **UTC** (zoneinfo).
+- [x] **Public page** (no session): `GET /api/book/{slug}/services|slots`, `POST /api/book/{slug}` (creates a unified **LEAD + booking** in one tx, client PII **encrypted at rest — asserted on raw columns**, double-booking → **409**, unknown slug → **404**, junk → **422**), `POST .../cancel|reschedule/{cancel_token}`.
+- [x] **Admin** (gated `/api`): `GET/PUT /api/booking/settings`, `GET/POST/PATCH/DELETE /api/services[/{id}]`, `GET /api/bookings`, `PATCH /api/bookings/{id}` (status / reschedule), `GET /api/google/connect|callback|status` + `POST /api/google/disconnect`.
+- [x] **Google Calendar OPTIONAL** per business via a decoupled hook (mock-tested): create-event with the right params, **Meet only when `meet_enabled`**, a Google failure **degrades gracefully** (booking stands), the KEK-encrypted **refresh_token never leaks** in a response/log.
+- [x] 🚦 **C4 re-proved:** A cannot read/list/PATCH B's bookings/services/settings (foreign PATCH → 404); admin routes 401 without a session; the public slug only exposes its own tenant.
+
+✅ **Done:** `tests/test_m11.bat` → M11 narrated **21/21** (incl. an active negative control: drop RLS on `bookings` → catch the leak → restore) + strict `tests/test_m11.py` **28/28**; the strict M3–M10 bundle **131 passed**; M2 **12/12** + M3 **5/5** + M4 **9/9** + M5 **18/18** + M5b **10/10** + M7 **15/15** + M8 **27/27** + M9 **11/11** + M10 **10/10** all still green. (No old assertions required changing — product source already implemented the locked M11 contract; the one nuance worth noting: an off-grid-but-still-future time maps to **409**, a past/closed one to **422** — the test asserts the real contract.)
+
 ## M8 — Ship to AWS ☁️ *(when ready to go public)*
 - [ ] AWS account + **region** (EU) + root **MFA** + CloudTrail
 - [ ] 💸 **Budget alarm (day one)**

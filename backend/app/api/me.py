@@ -15,8 +15,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 
+from app.api.booking import router as booking_router
 from app.api.bot_builder import router as bot_builder_router
 from app.api.dashboard import router as dashboard_router
+from app.api.google_oauth import router as google_router
 from app.core.deps import current_business, current_session, current_user
 from app.db.session import tenant_connection
 from app.models.auth import MeBusiness, MeConnection, MeResponse, MeUser
@@ -32,6 +34,16 @@ api.include_router(bot_builder_router)
 # Mount the M7 dashboard / back-office READ routes (/api/leads, /api/dashboard,
 # /api/conversations/*, /api/bot/publish). Same gate, deny-by-default.
 api.include_router(dashboard_router)
+
+# Mount the M11 booking ADMIN routes (/api/booking/settings, /api/services/*,
+# /api/bookings/*). Same gate, deny-by-default. The PUBLIC booking routes
+# (/api/book/*) are mounted separately on the app root — they are NOT gated.
+api.include_router(booking_router)
+
+# Mount the M11 Google Calendar connect routes (/api/google/connect|callback|
+# status|disconnect). Same gate, deny-by-default — the OAuth callback is reached
+# by the already-logged-in owner (the browser carries the session cookie).
+api.include_router(google_router)
 
 
 async def _connection_status(request: Request, business_id: str) -> str:

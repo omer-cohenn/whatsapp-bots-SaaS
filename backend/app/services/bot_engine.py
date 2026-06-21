@@ -44,8 +44,10 @@ _DEFAULT_VALIDATION_ERROR = "לא הצלחתי להבין את התשובה, א�
 _DEFAULT_COMPLETION = "תודה רבה! קיבלנו את הפרטים שלך ונחזור אליך בקרוב 🙏"
 # Gentle nudge when, at the menu, the message matched no flow.
 _DEFAULT_NUDGE = "לא בטוח שהבנתי — אפשר לבחור אחת מהאפשרויות הבאות:"
-# Placeholder booking link (booking is Phase 2; the engine only echoes a demo).
-_DEMO_BOOKING_LINK = "https://example.com/book/demo"
+# Placeholder booking link the PURE engine substitutes for {link}. The runtime
+# (bot_runtime) swaps this exact string for the tenant's REAL public booking URL
+# on a "booking" event (M11, fix B7) — kept PUBLIC so the runtime can match it.
+DEMO_BOOKING_LINK = "https://example.com/book/demo"
 
 # Owner requirement: every in-flow question reply ENDS with exactly this footer.
 MENU_HINT = '↩️ בכל שלב אפשר לכתוב "תפריט" כדי לחזור לתפריט הראשי.'
@@ -216,7 +218,7 @@ def _advance_menu(
         msg = (flow.get("message") or "").strip()
         if not msg:
             msg = f"לקביעת תור: {{link}}"
-        msg = msg.replace("{link}", _DEMO_BOOKING_LINK)
+        msg = msg.replace("{link}", DEMO_BOOKING_LINK)
         return _result([msg], _menu_state(), event="booking")
 
     # Unknown flow_type (shouldn't happen post-validation) → nudge.

@@ -30,6 +30,15 @@ export type IconName =
   | 'refresh'
   | 'world'
   | 'eye'
+  | 'copy'
+  | 'check'
+  | 'external-link'
+  | 'brand-google'
+  | 'mail'
+  | 'phone'
+  | 'chevron-right'
+  | 'chevron-left'
+  | 'calendar-off'
 
 // Path/element markup per icon (stroke-based, inherits currentColor).
 const PATHS: Record<IconName, JSX.Element> = {
@@ -77,6 +86,47 @@ const PATHS: Record<IconName, JSX.Element> = {
     <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9s1-6.5 3.5-9z" />
   ),
   eye: <path d="M12 5c-5 0-8.5 4.2-9.5 7 1 2.8 4.5 7 9.5 7s8.5-4.2 9.5-7c-1-2.8-4.5-7-9.5-7zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />,
+  copy: (
+    <path d="M8 8V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2M6 8h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z" />
+  ),
+  check: <path d="M5 12l5 5L20 7" />,
+  'external-link': (
+    <path d="M11 5H7a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4M14 5h5v5M19 5l-9 9" />
+  ),
+  // Multicolour Google "G" — overrides stroke with its own fills (see render).
+  'brand-google': (
+    <>
+      <path
+        fill="#4285F4"
+        stroke="none"
+        d="M21.6 12.2c0-.7-.06-1.36-.18-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.74 3-4.3 3-7.3z"
+      />
+      <path
+        fill="#34A853"
+        stroke="none"
+        d="M12 22c2.7 0 4.96-.9 6.62-2.43l-3.2-2.5c-.9.6-2.04.95-3.42.95-2.62 0-4.84-1.77-5.64-4.15H3.05v2.6A10 10 0 0 0 12 22z"
+      />
+      <path
+        fill="#FBBC05"
+        stroke="none"
+        d="M6.36 13.87a6 6 0 0 1 0-3.74v-2.6H3.05a10 10 0 0 0 0 8.94l3.31-2.6z"
+      />
+      <path
+        fill="#EA4335"
+        stroke="none"
+        d="M12 5.98c1.47 0 2.8.5 3.84 1.5l2.84-2.84A10 10 0 0 0 3.05 7.53l3.31 2.6C7.16 7.75 9.38 5.98 12 5.98z"
+      />
+    </>
+  ),
+  mail: <path d="M4 6h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zM3 7l9 6 9-6" />,
+  phone: (
+    <path d="M5 4h3l2 5-2.5 1.5a11 11 0 0 0 5 5L17 13l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-1z" />
+  ),
+  'chevron-right': <path d="M9 6l6 6-6 6" />,
+  'chevron-left': <path d="M15 6l-6 6 6 6" />,
+  'calendar-off': (
+    <path d="M4 7a2 2 0 0 1 2-2h10M20 9v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6M16 3v4M8 3v4M4 11h7M3 3l18 18" />
+  ),
 }
 
 type IconProps = SVGProps<SVGSVGElement> & {

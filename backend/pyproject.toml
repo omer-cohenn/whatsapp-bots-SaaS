@@ -19,6 +19,12 @@ dependencies = [
     # M4: Google Gemini SDK (the unified google-genai client) for the AI bot
     # builder. Used only when GEMINI_API_KEY is set (validate-at-use).
     "google-genai==2.6.0",
+    # M11: Google Calendar + Meet (OPTIONAL per business). google-auth is already
+    # present (pulled by google-genai); these add the OAuth-flow helper and the
+    # Calendar API client. Used only when a business connects Google + a redirect
+    # URI is configured (validate-at-use) — never required at boot.
+    "google-auth-oauthlib==1.2.1",
+    "google-api-python-client==2.149.0",
 ]
 
 [project.optional-dependencies]

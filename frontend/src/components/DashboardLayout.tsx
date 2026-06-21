@@ -28,7 +28,7 @@ const NAV_ITEMS: NavSpec[] = [
   { to: '/try-me', label: 'נסה אותי', icon: 'player-play', enabled: true },
   { to: '/leads', label: 'לידים', icon: 'users', enabled: true },
   { to: '/conversations', label: 'שיחות', icon: 'message-circle', enabled: true },
-  { to: '/appointments', label: 'ניהול פגישות', icon: 'calendar-event', enabled: false },
+  { to: '/appointments', label: 'ניהול פגישות', icon: 'calendar-event', enabled: true },
   { to: '/settings', label: 'הגדרות', icon: 'settings', enabled: false },
 ]
 

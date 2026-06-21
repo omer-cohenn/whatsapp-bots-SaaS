@@ -67,9 +67,30 @@ class Settings(BaseSettings):
     # when it's actually needed. So it is NOT in the fail-closed validator below.
     gemini_api_key: SecretStr | None = Field(default=None, alias="GEMINI_API_KEY")
 
+    # --- M11 Google Calendar connect. OPTIONAL — validate-at-USE, not at boot. --
+    # Calendar/Meet is an OPTIONAL per-business feature: the stack MUST boot with
+    # no Calendar redirect configured. Its OWN callback (separate from the LOGIN
+    # redirect) needs a distinct redirect URI registered in Google Cloud. The
+    # google_oauth service checks this lazily and raises a typed error → HTTP 503
+    # when the owner actually tries to connect. So it is NOT fail-closed at boot.
+    # (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are already required for login and
+    # are reused here for incremental calendar auth.)
+    google_calendar_redirect_uri: str | None = Field(
+        default=None, alias="GOOGLE_CALENDAR_REDIRECT_URI"
+    )
+
     # --- Non-secret operational knobs (safe, explicit defaults allowed) ---
     app_env: str = Field(default="dev", alias="APP_ENV")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
+
+    # --- M11 booking: the public base URL the bot links customers to ---------
+    # The bot's "booking" reply must send a REAL public link (fix B7). We build
+    # it as {public_base_url}/book/{slug}. Non-secret; defaults to the dev
+    # frontend origin so the stack works locally with no extra env. Trailing
+    # slashes are trimmed where it's used.
+    public_base_url: str = Field(
+        default="http://localhost:5173", alias="PUBLIC_BASE_URL"
+    )
 
     @field_validator(
         "gateway_api_token", "database_url", "redis_url",

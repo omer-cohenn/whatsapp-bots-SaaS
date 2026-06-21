@@ -13,6 +13,9 @@ import BotBuilderPage from './pages/BotBuilderPage'
 import TryMePage from './pages/TryMePage'
 import LeadsPage from './pages/LeadsPage'
 import ConversationsPage from './pages/ConversationsPage'
+import AppointmentsPage from './pages/AppointmentsPage'
+import PublicBookingPage from './pages/PublicBookingPage'
+import PublicManagePage from './pages/PublicManagePage'
 
 export default function App() {
   return (
@@ -23,6 +26,10 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
+
+          {/* Public booking (NO auth — tenant resolved server-side from the slug). */}
+          <Route path="/book/:slug" element={<PublicBookingPage />} />
+          <Route path="/book/:slug/manage/:token" element={<PublicManagePage />} />
 
           {/* Protected */}
           <Route
@@ -62,6 +69,23 @@ export default function App() {
             element={
               <AuthGate>
                 <ConversationsPage />
+              </AuthGate>
+            }
+          />
+          <Route
+            path="/appointments"
+            element={
+              <AuthGate>
+                <AppointmentsPage />
+              </AuthGate>
+            }
+          />
+          {/* Google OAuth returns here (?google=connected|error) → settings tab. */}
+          <Route
+            path="/settings/calendar"
+            element={
+              <AuthGate>
+                <AppointmentsPage defaultTab="settings" />
               </AuthGate>
             }
           />
