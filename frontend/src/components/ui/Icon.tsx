@@ -39,6 +39,7 @@ export type IconName =
   | 'chevron-right'
   | 'chevron-left'
   | 'calendar-off'
+  | 'photo'
 
 // Path/element markup per icon (stroke-based, inherits currentColor).
 const PATHS: Record<IconName, JSX.Element> = {
@@ -126,6 +127,9 @@ const PATHS: Record<IconName, JSX.Element> = {
   'chevron-left': <path d="M15 6l-6 6 6 6" />,
   'calendar-off': (
     <path d="M4 7a2 2 0 0 1 2-2h10M20 9v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6M16 3v4M8 3v4M4 11h7M3 3l18 18" />
+  ),
+  photo: (
+    <path d="M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM9 9a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM4 16l4-4a2 2 0 0 1 2.8 0L15 16M14 14l1-1a2 2 0 0 1 2.8 0L20 15" />
   ),
 }
 

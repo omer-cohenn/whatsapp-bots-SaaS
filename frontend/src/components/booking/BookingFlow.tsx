@@ -324,30 +324,50 @@ export default function BookingFlow(props: Props) {
                     aria-checked={selected}
                     onClick={() => pickService(svc.id)}
                     className={[
-                      'relative flex flex-col gap-2 rounded-2xl border bg-white p-4 text-start transition',
+                      'relative flex flex-col gap-3 overflow-hidden rounded-2xl border bg-white p-3 text-start transition',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf',
                       selected
                         ? 'border-[#2563EB] ring-2 ring-[#2563EB]'
                         : 'border-slate-200 hover:border-[#2563EB]/60',
                     ].join(' ')}
                   >
-                    {selected ? (
-                      <span
-                        aria-hidden="true"
-                        className="absolute top-3 left-3 flex h-6 w-6 items-center justify-center rounded-full bg-[#2563EB] text-white"
-                      >
-                        <Icon name="check" size={15} />
-                      </span>
-                    ) : null}
-                    <span className="pr-8 text-base font-semibold text-slate-900">
+                    {/* Image frame on top: the photo, or a placeholder when empty. */}
+                    <span className="relative block aspect-[16/9] w-full overflow-hidden rounded-2xl border border-[#2563EB]/15 bg-[#2563EB]/5">
+                      {svc.image_url ? (
+                        <img
+                          src={svc.image_url}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-slate-400">
+                          <Icon name="photo" size={28} />
+                          <span className="text-xs font-medium">מקום לתמונה</span>
+                        </span>
+                      )}
+                      {selected ? (
+                        <span
+                          aria-hidden="true"
+                          className="absolute top-2 left-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#2563EB] text-white shadow"
+                        >
+                          <Icon name="check" size={15} />
+                        </span>
+                      ) : null}
+                    </span>
+
+                    {/* Title + description */}
+                    <span className="block px-1 text-base font-semibold text-slate-900">
                       {svc.name}
                     </span>
                     {svc.description ? (
-                      <span className="text-sm leading-relaxed text-slate-500">
+                      <span className="block px-1 text-sm leading-relaxed text-slate-500">
                         {svc.description}
                       </span>
                     ) : null}
-                    <span className="mt-1 flex items-center justify-between gap-2">
+
+                    {/* Duration chip + price */}
+                    <span className="mt-auto flex items-center justify-between gap-2 px-1">
                       <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
                         <Icon name="clock" size={13} />
                         {svc.duration_minutes} דק׳

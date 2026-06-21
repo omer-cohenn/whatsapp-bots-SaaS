@@ -123,6 +123,7 @@ async def public_services(
                 duration_minutes=r["duration_minutes"],
                 description=r.get("description"),
                 price=r.get("price"),
+                image_url=r.get("image_url"),
             )
             for r in rows
         ],

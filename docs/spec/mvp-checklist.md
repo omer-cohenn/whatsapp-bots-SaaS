@@ -154,6 +154,15 @@ You can build **M0–M7 entirely on your laptop first**, then do **M8 (AWS)** wh
 
 ✅ **Done:** `tests/test_m11_1.bat` → M11.1 narrated **20/20** (incl. an active negative control: drop RLS on `booking_settings` → catch the welcome-message leak → restore) + strict `tests/test_m11_1.py` **20/20**; the strict M3–M11 bundle **179 passed** (was 159 + the 20 new M11.1 tests); M2 **12/12** + M11 **28/28** all still green. No product source was edited to pass — the locked M11.1 contract was already implemented.
 
+## M11.2 (service card image) — ✅ DONE 2026-06-21
+> Each service can carry a PICTURE with **no external file storage**: the owner uploads a photo, the frontend resizes it client-side (canvas) into a small compressed `data:` URL stored in `services.image_url` (a plain http(s) URL is also accepted). NULL => the public card shows a placeholder frame.
+- [x] **Migration `0012_service_image`** (additive + idempotent): `ALTER TABLE services ADD COLUMN IF NOT EXISTS image_url text`. No new RLS/grant (the existing `services` policies cover the new column).
+- [x] **Backend:** `ServiceItem`/`ServiceCreateRequest`/`ServiceUpdateRequest`/`PublicServiceItem` carry `image_url` (Pydantic `max_length=2_000_000` so a ~1 MB resized data URL fits); `booking.py` create/update/list/get/`_service_to_dict` carry it through SELECT/INSERT/UPDATE/RETURNING; PATCH distinguishes *omit* (untouched) from *explicit null* (clear) via `model_fields_set`/`set_image_url`; the public `GET /api/book/{slug}/services` includes it.
+- [x] **Frontend:** `BookingFlow.tsx` service card matches the approved prototype — top image frame (`rounded-2xl`, `aspect-[16/9]`, soft blue-tinted border) showing the photo (`object-cover`) or a centered `מקום לתמונה` placeholder; title/description below; duration chip + price row; selected = blue ring (#2563EB) + check badge. Owner upload + canvas resize via `ServicesEditor.tsx` + `lib/imageResize.ts`.
+- [x] 🚦 **Isolation re-proved on the NEW field:** A cannot PATCH B's service image (404, B untouched); the public slug exposes only its own services + images.
+
+✅ **Done:** `tests/test_m11_2.bat` → M11.2 narrated **13/13** (incl. a non-destructive negative control: A's own DB query for B's image returns NULL while B sees its own — RLS proven without weakening it) + strict `tests/test_m11_2.py` **11/11**; the strict M3–M11.2 bundle **190 passed** (was 179 + the 11 new M11.2 tests); M2 **12/12** + M11 **28/28** + M11.1 **20/20** all still green. No product source was edited to pass — the locked M11.2 contract was already implemented.
+
 ## M8 — Ship to AWS ☁️ *(when ready to go public)*
 - [ ] AWS account + **region** (EU) + root **MFA** + CloudTrail
 - [ ] 💸 **Budget alarm (day one)**

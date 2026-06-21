@@ -41,6 +41,11 @@ MAX_SERVICE_NAME_CHARS = 120
 # Service blurb (public card) + the per-business public-page welcome message.
 MAX_SERVICE_DESC_CHARS = 500
 MAX_WELCOME_MESSAGE_CHARS = 600
+# A service image is EITHER a short http(s) URL OR a client-resized data: URL
+# (the frontend canvas-compresses the upload to a tiny data URL). The bound is
+# generous enough to hold a small compressed data URL but still finite (abuse
+# guard) — see the M11.2 contract.
+MAX_SERVICE_IMAGE_CHARS = 2_000_000
 # A booking-page slug is the public handle; bound it tightly.
 SLUG_MAX = 64
 
@@ -139,6 +144,9 @@ class ServiceItem(BaseModel):
     # (None => the UI shows "ללא עלות").
     description: str | None = None
     price: int | None = None
+    # OPTIONAL service image: an http(s) URL OR a client-resized data: URL.
+    # None => the public card shows a placeholder frame.
+    image_url: str | None = None
     created_at: str | None = None
 
 
@@ -159,6 +167,8 @@ class ServiceCreateRequest(BaseModel):
     description: str | None = Field(default=None, max_length=MAX_SERVICE_DESC_CHARS)
     # OPTIONAL price in ₪ (whole shekels). None => "ללא עלות" on the public page.
     price: int | None = Field(default=None, ge=0)
+    # OPTIONAL image: an http(s) URL OR a resized data: URL. None => placeholder.
+    image_url: str | None = Field(default=None, max_length=MAX_SERVICE_IMAGE_CHARS)
 
 
 class ServiceUpdateRequest(BaseModel):
@@ -171,6 +181,9 @@ class ServiceUpdateRequest(BaseModel):
     active: bool | None = None
     description: str | None = Field(default=None, max_length=MAX_SERVICE_DESC_CHARS)
     price: int | None = Field(default=None, ge=0)
+    # OPTIONAL image: explicit null clears it, omitted leaves it unchanged (same
+    # partial-update semantics as description/price, via model_fields_set).
+    image_url: str | None = Field(default=None, max_length=MAX_SERVICE_IMAGE_CHARS)
 
 
 # --- bookings (admin: GET /api/bookings, PATCH /api/bookings/{id}) -----------
@@ -320,6 +333,9 @@ class PublicServiceItem(BaseModel):
     # renders "ללא עלות"). These are owner-authored, public — never PII.
     description: str | None = None
     price: int | None = None
+    # OPTIONAL image (http(s) URL OR resized data: URL). None => the public card
+    # renders a placeholder frame.
+    image_url: str | None = None
 
 
 class PublicServicesResponse(BaseModel):

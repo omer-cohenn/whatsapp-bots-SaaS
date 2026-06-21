@@ -190,6 +190,7 @@ async def create_service(
             active=body.active,
             description=body.description,
             price=body.price,
+            image_url=body.image_url,
         )
     return ServiceItem(**row)
 
@@ -203,8 +204,8 @@ async def update_service(
 ) -> ServiceItem:
     """Partial-update a service. 404 if the id isn't this tenant's.
 
-    description/price are nullable: we forward whether each was PRESENT in the
-    body (model_fields_set) so an explicit null clears the column, while an
+    description/price/image_url are nullable: we forward whether each was PRESENT
+    in the body (model_fields_set) so an explicit null clears the column, while an
     omitted field is left untouched.
     """
     sent = body.model_fields_set
@@ -218,8 +219,10 @@ async def update_service(
             active=body.active,
             description=body.description,
             price=body.price,
+            image_url=body.image_url,
             set_description="description" in sent,
             set_price="price" in sent,
+            set_image_url="image_url" in sent,
         )
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="service not found")

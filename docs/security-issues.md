@@ -469,3 +469,7 @@ the delta touches, already tracked under M11.
 | M11.1-02 | Low | Abuse (carry-over) | `_client_ip` trusts `X-Forwarded-For` first hop unconditionally; honor it only behind a trusted proxy. Pre-existing (tracked under M11-02), re-flagged because the new flow shares the limiter. |
 
 **Top fixes:** (1) M11.1-01 — add a lightweight per-(IP, slug) rate limit and/or a short Redis cache to the public booking READ endpoints (`/availability`, `/slots`, `/services`) so a known slug can't be scripted into repeated 62-day scans (API/public layer). (2) M11.1-02 — parse `X-Forwarded-For` only behind a configured trusted proxy, else fall back to the peer IP (API/public layer). Both are LOW abuse-hardening; neither blocks ship.
+
+## M11.2 — service images (image_url). Verdict: SHIP (2 LOW)
+- **S12-01 (LOW)** — `image_url` accepts any URL scheme (no http(s)/data:image allow-list). Rendered only as `<img src>` (no HTML sink, no XSS), owner-scoped. Fix: validate scheme on backend model + client (allow only `https://`, `http://`, `data:image/...;base64,`).
+- **S12-02 (LOW)** — server bound is 2,000,000 chars while the client resizer targets ~400KB; authenticated-owner abuse vector. Fix: confirm a request-body size limit + consider lowering the column bound toward the client target.

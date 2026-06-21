@@ -148,6 +148,7 @@ export default function BookingSettingsPanel() {
           duration_minutes: s.duration_minutes,
           description: s.description,
           price: s.price,
+          image_url: s.image_url,
         })),
     [services],
   )

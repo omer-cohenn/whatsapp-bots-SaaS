@@ -76,6 +76,11 @@ export type ServiceItem = {
   description: string | null
   /** Optional price in whole ₪ (≥0), or null → the UI shows "ללא עלות". */
   price: number | null
+  /**
+   * Optional image for the service card: an http(s) URL OR a client-resized
+   * `data:` URL (≤2,000,000 chars), or null → the card shows a placeholder frame.
+   */
+  image_url: string | null
   created_at: string
 }
 
@@ -91,6 +96,8 @@ export type ServiceCreate = {
   description?: string | null
   /** ≥0; null/omitted means no price. */
   price?: number | null
+  /** http(s) URL or a resized data: URL (≤2,000,000); null/omitted → no image. */
+  image_url?: string | null
 }
 
 export type ServiceUpdate = {
@@ -101,6 +108,8 @@ export type ServiceUpdate = {
   description?: string | null
   /** Partial: sending null CLEARS the price; omitting leaves it unchanged. */
   price?: number | null
+  /** Partial: sending null CLEARS the image; omitting leaves it unchanged. */
+  image_url?: string | null
 }
 
 // --- admin: bookings ---------------------------------------------------------
@@ -178,6 +187,8 @@ export type PublicService = {
   description: string | null
   /** Optional price in whole ₪, or null → the card shows "ללא עלות". */
   price: number | null
+  /** http(s) URL or a resized data: URL for the card image, or null → placeholder. */
+  image_url: string | null
 }
 
 /** GET /api/book/{slug}/services. */
