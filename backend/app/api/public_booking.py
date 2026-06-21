@@ -28,6 +28,7 @@ from fastapi import APIRouter, HTTPException, Path, Query, Request, status
 from app.core.logging import get_logger
 from app.db.session import tenant_connection
 from app.models.booking import (
+    PublicAvailabilityResponse,
     PublicBookingCreateRequest,
     PublicBookingCreateResponse,
     PublicMutationResponse,
@@ -102,20 +103,61 @@ async def public_services(
     request: Request,
     slug: str = Path(..., min_length=1, max_length=SLUG_MAX),
 ) -> PublicServicesResponse:
-    """The active services bookable on this public page (no internal flags)."""
+    """The active services bookable on this public page + the welcome message.
+
+    Each service carries its public blurb + optional ₪ price; the page header
+    shows the per-business welcome_message (None when the owner hasn't set one).
+    """
     business_id = await _resolve_or_404(request, slug)
     async with tenant_connection(request.app.state.pg_pool, business_id) as conn:
         rows = await booking_service.list_services(conn, business_id, active_only=True)
         name = await booking_service.business_display_name(conn, business_id)
+        settings = await booking_service.get_settings(conn, business_id)
     return PublicServicesResponse(
         business_name=name,
+        welcome_message=settings.get("welcome_message"),
         services=[
             PublicServiceItem(
-                id=r["id"], name=r["name"], duration_minutes=r["duration_minutes"]
+                id=r["id"],
+                name=r["name"],
+                duration_minutes=r["duration_minutes"],
+                description=r.get("description"),
+                price=r.get("price"),
             )
             for r in rows
         ],
     )
+
+
+@router.get("/{slug}/availability", response_model=PublicAvailabilityResponse)
+async def public_availability(
+    request: Request,
+    slug: str = Path(..., min_length=1, max_length=SLUG_MAX),
+    service_id: str = Query(..., min_length=1, max_length=64),
+    date_from: str = Query(..., min_length=10, max_length=10, alias="from"),
+    date_to: str = Query(..., min_length=10, max_length=10, alias="to"),
+) -> PublicAvailabilityResponse:
+    """Which days in [from,to] have >=1 free slot for this service.
+
+    Slug-resolved like the other public routes; RLS-scoped. The range is bounded
+    server-side (<=62 days) — an invalid or oversized range → 422. No PII here.
+    """
+    business_id = await _resolve_or_404(request, slug)
+    try:
+        async with tenant_connection(request.app.state.pg_pool, business_id) as conn:
+            dates = await booking_service.compute_availability(
+                conn,
+                business_id,
+                service_id=service_id,
+                from_str=date_from,
+                to_str=date_to,
+            )
+    except booking_service.InvalidDateRange:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="invalid date range",
+        ) from None
+    return PublicAvailabilityResponse(dates=dates)
 
 
 @router.get("/{slug}/slots", response_model=PublicSlotsResponse)

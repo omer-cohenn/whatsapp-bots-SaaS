@@ -20,6 +20,7 @@ import type {
   ServiceItem,
   ServiceUpdate,
   ServicesResponse,
+  WelcomeGenerateResponse,
 } from '../dashboard/appointmentTypes'
 
 // Build a query string from defined, non-empty params (omits undefined/'').
@@ -48,6 +49,20 @@ export function updateBookingSettings(
   body: BookingSettingsUpdate,
 ): Promise<BookingSettings> {
   return api.put<BookingSettings>('/api/booking/settings', body)
+}
+
+/**
+ * POST /api/booking/welcome/generate — ask the AI for a short, warm Hebrew
+ * welcome for the public page (using the business name + active services). The
+ * result is NOT persisted: the owner reviews it, then saves via PUT settings.
+ * 503 if the AI key isn't configured; 502 on a model failure.
+ */
+export function generateWelcomeMessage(
+  tone?: string,
+): Promise<WelcomeGenerateResponse> {
+  return api.post<WelcomeGenerateResponse>('/api/booking/welcome/generate', {
+    ...(tone ? { tone } : {}),
+  })
 }
 
 // --- services ----------------------------------------------------------------

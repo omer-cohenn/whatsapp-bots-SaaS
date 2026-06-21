@@ -38,6 +38,9 @@ MAX_PHONE_CHARS = 40
 MAX_EMAIL_CHARS = 200
 MAX_NOTES_CHARS = 1000
 MAX_SERVICE_NAME_CHARS = 120
+# Service blurb (public card) + the per-business public-page welcome message.
+MAX_SERVICE_DESC_CHARS = 500
+MAX_WELCOME_MESSAGE_CHARS = 600
 # A booking-page slug is the public handle; bound it tightly.
 SLUG_MAX = 64
 
@@ -107,6 +110,9 @@ class BookingSettings(BaseModel):
     buffer_minutes: int = Field(default=0, ge=0, le=240)
     max_days_ahead: int = Field(default=30, ge=1, le=365)
     meet_enabled: bool = False
+    # Short Hebrew greeting shown atop the public booking page (owner-authored or
+    # AI-generated). Public marketing copy — never PII. Persisted on PUT.
+    welcome_message: str | None = Field(default=None, max_length=MAX_WELCOME_MESSAGE_CHARS)
 
     @field_validator("working_hours")
     @classmethod
@@ -129,6 +135,10 @@ class ServiceItem(BaseModel):
     name: str
     duration_minutes: int
     active: bool
+    # description = a short public blurb; price = OPTIONAL ₪ whole shekels
+    # (None => the UI shows "ללא עלות").
+    description: str | None = None
+    price: int | None = None
     created_at: str | None = None
 
 
@@ -146,6 +156,9 @@ class ServiceCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=MAX_SERVICE_NAME_CHARS)
     duration_minutes: int = Field(default=30, ge=5, le=8 * 60)
     active: bool = True
+    description: str | None = Field(default=None, max_length=MAX_SERVICE_DESC_CHARS)
+    # OPTIONAL price in ₪ (whole shekels). None => "ללא עלות" on the public page.
+    price: int | None = Field(default=None, ge=0)
 
 
 class ServiceUpdateRequest(BaseModel):
@@ -156,6 +169,8 @@ class ServiceUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=MAX_SERVICE_NAME_CHARS)
     duration_minutes: int | None = Field(default=None, ge=5, le=8 * 60)
     active: bool | None = None
+    description: str | None = Field(default=None, max_length=MAX_SERVICE_DESC_CHARS)
+    price: int | None = Field(default=None, ge=0)
 
 
 # --- bookings (admin: GET /api/bookings, PATCH /api/bookings/{id}) -----------
@@ -261,6 +276,31 @@ class BookingUpdateResponse(BaseModel):
     scheduled_at: str  # UTC ISO-8601
 
 
+# --- welcome-message generator (admin: POST /api/booking/welcome/generate) ----
+
+
+class WelcomeGenerateRequest(BaseModel):
+    """POST /api/booking/welcome/generate body — an OPTIONAL tone hint.
+
+    `tone` nudges the generated greeting (e.g. "חם", "מקצועי", "קליל"); when
+    omitted the generator picks a warm default. Bounded so it can't be abused.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    tone: str | None = Field(default=None, max_length=60)
+
+
+class WelcomeGenerateResponse(BaseModel):
+    """POST /api/booking/welcome/generate response: the suggested greeting.
+
+    The owner previews/edits it before saving via PUT /api/booking/settings — we
+    do NOT persist it here.
+    """
+
+    message: str
+
+
 # --- PUBLIC shapes (NO session — resolved from the slug) ---------------------
 #
 # These power the customer-facing booking page. They expose the MINIMUM needed
@@ -276,13 +316,33 @@ class PublicServiceItem(BaseModel):
     id: str
     name: str
     duration_minutes: int
+    # Public card extras: a short blurb + an OPTIONAL price in ₪ (None => the UI
+    # renders "ללא עלות"). These are owner-authored, public — never PII.
+    description: str | None = None
+    price: int | None = None
 
 
 class PublicServicesResponse(BaseModel):
-    """GET /api/book/{slug}/services response (active services only)."""
+    """GET /api/book/{slug}/services response (active services only).
+
+    `welcome_message` is the per-business greeting shown atop the page (may be
+    None when the owner hasn't set one — the UI shows a sensible default).
+    """
 
     business_name: str
+    welcome_message: str | None = None
     services: list[PublicServiceItem]
+
+
+class PublicAvailabilityResponse(BaseModel):
+    """GET /api/book/{slug}/availability response: which days have any free slot.
+
+    `dates` are the "YYYY-MM-DD" days inside the requested [from,to] range that
+    have >=1 bookable slot for the chosen service. The public page uses this to
+    enable/disable calendar days before drilling into a single day's slots.
+    """
+
+    dates: list[str]
 
 
 class PublicSlotsResponse(BaseModel):

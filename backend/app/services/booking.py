@@ -130,7 +130,8 @@ async def get_settings(conn: asyncpg.Connection, business_id: str) -> dict[str, 
     row = await conn.fetchrow(
         """
         SELECT business_id, timezone, working_hours, min_notice_minutes,
-               buffer_minutes, max_days_ahead, meet_enabled, slug, updated_at
+               buffer_minutes, max_days_ahead, meet_enabled, welcome_message,
+               slug, updated_at
         FROM booking_settings
         WHERE business_id = $1
         """,
@@ -153,7 +154,8 @@ async def _create_default_settings(
         VALUES ($1, $2::jsonb, $3)
         ON CONFLICT (business_id) DO UPDATE SET updated_at = now()
         RETURNING business_id, timezone, working_hours, min_notice_minutes,
-                  buffer_minutes, max_days_ahead, meet_enabled, slug, updated_at
+                  buffer_minutes, max_days_ahead, meet_enabled, welcome_message,
+                  slug, updated_at
         """,
         business_id,
         json.dumps(_DEFAULT_WORKING_HOURS, ensure_ascii=False),
@@ -171,11 +173,13 @@ async def update_settings(
     buffer_minutes: int,
     max_days_ahead: int,
     meet_enabled: bool,
+    welcome_message: str | None,
 ) -> dict[str, Any]:
     """UPSERT the editable booking settings for this tenant; return the saved row.
 
     The slug + timezone are SERVER-OWNED: a new row gets a fresh slug, and an
     existing row keeps its slug/timezone untouched (the body can't change them).
+    `welcome_message` is owner-authored public copy (NOT PII) — persisted as-is.
     RLS-scoped; business_id is the verified id and is written from here only.
     """
     # Ensure a slug exists (first save creates the row + slug); then update the
@@ -185,17 +189,19 @@ async def update_settings(
         """
         INSERT INTO booking_settings
             (business_id, working_hours, min_notice_minutes, buffer_minutes,
-             max_days_ahead, meet_enabled, slug, updated_at)
-        VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7, now())
+             max_days_ahead, meet_enabled, welcome_message, slug, updated_at)
+        VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7, $8, now())
         ON CONFLICT (business_id) DO UPDATE SET
             working_hours      = EXCLUDED.working_hours,
             min_notice_minutes = EXCLUDED.min_notice_minutes,
             buffer_minutes     = EXCLUDED.buffer_minutes,
             max_days_ahead     = EXCLUDED.max_days_ahead,
             meet_enabled       = EXCLUDED.meet_enabled,
+            welcome_message    = EXCLUDED.welcome_message,
             updated_at         = now()
         RETURNING business_id, timezone, working_hours, min_notice_minutes,
-                  buffer_minutes, max_days_ahead, meet_enabled, slug, updated_at
+                  buffer_minutes, max_days_ahead, meet_enabled, welcome_message,
+                  slug, updated_at
         """,
         business_id,
         json.dumps(working_hours, ensure_ascii=False),
@@ -203,6 +209,7 @@ async def update_settings(
         buffer_minutes,
         max_days_ahead,
         meet_enabled,
+        welcome_message,
         slug,
     )
     return _settings_to_dict(row)
@@ -236,6 +243,7 @@ def _settings_to_dict(row: asyncpg.Record) -> dict[str, Any]:
         "buffer_minutes": int(row["buffer_minutes"]),
         "max_days_ahead": int(row["max_days_ahead"]),
         "meet_enabled": bool(row["meet_enabled"]),
+        "welcome_message": row["welcome_message"],
         "updated_at": _iso(row["updated_at"]),
     }
 
@@ -253,7 +261,7 @@ async def list_services(
         where += " AND active = true"
     rows = await conn.fetch(
         f"""
-        SELECT id, name, duration_minutes, active, created_at
+        SELECT id, name, duration_minutes, active, description, price, created_at
         FROM services
         WHERE {where}
         ORDER BY created_at DESC
@@ -269,7 +277,7 @@ async def get_service(
     """Return one service for this tenant, or None (caller maps None → 404)."""
     row = await conn.fetchrow(
         """
-        SELECT id, name, duration_minutes, active, created_at
+        SELECT id, name, duration_minutes, active, description, price, created_at
         FROM services
         WHERE id = $1 AND business_id = $2
         """,
@@ -286,18 +294,23 @@ async def create_service(
     name: str,
     duration_minutes: int,
     active: bool,
+    description: str | None,
+    price: int | None,
 ) -> dict[str, Any]:
     """Insert a new service for this tenant; return it. RLS WITH CHECK matches."""
     row = await conn.fetchrow(
         """
-        INSERT INTO services (business_id, name, duration_minutes, active)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id, name, duration_minutes, active, created_at
+        INSERT INTO services
+            (business_id, name, duration_minutes, active, description, price)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id, name, duration_minutes, active, description, price, created_at
         """,
         business_id,
         name,
         duration_minutes,
         active,
+        description,
+        price,
     )
     return _service_to_dict(row)
 
@@ -310,12 +323,21 @@ async def update_service(
     name: str | None,
     duration_minutes: int | None,
     active: bool | None,
+    description: str | None,
+    price: int | None,
+    set_description: bool = False,
+    set_price: bool = False,
 ) -> dict[str, Any] | None:
     """Partial-update a service (only provided fields). None if no row matched.
 
     Builds a dynamic SET from just the supplied fields; the WHERE includes
     business_id so RLS scopes the write to this tenant. Returns the updated row,
     or None when the id doesn't exist for this tenant (caller → 404).
+
+    description/price are nullable columns, so "set to NULL" (clear) must be
+    distinguishable from "omitted". The caller passes `set_description` /
+    `set_price` = True when the field was present in the PATCH body (even if its
+    value is None), so an explicit null actually clears the column.
     """
     sets: list[str] = []
     params: list[Any] = [service_id, business_id]
@@ -328,6 +350,12 @@ async def update_service(
     if active is not None:
         params.append(active)
         sets.append(f"active = ${len(params)}")
+    if set_description:
+        params.append(description)
+        sets.append(f"description = ${len(params)}")
+    if set_price:
+        params.append(price)
+        sets.append(f"price = ${len(params)}")
 
     if not sets:
         # Nothing to change → just return the current row (or None if absent).
@@ -337,7 +365,7 @@ async def update_service(
         f"""
         UPDATE services SET {', '.join(sets)}
         WHERE id = $1 AND business_id = $2
-        RETURNING id, name, duration_minutes, active, created_at
+        RETURNING id, name, duration_minutes, active, description, price, created_at
         """,
         *params,
     )
@@ -366,6 +394,8 @@ def _service_to_dict(row: asyncpg.Record) -> dict[str, Any]:
         "name": row["name"],
         "duration_minutes": int(row["duration_minutes"]),
         "active": bool(row["active"]),
+        "description": row["description"],
+        "price": int(row["price"]) if row["price"] is not None else None,
         "created_at": _iso(row["created_at"]),
     }
 
@@ -451,6 +481,57 @@ async def compute_slots(
                 out.append(cursor.strftime("%H:%M"))
             cursor += timedelta(minutes=step)
 
+    return out
+
+
+# The public availability range is bounded so the day-by-day loop can't be used
+# to hammer the DB (62 days ≈ two months, comfortably above max_days_ahead=30).
+AVAILABILITY_MAX_DAYS = 62
+
+
+class InvalidDateRange(Exception):
+    """Raised for a bad/oversized availability range (caller → 422)."""
+
+
+async def compute_availability(
+    conn: asyncpg.Connection,
+    business_id: str,
+    *,
+    service_id: str,
+    from_str: str,
+    to_str: str,
+    now: datetime | None = None,
+) -> list[str]:
+    """Return the days in [from,to] that have >=1 free slot for a service.
+
+    A thin loop over `compute_slots`: for each calendar day in the INCLUSIVE
+    range we ask for that day's bookable slots and keep the day if any survive.
+    The range is validated + BOUNDED to AVAILABILITY_MAX_DAYS days (a longer or
+    inverted range raises InvalidDateRange → 422). RLS-scoped via `conn`; never
+    logs PII (there is none here). An unknown/inactive service yields [].
+    """
+    try:
+        start = datetime.strptime(from_str, "%Y-%m-%d").date()
+        end = datetime.strptime(to_str, "%Y-%m-%d").date()
+    except ValueError:
+        raise InvalidDateRange("dates must be YYYY-MM-DD") from None
+    if end < start:
+        raise InvalidDateRange("'to' must be on or after 'from'")
+    span_days = (end - start).days + 1  # inclusive
+    if span_days > AVAILABILITY_MAX_DAYS:
+        raise InvalidDateRange("range too large")
+
+    now = now or datetime.now(timezone.utc)
+    out: list[str] = []
+    day = start
+    while day <= end:
+        date_str = day.strftime("%Y-%m-%d")
+        slots = await compute_slots(
+            conn, business_id, service_id=service_id, date_str=date_str, now=now
+        )
+        if slots:
+            out.append(date_str)
+        day += timedelta(days=1)
     return out
 
 

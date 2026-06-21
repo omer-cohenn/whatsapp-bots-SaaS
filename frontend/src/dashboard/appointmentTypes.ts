@@ -40,6 +40,8 @@ export type BookingSettings = {
   max_days_ahead: number
   /** Global per-business Google Meet toggle (needs Google connected to take effect). */
   meet_enabled: boolean
+  /** Friendly Hebrew welcome shown atop the public page (≤600), or null for the default. */
+  welcome_message: string | null
 }
 
 /** Body of PUT /api/booking/settings — slug/timezone are ignored by the server. */
@@ -49,6 +51,18 @@ export type BookingSettingsUpdate = {
   buffer_minutes: number
   max_days_ahead: number
   meet_enabled: boolean
+  /** ≤600; null clears it back to the default greeting. */
+  welcome_message: string | null
+}
+
+/** Body of POST /api/booking/welcome/generate — an optional tone hint (≤60). */
+export type WelcomeGenerateRequest = {
+  tone?: string
+}
+
+/** Response of POST /api/booking/welcome/generate — not persisted; owner saves via PUT. */
+export type WelcomeGenerateResponse = {
+  message: string
 }
 
 // --- admin: services CRUD ----------------------------------------------------
@@ -58,6 +72,10 @@ export type ServiceItem = {
   name: string
   duration_minutes: number
   active: boolean
+  /** Optional blurb shown on the public service card (≤500), or null. */
+  description: string | null
+  /** Optional price in whole ₪ (≥0), or null → the UI shows "ללא עלות". */
+  price: number | null
   created_at: string
 }
 
@@ -69,12 +87,20 @@ export type ServiceCreate = {
   name: string
   duration_minutes: number
   active?: boolean
+  /** ≤500; null/omitted leaves it empty. */
+  description?: string | null
+  /** ≥0; null/omitted means no price. */
+  price?: number | null
 }
 
 export type ServiceUpdate = {
   name?: string
   duration_minutes?: number
   active?: boolean
+  /** Partial: sending null CLEARS the column; omitting leaves it unchanged. */
+  description?: string | null
+  /** Partial: sending null CLEARS the price; omitting leaves it unchanged. */
+  price?: number | null
 }
 
 // --- admin: bookings ---------------------------------------------------------
@@ -148,12 +174,24 @@ export type PublicService = {
   id: string
   name: string
   duration_minutes: number
+  /** Optional blurb shown on the service card, or null. */
+  description: string | null
+  /** Optional price in whole ₪, or null → the card shows "ללא עלות". */
+  price: number | null
 }
 
 /** GET /api/book/{slug}/services. */
 export type PublicServicesResponse = {
   business_name: string
+  /** Per-business welcome shown atop the public page, or null for the default. */
+  welcome_message: string | null
   services: PublicService[]
+}
+
+/** GET /api/book/{slug}/availability — the days in [from,to] with ≥1 free slot. */
+export type PublicAvailabilityResponse = {
+  /** ["YYYY-MM-DD", ...] — local Asia/Jerusalem days that have availability. */
+  dates: string[]
 }
 
 /** GET /api/book/{slug}/slots — local Asia/Jerusalem "HH:MM" starts. */

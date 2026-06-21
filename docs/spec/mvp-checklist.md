@@ -143,6 +143,17 @@ You can build **M0–M7 entirely on your laptop first**, then do **M8 (AWS)** wh
 
 ✅ **Done:** `tests/test_m11.bat` → M11 narrated **21/21** (incl. an active negative control: drop RLS on `bookings` → catch the leak → restore) + strict `tests/test_m11.py` **28/28**; the strict M3–M10 bundle **131 passed**; M2 **12/12** + M3 **5/5** + M4 **9/9** + M5 **18/18** + M5b **10/10** + M7 **15/15** + M8 **27/27** + M9 **11/11** + M10 **10/10** all still green. (No old assertions required changing — product source already implemented the locked M11 contract; the one nuance worth noting: an off-grid-but-still-future time maps to **409**, a past/closed one to **422** — the test asserts the real contract.)
 
+## M11.1 (public booking page polish) — ✅ DONE 2026-06-21
+> Per [decision 0012](../decisions/0012-m11-public-booking-polish.md). Richer service cards + a per-business welcome message + a day-availability call for the public calendar. NO images / no file storage.
+- [x] **Migration `0011_booking_service_extras`** (additive + idempotent): `services.description text`, `services.price int` (nullable, ≥0 ₪, app-enforced), `booking_settings.welcome_message text`. No new RLS/grant (the existing `services` / `booking_settings` policies cover new columns).
+- [x] **Service cards:** `ServiceItem`/`ServiceCreateRequest`/`ServiceUpdateRequest` + `PublicServiceItem` carry `description` (≤500) + `price` (≥0, OPTIONAL). PATCH distinguishes *omit* (untouched) from *explicit null* (clear) via `model_fields_set`; price `0` is a valid free price; an empty price stays null (UI shows "ללא עלות").
+- [x] **Welcome message:** `BookingSettings.welcome_message` (≤600) persists on `PUT /api/booking/settings` + returns on GET; the public `GET /api/book/{slug}/services` response includes it (None when unset).
+- [x] **Availability:** new public `GET /api/book/{slug}/availability?service_id=&from=&to=` → `{dates:[...]}` (days with ≥1 free slot; loops `compute_slots`); range bounded ≤ 62 days (else **422**), inverted/bad range → **422**, unknown slug → **404**.
+- [x] **AI welcome:** new gated `POST /api/booking/welcome/generate` (`current_business`); dedicated Hebrew prompt via `booking_welcome` mirroring `bot_builder_ai` (gemini-3.1-flash-lite, validate-at-use → **503** no key, **502** call fail). Never logs/leaks the key.
+- [x] 🚦 **Isolation re-proved on the NEW fields:** A cannot PATCH B's service description/price (404, B untouched); A's settings never show B's welcome_message; the public slug exposes only its own welcome + services.
+
+✅ **Done:** `tests/test_m11_1.bat` → M11.1 narrated **20/20** (incl. an active negative control: drop RLS on `booking_settings` → catch the welcome-message leak → restore) + strict `tests/test_m11_1.py` **20/20**; the strict M3–M11 bundle **179 passed** (was 159 + the 20 new M11.1 tests); M2 **12/12** + M11 **28/28** all still green. No product source was edited to pass — the locked M11.1 contract was already implemented.
+
 ## M8 — Ship to AWS ☁️ *(when ready to go public)*
 - [ ] AWS account + **region** (EU) + root **MFA** + CloudTrail
 - [ ] 💸 **Budget alarm (day one)**

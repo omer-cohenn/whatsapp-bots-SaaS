@@ -45,10 +45,13 @@ from app.models.booking import (
     ServiceUpdateRequest,
     BookingAlertItem,
     BookingAlertsResponse,
+    WelcomeGenerateRequest,
+    WelcomeGenerateResponse,
 )
 from app.services import booking as booking_service
 from app.services import booking_alerts
 from app.services import booking_reminders
+from app.services import booking_welcome
 
 router = APIRouter(tags=["booking"])
 log = get_logger("app.api.booking")
@@ -97,6 +100,7 @@ async def put_booking_settings(
             buffer_minutes=body.buffer_minutes,
             max_days_ahead=body.max_days_ahead,
             meet_enabled=body.meet_enabled,
+            welcome_message=body.welcome_message,
         )
     return BookingSettings(**_settings_for_model(data))
 
@@ -114,7 +118,46 @@ def _settings_for_model(data: dict) -> dict:
         "buffer_minutes": data["buffer_minutes"],
         "max_days_ahead": data["max_days_ahead"],
         "meet_enabled": data["meet_enabled"],
+        "welcome_message": data.get("welcome_message"),
     }
+
+
+# --- AI welcome-message generator (preview only; not persisted here) ----------
+
+
+@router.post("/booking/welcome/generate", response_model=WelcomeGenerateResponse)
+async def generate_welcome_message(
+    body: WelcomeGenerateRequest,
+    request: Request,
+    business_id: str = Depends(current_business),
+) -> WelcomeGenerateResponse:
+    """Generate a short warm Hebrew welcome for the public booking page.
+
+    Uses the business display name + its ACTIVE service names (read RLS-scoped)
+    and an optional tone hint. 503 if Gemini is unset, 502 if the call fails. The
+    owner previews/edits the result, then saves it via PUT /api/booking/settings
+    — we do NOT persist it here. Never logs the key or output.
+    """
+    async with tenant_connection(request.app.state.pg_pool, business_id) as conn:
+        name = await booking_service.business_display_name(conn, business_id)
+        services = await booking_service.list_services(conn, business_id, active_only=True)
+    service_names = [s["name"] for s in services]
+
+    try:
+        message = await booking_welcome.generate_welcome(name, service_names, body.tone)
+    except booking_welcome.WelcomeNotConfiguredError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI is not configured",
+        ) from None
+    except booking_welcome.WelcomeGenerateError:
+        log.warning("welcome generate ai call failed")  # no key / no output
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="AI is temporarily unavailable",
+        ) from None
+
+    return WelcomeGenerateResponse(message=message)
 
 
 # --- services CRUD -----------------------------------------------------------
@@ -145,6 +188,8 @@ async def create_service(
             name=body.name,
             duration_minutes=body.duration_minutes,
             active=body.active,
+            description=body.description,
+            price=body.price,
         )
     return ServiceItem(**row)
 
@@ -156,7 +201,13 @@ async def update_service(
     service_id: str = Path(..., min_length=1, max_length=_ID_MAX),
     business_id: str = Depends(current_business),
 ) -> ServiceItem:
-    """Partial-update a service. 404 if the id isn't this tenant's."""
+    """Partial-update a service. 404 if the id isn't this tenant's.
+
+    description/price are nullable: we forward whether each was PRESENT in the
+    body (model_fields_set) so an explicit null clears the column, while an
+    omitted field is left untouched.
+    """
+    sent = body.model_fields_set
     async with tenant_connection(request.app.state.pg_pool, business_id) as conn:
         row = await booking_service.update_service(
             conn,
@@ -165,6 +216,10 @@ async def update_service(
             name=body.name,
             duration_minutes=body.duration_minutes,
             active=body.active,
+            description=body.description,
+            price=body.price,
+            set_description="description" in sent,
+            set_price="price" in sent,
         )
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="service not found")

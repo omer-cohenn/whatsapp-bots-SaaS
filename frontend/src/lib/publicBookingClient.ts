@@ -6,6 +6,7 @@
 
 import { api } from './apiClient'
 import type {
+  PublicAvailabilityResponse,
   PublicBookingCreate,
   PublicBookingResponse,
   PublicManageResponse,
@@ -45,6 +46,23 @@ export function getPublicSlots(
 ): Promise<SlotsResponse> {
   return api.get<SlotsResponse>(
     `${slugPath(slug)}/slots${qs({ service_id: serviceId, date })}`,
+  )
+}
+
+/**
+ * GET /api/book/{slug}/availability?service_id=&from=&to= — the days in the
+ * [from,to] window (inclusive, "YYYY-MM-DD") that have ≥1 free slot for that
+ * service. The server bounds the span to ≤62 days (422 otherwise); an unknown
+ * or inactive service simply yields an empty list.
+ */
+export function getPublicAvailability(
+  slug: string,
+  serviceId: string,
+  from: string,
+  to: string,
+): Promise<PublicAvailabilityResponse> {
+  return api.get<PublicAvailabilityResponse>(
+    `${slugPath(slug)}/availability${qs({ service_id: serviceId, from, to })}`,
   )
 }
 
