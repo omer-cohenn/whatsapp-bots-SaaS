@@ -7,6 +7,7 @@
 import { api } from './apiClient'
 import type {
   BookingMutateResponse,
+  BookingAlertsResponse,
   BookingPatch,
   BookingSettings,
   BookingSettingsUpdate,
@@ -108,6 +109,14 @@ export function patchBooking(
     `/api/bookings/${encodeURIComponent(id)}`,
     body,
   )
+}
+
+/**
+ * GET /api/bookings/alerts — home notifications for bookings a CUSTOMER recently
+ * cancelled/rescheduled (newest first, resolved + decrypted for the owner).
+ */
+export function getBookingAlerts(): Promise<BookingAlertsResponse> {
+  return api.get<BookingAlertsResponse>('/api/bookings/alerts')
 }
 
 // --- Google Calendar connect -------------------------------------------------

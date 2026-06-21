@@ -108,6 +108,20 @@ export type BookingsResponse = {
   bookings: BookingItem[]
 }
 
+/** A home notification: a customer cancelled/rescheduled their booking. */
+export type BookingAlert = {
+  booking_id: string
+  kind: 'cancelled' | 'rescheduled'
+  at: string | null
+  client_name: string | null
+  service_name: string | null
+  scheduled_at: string | null
+}
+
+export type BookingAlertsResponse = {
+  alerts: BookingAlert[]
+}
+
 /**
  * Body of PATCH /api/bookings/{id}. Either change `status`, or reschedule by
  * sending `date`+`time` together (both-or-neither). At least one is required.

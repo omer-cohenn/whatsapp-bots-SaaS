@@ -20,10 +20,12 @@ import Spinner from '../components/ui/Spinner'
 import Alert from '../components/ui/Alert'
 import Icon from '../components/ui/Icon'
 import { getDashboard, getLeads, getConversations } from '../lib/dashboardClient'
+import { getBookingAlerts } from '../lib/bookingClient'
 import { getSettings } from '../lib/botClient'
 import { toFriendlyError } from '../lib/friendlyError'
-import { relativeTime } from '../lib/formatDate'
+import { relativeTime, fullDateTime } from '../lib/formatDate'
 import type { Conversation, DashboardStats, Lead, Period } from '../dashboard/types'
+import type { BookingAlert } from '../dashboard/appointmentTypes'
 
 const PERIOD_SEGMENTS: Segment<Period>[] = [
   { value: 'week', label: 'השבוע' },
@@ -45,6 +47,10 @@ export default function DashboardHome() {
   // Conversations waiting for a human ("מחכים לך"), surfaced prominently above
   // the feed. Loaded once; non-fatal if it fails (the block just hides).
   const [waiting, setWaiting] = useState<Conversation[]>([])
+
+  // Customer-initiated booking changes (cancel / reschedule) → home alerts.
+  // Loaded once; non-fatal if it fails (the block just hides).
+  const [bookingAlerts, setBookingAlerts] = useState<BookingAlert[]>([])
 
   // Publish state lives here so the toggle stays in sync with the loaded config.
   const [isPublished, setIsPublished] = useState<boolean | null>(null)
@@ -96,6 +102,21 @@ export default function DashboardHome() {
       })
       .catch(() => {
         if (!cancelled) setWaiting([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Booking alerts (customer cancelled / rescheduled), loaded once. Non-fatal.
+  useEffect(() => {
+    let cancelled = false
+    getBookingAlerts()
+      .then((res) => {
+        if (!cancelled) setBookingAlerts(res.alerts)
+      })
+      .catch(() => {
+        if (!cancelled) setBookingAlerts([])
       })
     return () => {
       cancelled = true
@@ -241,6 +262,62 @@ export default function DashboardHome() {
                         className="flex-shrink-0 text-xs text-slate-400"
                       >
                         {relativeTime(conv.last_activity_at)}
+                      </time>
+                    ) : null}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        {/* "עדכוני פגישות" — a customer cancelled or moved an appointment. Each
+            links to the appointments calendar. */}
+        {bookingAlerts.length > 0 ? (
+          <section aria-labelledby="booking-alerts-heading" className="flex flex-col gap-3">
+            <h2
+              id="booking-alerts-heading"
+              className="flex items-center gap-2 text-lg font-medium text-slate-900"
+            >
+              <span
+                aria-hidden="true"
+                className="flex h-6 w-6 items-center justify-center rounded-full bg-[#D85A30]/15 text-[#D85A30]"
+              >
+                <Icon name="calendar-event" size={15} />
+              </span>
+              עדכוני פגישות
+              <span className="rounded-full bg-[#D85A30]/15 px-2 py-0.5 text-xs font-semibold text-[#D85A30]">
+                {bookingAlerts.length}
+              </span>
+            </h2>
+
+            <ul className="flex flex-col gap-2">
+              {bookingAlerts.map((a) => (
+                <li key={`${a.booking_id}-${a.at ?? ''}`}>
+                  <Link
+                    to="/appointments"
+                    className="flex items-center gap-3 rounded-xl border border-orange-200 bg-orange-50/60 px-3 py-2.5 outline-none transition-colors hover:bg-orange-50 focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-[#D85A30] text-white"
+                    >
+                      <Icon name={a.kind === 'cancelled' ? 'x' : 'clock'} size={20} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-slate-900">
+                        {a.kind === 'cancelled' ? 'לקוח ביטל פגישה' : 'לקוח שינה מועד פגישה'}
+                        {a.client_name ? ` · ${a.client_name}` : ''}
+                      </span>
+                      <span className="block truncate text-xs text-slate-500">
+                        {[a.service_name, a.scheduled_at ? fullDateTime(a.scheduled_at) : null]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                    </span>
+                    {a.at ? (
+                      <time dateTime={a.at} className="flex-shrink-0 text-xs text-slate-400">
+                        {relativeTime(a.at)}
                       </time>
                     ) : null}
                   </Link>

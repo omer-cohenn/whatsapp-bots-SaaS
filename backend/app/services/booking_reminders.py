@@ -135,6 +135,26 @@ async def _queue_touch(
     return True
 
 
+async def queue_booking_message(
+    redis: aioredis.Redis,
+    business_id: str,
+    booking_id: str,
+    kind: str,
+    scheduled_at: datetime | str,
+) -> bool:
+    """Public one-off enqueue for an event-driven booking message.
+
+    Used when the OWNER confirms a booking (kind="approved") so the customer gets
+    a "your appointment is confirmed" message from the business's WhatsApp number.
+    Reuses the same outbox + once-marker as the sweep, so re-confirming won't
+    double-send. The M6 sender drains the outbox and delivers for real; until then
+    the message simply waits in the queue. `scheduled_at` may be a datetime or ISO.
+    """
+    if isinstance(scheduled_at, str):
+        scheduled_at = datetime.fromisoformat(scheduled_at)
+    return await _queue_touch(redis, business_id, booking_id, kind, scheduled_at)
+
+
 async def sweep_loop(pool: asyncpg.Pool, redis: aioredis.Redis) -> None:
     """The forever-loop: every SWEEP_INTERVAL_SECONDS, sweep under a Redis lock.
 

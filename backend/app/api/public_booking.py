@@ -38,6 +38,7 @@ from app.models.booking import (
     SLUG_MAX,
 )
 from app.services import booking as booking_service
+from app.services import booking_alerts
 
 # Mounted at the app root (NOT under the gated /api router) so it stays public.
 router = APIRouter(prefix="/api/book", tags=["public-booking"])
@@ -212,6 +213,10 @@ async def public_cancel_booking(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="booking not found")
 
     await booking_service.run_google_hook(business_id, result["booking_id"], "cancelled")
+    # Notify the owner's home that a CUSTOMER cancelled (PII-free alert).
+    await booking_alerts.push_alert(
+        request.app.state.redis, business_id, result["booking_id"], "cancelled"
+    )
     return PublicMutationResponse(**result)
 
 
@@ -247,4 +252,8 @@ async def public_reschedule_booking(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="booking not found")
 
     await booking_service.run_google_hook(business_id, result["booking_id"], "rescheduled")
+    # Notify the owner's home that a CUSTOMER moved their appointment (PII-free).
+    await booking_alerts.push_alert(
+        request.app.state.redis, business_id, result["booking_id"], "rescheduled"
+    )
     return PublicMutationResponse(**result)

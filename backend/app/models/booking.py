@@ -198,6 +198,27 @@ class BookingsResponse(BaseModel):
     bookings: list[BookingItem]
 
 
+class BookingAlertItem(BaseModel):
+    """One home notification: a customer cancelled/rescheduled their booking.
+
+    Resolved for the owner — client_name/service_name/scheduled_at are decrypted
+    from the linked booking; `at` is when the customer made the change.
+    """
+
+    booking_id: str
+    kind: str  # "cancelled" | "rescheduled"
+    at: str | None = None
+    client_name: str | None = None
+    service_name: str | None = None
+    scheduled_at: str | None = None  # the booking's (new) time, UTC ISO-8601
+
+
+class BookingAlertsResponse(BaseModel):
+    """GET /api/bookings/alerts response (newest first)."""
+
+    alerts: list[BookingAlertItem]
+
+
 class BookingUpdateRequest(BaseModel):
     """PATCH /api/bookings/{id} body: set status and/or reschedule.
 

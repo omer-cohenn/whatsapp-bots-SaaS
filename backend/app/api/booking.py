@@ -43,8 +43,12 @@ from app.models.booking import (
     ServiceItem,
     ServicesResponse,
     ServiceUpdateRequest,
+    BookingAlertItem,
+    BookingAlertsResponse,
 )
 from app.services import booking as booking_service
+from app.services import booking_alerts
+from app.services import booking_reminders
 
 router = APIRouter(tags=["booking"])
 log = get_logger("app.api.booking")
@@ -265,4 +269,58 @@ async def update_booking(
     action = "cancelled" if body.status == "cancelled" else "rescheduled"
     await booking_service.run_google_hook(business_id, result["booking_id"], action)
 
+    # When the OWNER confirms a booking, queue a confirmation message so the
+    # customer hears about it from the business's WhatsApp number. It waits in the
+    # booking outbox and is delivered for real once M6 (WhatsApp) is connected.
+    if body.status == "confirmed":
+        await booking_reminders.queue_booking_message(
+            request.app.state.redis,
+            business_id,
+            result["booking_id"],
+            "approved",
+            result["scheduled_at"],
+        )
+
     return BookingUpdateResponse(**result)
+
+
+@router.get("/bookings/alerts", response_model=BookingAlertsResponse)
+async def booking_alerts_feed(
+    request: Request,
+    business_id: str = Depends(current_business),
+) -> BookingAlertsResponse:
+    """Home notifications: bookings a CUSTOMER cancelled/rescheduled (newest first).
+
+    The PII-free alerts come from this tenant's Redis inbox; each is resolved back
+    to its booking under RLS so the owner sees the (decrypted) name + service +
+    time. Alerts whose booking no longer exists are skipped. PII is never logged.
+    """
+    raw = await booking_alerts.list_alerts(request.app.state.redis, business_id)
+    if not raw:
+        return BookingAlertsResponse(alerts=[])
+
+    items: list[BookingAlertItem] = []
+    try:
+        async with tenant_connection(request.app.state.pg_pool, business_id) as conn:
+            for a in raw:
+                booking = await booking_service.get_booking(conn, business_id, a["booking_id"])
+                if booking is None:
+                    continue  # the booking was deleted; drop the stale alert
+                items.append(
+                    BookingAlertItem(
+                        booking_id=a["booking_id"],
+                        kind=a.get("kind", "cancelled"),
+                        at=a.get("at"),
+                        client_name=booking.get("client_name"),
+                        service_name=booking.get("service_name"),
+                        scheduled_at=booking.get("scheduled_at"),
+                    )
+                )
+    except DecryptionError:
+        log.error("booking alert decryption failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="could not read alerts",
+        ) from None
+
+    return BookingAlertsResponse(alerts=items)
