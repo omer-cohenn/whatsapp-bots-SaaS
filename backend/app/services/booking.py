@@ -685,11 +685,15 @@ async def create_public_booking(
     # Enrich the lead with the customer's details + the booking summary so it shows
     # up meaningfully on the dashboard (a NAMED "booking request" — not a nameless,
     # half-filled lead). Hebrew keys map name→contact_name, phone→phone; status → 'new'.
+    # A human-readable local date for the "מועד" answer (DD/MM/YYYY HH:MM), not raw
+    # ISO — the customer picked date_str (YYYY-MM-DD) + time_str (HH:MM) in local time.
+    _y, _m, _d = date_str.split("-")
+    human_when = f"{_d}/{_m}/{_y} {time_str}"
     lead_details: dict[str, Any] = {
         "שם_מלא": name,
         "טלפון": phone,
         "שירות": service["name"],
-        "מועד": f"{date_str} {time_str}",
+        "מועד": human_when,
     }
     if email:
         lead_details["אימייל"] = email
