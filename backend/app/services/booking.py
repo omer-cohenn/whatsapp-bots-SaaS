@@ -682,6 +682,19 @@ async def create_public_booking(
         is_test=is_test,
     )
 
+    # Enrich the lead with the customer's details + the booking summary so it shows
+    # up meaningfully on the dashboard (a NAMED "booking request" — not a nameless,
+    # half-filled lead). Hebrew keys map name→contact_name, phone→phone; status → 'new'.
+    lead_details: dict[str, Any] = {
+        "שם_מלא": name,
+        "טלפון": phone,
+        "שירות": service["name"],
+        "מועד": f"{date_str} {time_str}",
+    }
+    if email:
+        lead_details["אימייל"] = email
+    await leads_service.complete_lead(conn, business_id, lead_id, lead_details)
+
     # 2) The booking row — PII encrypted at rest, key_version stamped.
     row = await conn.fetchrow(
         """

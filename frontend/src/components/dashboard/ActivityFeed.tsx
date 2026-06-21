@@ -34,6 +34,17 @@ function leadTimestamp(lead: Lead): string | null {
 function toNotification(lead: Lead): Notification {
   const name = leadDisplayName(lead)
   const at = leadTimestamp(lead)
+  // Booking-originated leads (lead_name "פגישה") read as a booking request, not a
+  // generic lead — until the owner resolves them (deal/closed keep their wording).
+  if (lead.lead_name === 'פגישה' && (lead.status === 'new' || lead.status === 'in_progress')) {
+    return {
+      id: lead.id,
+      icon: 'calendar-event',
+      chipClassName: 'bg-[#378ADD]',
+      title: `בקשה לפגישה: ${name}`,
+      at,
+    }
+  }
   switch (lead.status) {
     case 'deal':
       return {
