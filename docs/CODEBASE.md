@@ -11,19 +11,21 @@ customer messages are captured as **encrypted leads**, handled by a **bot ↔ hu
 and turned into **appointments/bookings** (with an optional public booking page + Google Calendar). The
 owner sees everything in a back-office dashboard.
 
-**Build status:** M0–M5, M7, M8, M9, M10, M11 (incl. M11.1/M11.2) are **done & committed on `main`**.
-The remaining gap is **M6 — connect WhatsApp for real** (multi-tenant), and a separate **AWS deploy**
-track — both planned in [`decisions/0013`](decisions/0013-whatsapp-multitenant-and-aws-roadmap.md) but
-not built yet.
+**Build status:** M0–M5, M7, M8, M9, M10, M11 (incl. M11.1/M11.2), and the **M6a slice** (M6a +
+M6a.1 + M6a.2) are **done & committed on `main`** (pushed to GitHub `omer-cohenn/ManBuizz`). M6a is
+single-session "Message Yourself" + a ≤5 test-number allow-list that drive the LIVE bot over real
+WhatsApp, plus owner manual reply → WhatsApp. Next is **M6b — multi-tenant WhatsApp** (one socket per
+business, encrypted creds, hardened/locked-down gateway), then the separate **AWS deploy** track —
+both planned in [`decisions/0013`](decisions/0013-whatsapp-multitenant-and-aws-roadmap.md).
 
 ## Top-level layout
 ```
 bizz_up/
 ├── backend/        FastAPI app (Python 3.12) — API, services, the bot engine, DB access, tests
 ├── frontend/       React 18 + TypeScript + Tailwind (RTL Hebrew) — the owner web app + public booking page
-├── gateway/        Node.js + Baileys — the WhatsApp gateway (QR connect, inbound→webhook) [single-session spike]
+├── gateway/        Node.js + Baileys — the WhatsApp gateway (QR connect, inbound→bot→reply) [single-session, M6a]
 ├── infra/          docker-compose, .env templates, Makefile, run.bat/stop.bat — local stack orchestration
-├── supabase/       PostgreSQL migrations (0000–0012) + seed.sql — schema, RLS, roles, functions
+├── supabase/       PostgreSQL migrations (0000–0014) + seed.sql — schema, RLS, roles, functions
 ├── docs/           Living docs: STATUS, spec/, decisions/, system-map/, prototype/, CODEBASE.md (this file)
 ├── tests/          Double-click .bat runners for the milestone test suites (run inside Docker)
 ├── .claude/        AI control room: specialist agents, workflows, skills, settings (last_bo write-deny)
@@ -67,9 +69,10 @@ or **thin orchestrators** (`bot_runtime`, the domain services). Started minimall
 
 ### `app/api/` — HTTP routers
 - `health.py` — Public `GET /healthz` (200 + per-dependency detail; 503 otherwise; secret-free).
-- `webhook.py` — Public `POST /webhook/whatsapp` (M1): verifies `X-Gateway-Token` (constant-time), parses the frozen `WhatsAppWebhook` contract, logs a redacted receipt. (M6 will route it to a business + run the bot.)
+- `webhook.py` — Public `POST /webhook/whatsapp`: verifies `X-Gateway-Token` (constant-time), parses the frozen `WhatsAppWebhook` contract, logs a redacted receipt. (M6a/M6a.1) Routes BOTH the owner self-chat (`self_test=True`, always allowed) AND allow-listed-number inbound through ONE core (`_run_bot_turn`): resolve `gateway_account_id→business_id` via `resolve_wa_account` (SECURITY DEFINER, server-side) → gate on `is_published` → `bot_runtime.run_turn` (`is_test=False`, REAL leads/funnel). Returns the frozen `{status, replies}` shape (`replies=[]` when silent/not-published/not-allowed).
 - `auth.py` — Public `/auth/*` (Google login/callback/logout): consent redirect with Redis CSRF state; provision owner+business; create opaque session; logout destroys it. Never logs codes/tokens.
-- `me.py` — The gated `/api` router group (deny-by-default via `current_session`); `GET /api/me`; mounts the bot-builder, dashboard, booking, and Google-calendar sub-routers.
+- `me.py` — The gated `/api` router group (deny-by-default via `current_session`); `GET /api/me`; mounts the bot-builder, dashboard, booking, Google-calendar, and WhatsApp-admin sub-routers.
+- `whatsapp.py` — `/api/whatsapp/*` owner admin (M6a, session-gated, tenant = session): `GET /status`, `POST /link`, `GET /qr` (status + QR proxy the Node gateway over `GATEWAY_BASE_URL`; degrade gracefully if it's down), `GET/PUT /test-numbers` (the ≤5 external allow-list). Never logs the phone/labels/token.
 - `bot_builder.py` — `/api/bot/*` (M4): `GET/PUT /settings`, `POST /tryme` (pure sandbox), `POST /sim` (full runtime, is_test), `POST /ai/chat` (Gemini, 503 if unset), `GET /ai/history`.
 - `dashboard.py` — `/api/*` back-office (M7+): `GET /leads`, `GET /dashboard` (funnel + orders), `GET /conversations[/{id}[/messages]]`, `POST /conversations/{id}/status|reply`, `PATCH /leads/{id}/status`, `GET /bookings/alerts`, `PUT /bot/publish`.
 - `booking.py` — `/api/*` booking admin (M11): `GET/PUT /booking/settings`, services CRUD (`/services[/{id}]`), `GET/PATCH /bookings[/{id}]`, `POST /booking/welcome/generate` (AI). Fires the Google hook after mutations.
@@ -92,11 +95,14 @@ or **thin orchestrators** (`bot_runtime`, the domain services). Started minimall
 - `live_chat.py` — Earlier ephemeral live-chat cache (Redis), business-prefixed keys (superseded in places by `conversation_state`).
 - `abandoned_sweep.py` — Background sweep (single-runner) flipping idle `in_progress` leads → abandoned via a SECURITY DEFINER function (cross-tenant but each row keeps its own business_id).
 - `auth.py` — Google OAuth + opaque server-side sessions (Redis), CSRF state, never logs codes/tokens.
+- `whatsapp.py` — Connection mapping (M6a): `get_connection_by_account` (PUBLIC-path inbound lookup via `resolve_wa_account` definer fn — no tenant context needed), `upsert_connection` (owner "link" write, phone encrypted at rest, RLS-scoped), `send_outbound(to, text)` (M6a.2 best-effort POST to the gateway's `/send-bot`; True only on 2xx+`{ok:true}`; never logs jid/text/token).
+- `whatsapp_test_numbers.py` — The owner's external test allow-list (M6a.1, ≤5 numbers): `normalize` (digits-only, Israeli `0…`→`972…` — the single source of truth, applied to BOTH stored numbers and inbound `from`), `get/set_test_numbers` (RLS, atomic replace, phone+label encrypted at rest), `is_number_allowed` (the inbound gate).
 
 ### `app/models/` — Pydantic contracts (no `business_id` ever)
 - `auth.py` — `/api/me` shapes (user, business, WhatsApp connection).
 - `health.py` — `/healthz` shapes.
-- `webhook.py` — the FROZEN gateway→backend `WhatsAppWebhook` contract.
+- `webhook.py` — the FROZEN gateway→backend `WhatsAppWebhook` contract; gained `self_test` + `conversation_id` (M6a, both default-safe so an older payload still parses → ack-only).
+- `whatsapp.py` — the WhatsApp admin shapes (M6a): `WhatsAppStatusResponse`/`WhatsAppLinkResponse` (linked/connected/phone/gateway_status), `WhatsAppQrResponse` (status/qr_data_url), `TestNumber`/`TestNumbersRequest` (≤5 cap)/`TestNumbersResponse`.
 - `bot_builder.py` — `BotSettings`/`BotProfile`/`Flow`/`Step` with bounds (≤20 flows, ≤30 steps/flow, choice ≤12, etc.); `is_published`.
 - `dashboard.py` — `LeadItem`/`LeadsResponse`, conversation + message shapes, booking-alert shapes (PII decrypted for the owner only).
 - `booking.py` — booking settings/service/booking + public shapes + welcome-generate; bounded fields; `image_url` (≤2,000,000 for a resized data URL).
@@ -111,8 +117,8 @@ or **thin orchestrators** (`bot_runtime`, the domain services). Started minimall
 - `isolation/test_tenant_wall.py` — the M2 hard gate: RLS reads only own rows, cross-tenant read/insert blocked, no-session → zero rows (connects as the real non-service roles).
 - `test_auth_gate.py` — M3 deny-by-default gate (401 for missing/expired sessions, `provision_owner` idempotency) against the real ASGI app via httpx.
 - `test_secret_guard.py` — asserts secrets/PII never appear in logs/responses.
-- Milestone narrated suites: `m2_full_test.py`, `m3_full_test.py`, `m5_full_test.py`/`m5b_full_test.py`, `m7_full_test.py`, `m8_full_test.py`, `m9_full_test.py`, `m10_full_test.py`, `m11_full_test.py`, `m11_1_full_test.py`, `m11_2_full_test.py` — plain-language end-to-end stories per milestone.
-- Strict pytest suites: `test_bot_builder.py`, `test_bot_tryme.py`, `test_bot_sim.py`, `test_dashboard.py`, `test_lead_status.py`, `test_m8.py`, `test_m9.py`, `test_m10.py`, `test_m11.py`, `test_m11_1.py`, `test_m11_2.py`, plus `demo_isolation.py`.
+- Milestone narrated suites: `m2_full_test.py`, `m3_full_test.py`, `m5_full_test.py`/`m5b_full_test.py`, `m7_full_test.py`, `m8_full_test.py`, `m9_full_test.py`, `m10_full_test.py`, `m11_full_test.py`, `m11_1_full_test.py`, `m11_2_full_test.py`, `m6a_full_test.py`/`m6a1_full_test.py`/`m6a2_full_test.py` (the M6a WhatsApp slice) — plain-language end-to-end stories per milestone.
+- Strict pytest suites: `test_bot_builder.py`, `test_bot_tryme.py`, `test_bot_sim.py`, `test_dashboard.py`, `test_lead_status.py`, `test_m8.py`, `test_m9.py`, `test_m10.py`, `test_m11.py`, `test_m11_1.py`, `test_m11_2.py`, `test_m6a.py`/`test_m6a1.py`/`test_m6a2.py`, plus `demo_isolation.py`.
 
 ---
 
@@ -129,7 +135,7 @@ aria-live, landmarks, skip-links). Docker dev server on :5173 (Windows host → 
 
 ### Entry & auth
 - `src/main.tsx` — React 18 root.
-- `src/App.tsx` — Router + AuthProvider. Public routes: `/login`, `/terms`, `/privacy`, `/book/:slug`, `/book/:slug/manage/:token`. Protected (AuthGate + DashboardLayout): `/`, `/bot-builder`, `/try-me`, `/leads`, `/conversations`, `/appointments`, `/settings/calendar`.
+- `src/App.tsx` — Router + AuthProvider. Public routes: `/login`, `/terms`, `/privacy`, `/book/:slug`, `/book/:slug/manage/:token`. Protected (AuthGate + DashboardLayout): `/`, `/bot-builder`, `/try-me`, `/leads`, `/conversations`, `/appointments`, `/whatsapp`, `/settings/calendar`.
 - `src/auth/AuthContext.tsx` — calls `GET /api/me`; holds user/business/connection; `logout()`; 401 → unauthenticated.
 - `src/auth/types.ts` — User/Business/Connection/Me types.
 
@@ -144,6 +150,7 @@ aria-live, landmarks, skip-links). Docker dev server on :5173 (Windows host → 
 - `AppointmentsPage.tsx` — two tabs: "פגישות" (`BookingsPanel`) and "הגדרות תורים" (`BookingSettingsPanel`); also the Google-OAuth return at `/settings/calendar`.
 - `PublicBookingPage.tsx` — public `/book/:slug`: loads services + welcome, renders `<BookingFlow mode="live">`.
 - `PublicManagePage.tsx` — public cancel/reschedule via the customer's token.
+- `WhatsAppPage.tsx` — WhatsApp connect (M6a, `/whatsapp`): QR + connect/status (polls `GET /api/whatsapp/status` ~4s, "חבר" → `POST /link`) + a "מספרים לבדיקה" (≤5) allow-list card (`GET/PUT /api/whatsapp/test-numbers`).
 
 ### Components — UI kit (`src/components/ui/`)
 - `Button`, `Card`, `Field`, `Textarea`, `Select`, `Badge`, `Alert`, `Spinner`, `Tabs`, `CopyButton`, `Icon` (Tabler-style inline SVG set, aria-hidden by default).
@@ -171,7 +178,7 @@ aria-live, landmarks, skip-links). Docker dev server on :5173 (Windows host → 
 
 ### Lib (`src/lib/`)
 - `apiClient.ts` — fetch wrapper (same-origin, credentials, timeout, `ApiError`, 401 detection).
-- `dashboardClient.ts`, `botClient.ts`, `bookingClient.ts` (admin), `publicBookingClient.ts` (public) — typed endpoint wrappers.
+- `dashboardClient.ts`, `botClient.ts`, `bookingClient.ts` (admin), `publicBookingClient.ts` (public), `whatsappClient.ts` (M6a: status/link/qr + test-numbers) — typed endpoint wrappers.
 - `formatDate.ts`, `friendlyError.ts` (Hebrew error i18n), `waLink.ts` (wa.me), `bookingDates.ts` (calendar math), `imageResize.ts` (canvas resize → compressed data URL).
 
 ### Types (`src/dashboard/`, `src/botbuilder/`)
@@ -184,15 +191,16 @@ aria-live, landmarks, skip-links). Docker dev server on :5173 (Windows host → 
 ## Gateway, Infra & Database
 
 ### Gateway (`gateway/`)
-Node.js + Baileys WhatsApp gateway — currently a **single-session spike** that proves the receive path.
-- `src/index.js` — boot, Baileys connection + QR generation, inbound `messages.upsert` → forward to backend, dev-only endpoints, reconnect.
+Node.js + Baileys WhatsApp gateway — **single-session**, now driving the LIVE bot loop (M6a), not just a receive spike.
+- `src/index.js` — boot, Baileys connection + QR generation; inbound `messages.upsert` → `handleInbound` → forward to backend AND send the replies back. **Self-chat detection:** on connect it computes the linked account's own `ownJid` (`@s.whatsapp.net`) AND `ownLid` (`@lid` — modern hidden id); `isSelfChat` matches EITHER form (never logged — it embeds the phone). **Loop-guard:** a bounded sent-id `Set` (cap 200, oldest-evicted) — every id we send is remembered so its `fromMe` echo is skipped at the top of `handleInbound` (else the bot would reply to itself forever). Two reply branches in `handleInbound`: the self-chat (`self_test:true` + `conversation_id`) and the normal-chat inbound (`conversation_id` only — the BACKEND decides via the allow-list). `sendReplies` types the backend's `replies[]` back into the chat in order.
 - `src/config.js` — fail-closed config (requires `GATEWAY_API_TOKEN`; `BACKEND_WEBHOOK_URL` default `http://backend:8000/webhook/whatsapp`; `authDir` default `./auth`; account id `'spike'`).
-- `src/contract.js` — the frozen webhook payload builder: Baileys msg → `{gateway_account_id, from (E.164), push_name, message_id, timestamp, type, text, raw}`.
+- `src/contract.js` — the frozen webhook payload builder: Baileys msg → `{gateway_account_id, from (E.164), push_name, message_id, timestamp, type, text, raw}`; (M6a) ALWAYS adds `conversation_id` (the chat jid), and `self_test:true` ONLY for the self-chat.
 - `src/logger.js` — Pino with hard redaction (never logs token/QR/body/phone).
 - `Dockerfile` — node:20-slim, creates `/app/auth` (spike creds), healthcheck on `/healthz`.
-- **Flow:** QR rendered at `GET /qr` (dev) → scan → `connection='open'` → inbound forwarded with `X-Gateway-Token`. Creds persist in `auth/` (gitignored, plaintext — M6 moves them to the encrypted DB).
-- **Dev-only endpoints** (remove/secure for prod): `GET /qr`, `GET /inbox`, `GET|POST /send`; plus `GET /healthz`.
-- **Single-session today** — M6 makes it one socket per business keyed by `gateway_account_id`.
+- **Internal endpoints** (backend → gateway, Docker network): `GET /info` (`{account_id, status, phone}` — the linked-own-number identity for the link mapping), `GET /qr.json` (`{status, qr_data_url}` — JSON the gated `/api/whatsapp/qr` proxies), `POST /send-bot` (M6a.2 — token-authed constant-time, `{to,text}` → delivers an owner manual reply; records the sent id in the loop-guard).
+- **Flow:** QR rendered at `GET /qr` (dev) → scan → `connection='open'` → inbound forwarded with `X-Gateway-Token`, replies sent back. Creds persist in `auth/` (gitignored, plaintext — M6b moves them to the encrypted DB).
+- **Dev-only endpoints — UNAUTH, must be locked down before prod (M6b):** `GET /qr`, `GET /inbox`, `GET|POST /send`; plus `GET /healthz`.
+- **Single-session today** — M6b makes it one socket per business keyed by `gateway_account_id`.
 
 ### Infra (`infra/`)
 - `docker-compose.yml` — health-gated stack (no blind sleeps):
@@ -216,6 +224,8 @@ PostgreSQL with RLS + role isolation. Migrations (applied in order by `migrate`)
 - `0010_booking_slug_resolve.sql` — SECURITY DEFINER `resolve_booking_slug(slug)` + `bookings_due_for_reminder(window_hours)` (PII-free).
 - `0011_booking_service_extras.sql` — `services.description`, `services.price`, `booking_settings.welcome_message`.
 - `0012_service_image.sql` — `services.image_url` (http(s) URL or resized data URL).
+- `0013_whatsapp_account_resolve.sql` — SECURITY DEFINER `resolve_wa_account(account_id)` (gateway account → business_id for the public webhook; exposes nothing else) + `GRANT INSERT ON whatsapp_connections TO app_role` (owner "link" write).
+- `0014_whatsapp_test_numbers.sql` — `whatsapp_test_numbers` table (🔒 phone+label ciphertext, ≤5 app-enforced) + RLS ENABLE+FORCE `p_tenant_isolation` + app_role CRUD (no gateway_role).
 - `seed.sql` — two dev tenants (Avi Insurance, Bella Barber) with bot config; idempotent.
 
 ---
@@ -228,14 +238,14 @@ PostgreSQL with RLS + role isolation. Migrations (applied in order by `migrate`)
 - `bugs.md` / `security-issues.md` — consolidated bug + security-finding logs (incl. per-milestone audit appends).
 - `spec/` — the blueprint: `roadmap.md`, `mvp-checklist.md`, `build-guide.md`, `architecture.md`, `data-model.md`, `bot-config-contract.md`, and `roadmap-parts/*` (per-domain plans incl. `devops-aws.md` = the full managed-AWS plan for scale).
 - `decisions/` — locked decision records:
-  - 0001 Baileys QR gateway canonical · 0002 multi-tenant required · 0003 default AI model (`gemini-3.1-flash-lite`) · 0004 MVP scope · 0005 data-model + auth · 0006 live chat in Redis · 0007 M5+M7 build plan · 0008 M8 handoff chat · 0009 M9 lead outcomes · 0010 M10 chat persistence + notes · 0011 M11 appointments & booking · 0012 M11.1 public booking polish · 0013 WhatsApp multi-tenant (M6) + AWS roadmap (planned).
+  - 0001 Baileys QR gateway canonical · 0002 multi-tenant required · 0003 default AI model (`gemini-3.1-flash-lite`) · 0004 MVP scope · 0005 data-model + auth · 0006 live chat in Redis · 0007 M5+M7 build plan · 0008 M8 handoff chat · 0009 M9 lead outcomes · 0010 M10 chat persistence + notes · 0011 M11 appointments & booking · 0012 M11.1 public booking polish · 0013 WhatsApp multi-tenant (M6) + AWS roadmap (planned) · 0014 M6a WhatsApp self-test + test-number allow-list + manual reply.
 - `system-map/` — read-only map of the ORIGINAL system (`last_bo` + `qr_wa_scanner`): backend-map, frontend-map, whatsapp-gateway, infrastructure, etc.
 - `prototype/bizzup-prototype.html` — approved UI mock (the booking page design source).
 - `CODEBASE.md` — this document.
 
 ### Test runners (`tests/`)
 Double-click `.bat` scripts (run inside Docker: migrate → seed → run suite → regress prior milestones):
-- `test_m2.bat` (tenant wall) · `test_m3.bat` (login/gate) · `test_m4.bat` (AI builder) · `test_m5.bat`/`test_m5b.bat` (try-me / lead memory) · `test_m7.bat`/`test_m7b.bat` (dashboard / polish) · `test_m8.bat` (handoff chat) · `test_m9.bat` (lead outcomes) · `test_m10.bat` (TTL + notes) · `test_m11.bat` (booking) · `test_m11_1.bat` (booking polish) · `test_m11_2.bat` (service image). Latest full strict bundle: **190 passed**.
+- `test_m2.bat` (tenant wall) · `test_m3.bat` (login/gate) · `test_m4.bat` (AI builder) · `test_m5.bat`/`test_m5b.bat` (try-me / lead memory) · `test_m7.bat`/`test_m7b.bat` (dashboard / polish) · `test_m8.bat` (handoff chat) · `test_m9.bat` (lead outcomes) · `test_m10.bat` (TTL + notes) · `test_m11.bat` (booking) · `test_m11_1.bat` (booking polish) · `test_m11_2.bat` (service image) · `test_m6a.bat`/`test_m6a1.bat`/`test_m6a2.bat` (the M6a WhatsApp slice). Latest full strict bundle: **231 passed**.
 
 ### AI control room (`.claude/`)
 - `agents/` — specialist sub-agents: read-only scanners (`business-logic-scanner`, `frontend-mapper`, `whatsapp-scanner`, `infra-scanner`, `security-scanner`, `docs-assembler`, `data-architect`, `devops_aws`) and the builders used this build (`bizzup-data-builder`, `bizzup-backend-builder`, `bizzup-frontend-builder`, `bizzup-test-runner`).

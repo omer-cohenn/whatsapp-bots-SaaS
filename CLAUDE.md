@@ -53,7 +53,7 @@ One business must **NEVER** see another business's data.
 
 **Current phase: BUILD (the MVP).** Mapping + the ground-up re-spec are DONE.
 - 📍 **Resume point — read [`docs/STATUS.md`](docs/STATUS.md) first**, then [`docs/spec/mvp-checklist.md`](docs/spec/mvp-checklist.md).
-- ✅ **M0** (the stack runs) and ✅ **M1** (WhatsApp receive works end-to-end) are complete. **Next: M2** — the tenant wall (9 tables + RLS + isolation tests).
+- ✅ **M0–M5, M7–M11.2** (full MVP: tenant wall, auth, AI bot builder, engine, dashboard, handoff chat, lead outcomes, appointments/booking) **and ✅ M6a + M6a.1 + M6a.2** (WhatsApp: owner self-chat self-test, ≤5 named test-number allowlist, owner handoff replies sent back over WhatsApp) are **done, committed on `main`, and pushed to GitHub `omer-cohenn/ManBuizz`**. **Next: M6b** — multi-tenant WhatsApp (one socket per business, encrypted creds in DB, drain outboxes, lock down the gateway dev routes), then AWS deploy. Exact per-milestone detail lives in `docs/STATUS.md` (always read it first).
 - ▶️ **Run the local stack:** double-click `run.bat` (Docker Desktop must be running); stop with `stop.bat`. URLs: frontend `:5173`, gateway QR `:3000/qr`, dev inbox/send `:3000/inbox` · `:3000/send`.
 - New code lives in `backend/ gateway/ frontend/ infra/ supabase/`. The full plan is in `docs/spec/`. (We ARE writing production code now — per the locked decisions + checklist.)
 
