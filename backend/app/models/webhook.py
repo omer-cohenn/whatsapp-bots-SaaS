@@ -34,3 +34,14 @@ class WhatsAppWebhook(BaseModel):
     type: str = Field(..., description="Message type, e.g. 'text'")
     text: str | None = Field(default=None, description="Message body (PII — never log)")
     raw: Any | None = Field(default=None, description="Original gateway payload (may hold PII)")
+
+    # --- M6a self-test path (decision 0014) ---------------------------------
+    # `self_test` is True ONLY when the owner messages their OWN number ("Message
+    # Yourself"). The gateway sets it; the backend uses it to gate the live-bot
+    # reply path. `conversation_id` is the stable self-chat jid (one per chat),
+    # used as the bot runtime's conversation key. Both default to safe values so
+    # an older gateway payload (without them) still parses → ack-only.
+    self_test: bool = Field(default=False, description="True only for self-chat test messages")
+    conversation_id: str | None = Field(
+        default=None, description="Stable self-chat conversation id (the chat jid)"
+    )

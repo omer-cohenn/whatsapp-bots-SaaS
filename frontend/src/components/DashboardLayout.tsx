@@ -29,6 +29,7 @@ const NAV_ITEMS: NavSpec[] = [
   { to: '/leads', label: 'לידים', icon: 'users', enabled: true },
   { to: '/conversations', label: 'שיחות', icon: 'message-circle', enabled: true },
   { to: '/appointments', label: 'ניהול פגישות', icon: 'calendar-event', enabled: true },
+  { to: '/whatsapp', label: 'וואטסאפ', icon: 'brand-whatsapp', enabled: true },
   { to: '/settings', label: 'הגדרות', icon: 'settings', enabled: false },
 ]
 

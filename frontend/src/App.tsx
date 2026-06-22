@@ -17,6 +17,7 @@ import TryMePage from './pages/TryMePage'
 import LeadsPage from './pages/LeadsPage'
 import ConversationsPage from './pages/ConversationsPage'
 import AppointmentsPage from './pages/AppointmentsPage'
+import WhatsAppPage from './pages/WhatsAppPage'
 import PublicBookingPage from './pages/PublicBookingPage'
 import PublicManagePage from './pages/PublicManagePage'
 
@@ -76,6 +77,14 @@ export default function App() {
             element={
               <AuthGate>
                 <AppointmentsPage />
+              </AuthGate>
+            }
+          />
+          <Route
+            path="/whatsapp"
+            element={
+              <AuthGate>
+                <WhatsAppPage />
               </AuthGate>
             }
           />

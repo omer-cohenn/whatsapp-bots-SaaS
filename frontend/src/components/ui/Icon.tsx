@@ -41,6 +41,7 @@ export type IconName =
   | 'calendar-off'
   | 'photo'
   | 'menu'
+  | 'brand-whatsapp'
 
 // Path/element markup per icon (stroke-based, inherits currentColor).
 const PATHS: Record<IconName, JSX.Element> = {
@@ -133,6 +134,10 @@ const PATHS: Record<IconName, JSX.Element> = {
     <path d="M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM9 9a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM4 16l4-4a2 2 0 0 1 2.8 0L15 16M14 14l1-1a2 2 0 0 1 2.8 0L20 15" />
   ),
   menu: <path d="M4 6h16M4 12h16M4 18h16" />,
+  // WhatsApp glyph: speech bubble (tail at the bottom-start) + a handset.
+  'brand-whatsapp': (
+    <path d="M3 21l1.65-4.8A8 8 0 1 1 7.8 19.3L3 21zM9 9.5c0 3 2.5 5.5 5.5 5.5l1-1c.3-.3.8-.4 1.1-.2l1.4.7c.3.2.5.5.5.9 0 .8-.6 1.4-1.4 1.6C13 17.6 7.4 13 7.4 9.4c.1-.8.8-1.4 1.6-1.4.4 0 .7.2.9.5l.7 1.4c.2.3.1.8-.2 1.1l-1 1z" />
+  ),
 }
 
 type IconProps = SVGProps<SVGSVGElement> & {

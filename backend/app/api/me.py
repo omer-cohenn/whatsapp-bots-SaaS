@@ -19,6 +19,7 @@ from app.api.booking import router as booking_router
 from app.api.bot_builder import router as bot_builder_router
 from app.api.dashboard import router as dashboard_router
 from app.api.google_oauth import router as google_router
+from app.api.whatsapp import router as whatsapp_router
 from app.core.deps import current_business, current_session, current_user
 from app.db.session import tenant_connection
 from app.models.auth import MeBusiness, MeConnection, MeResponse, MeUser
@@ -44,6 +45,10 @@ api.include_router(booking_router)
 # status|disconnect). Same gate, deny-by-default — the OAuth callback is reached
 # by the already-logged-in owner (the browser carries the session cookie).
 api.include_router(google_router)
+
+# Mount the M6a owner WhatsApp admin routes (/api/whatsapp/status|link|qr). Same
+# gate, deny-by-default — the tenant is always the verified session business.
+api.include_router(whatsapp_router)
 
 
 async def _connection_status(request: Request, business_id: str) -> str:

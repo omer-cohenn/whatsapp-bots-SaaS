@@ -28,11 +28,12 @@ const {
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
   DisconnectReason,
+  jidNormalizedUser,
 } = require('@whiskeysockets/baileys');
 
 const { loadConfig } = require('./config');
 const { createLogger } = require('./logger');
-const { buildWebhookPayload } = require('./contract');
+const { buildWebhookPayload, extractText } = require('./contract');
 
 // FAIL CLOSED: loadConfig throws if a required secret is missing -> process exits.
 let config;
@@ -53,6 +54,43 @@ const state = {
   qrDataUrl: null, // data: URL of the current QR PNG (DEV-ONLY, never logged)
 };
 
+// ── M6a "Message Yourself" support ───────────────────────────────────────────
+// The linked account's OWN normalized jid. Computed once on connect (open) so we
+// can recognize the owner's self-chat (the chat with themselves). Null until
+// connected. Used by isSelfChat(); never logged (it embeds the phone number).
+let ownJid = null;
+
+/**
+ * The self-chat is the conversation a user has with their OWN number. A message
+ * is a self-chat message when its remoteJid normalizes to our own jid.
+ * Returns false until we are connected (ownJid known).
+ */
+function isSelfChat(remoteJid) {
+  if (!ownJid || !remoteJid) return false;
+  try {
+    return jidNormalizedUser(remoteJid) === ownJid;
+  } catch {
+    return false;
+  }
+}
+
+// LOOP PREVENTION: ids of messages WE (the gateway) sent. In the self-chat,
+// every send echoes back through messages.upsert with fromMe=true — without
+// this guard the bot would reply to its own replies forever. We skip any upsert
+// whose key.id is in this set. Bounded (~200) with oldest-evicted via insertion
+// order (Set preserves it). Stores message id strings only — no PII.
+const SENT_ID_CAP = 200;
+const sentMessageIds = new Set();
+function rememberSentId(id) {
+  if (!id) return;
+  sentMessageIds.add(id);
+  if (sentMessageIds.size > SENT_ID_CAP) {
+    // Evict the oldest (first-inserted) id.
+    const oldest = sentMessageIds.values().next().value;
+    sentMessageIds.delete(oldest);
+  }
+}
+
 // DEV-ONLY: keep the last few INBOUND messages in memory so you can eyeball the
 // content during the connection test via GET /inbox. NOT logged, NOT persisted.
 // Remove this (and the /inbox, /send routes) before production.
@@ -72,6 +110,9 @@ let sock = null;
 let reconnecting = false;
 
 // ── Forward one inbound message to the backend webhook ───────────────────────
+// Returns the parsed backend response { status, replies: [...] } on success, or
+// null on any failure. The contract: replies=[] when the bot is silent / not
+// published / no mapping — so the caller just sends whatever replies come back.
 async function forwardToBackend(payload) {
   try {
     const res = await request(config.backendWebhookUrl, {
@@ -86,23 +127,110 @@ async function forwardToBackend(payload) {
       headersTimeout: 8000,
       bodyTimeout: 8000,
     });
-    // Drain the body so the socket can be reused / closed cleanly.
-    await res.body.text().catch(() => {});
 
-    // SAFE logging only: status + a truncated message id + whether text existed.
-    // No phone number, no message body, no token, no QR.
+    // Read the JSON response body. The backend returns { status, replies[] }.
+    // Be defensive: on non-JSON / parse failure, treat as no replies.
+    let parsed = null;
+    try {
+      parsed = await res.body.json();
+    } catch {
+      // Drain so the socket can be reused / closed cleanly even on bad JSON.
+      await res.body.text().catch(() => {});
+    }
+
+    // SAFE logging only: status + a truncated message id + whether text existed
+    // + how many replies came back. No phone number, no message body (the reply
+    // text is NEVER logged), no token, no QR.
     log.info(
       {
         webhookStatus: res.statusCode,
         messageIdSuffix: payload.message_id ? payload.message_id.slice(-6) : null,
         msgType: payload.type,
         hasText: Boolean(payload.text),
+        selfTest: Boolean(payload.self_test),
+        replyCount: Array.isArray(parsed?.replies) ? parsed.replies.length : 0,
       },
       'forwarded inbound message to backend'
     );
+
+    return parsed;
   } catch (err) {
     // err.message from undici contains no secret/PII (connection-level error).
     log.error({ err: err.message }, 'failed to forward inbound message to backend');
+    return null;
+  }
+}
+
+// ── Send the bot's replies back into the self-chat ───────────────────────────
+// Sends each reply IN ORDER and records the resulting message id in the loop
+// guard so the echoed fromMe upsert does not re-trigger the bot. Wrapped so a
+// single bad send can't take down the socket; logs are SAFE (no text/phone).
+async function sendReplies(remoteJid, replies) {
+  if (!sock || !Array.isArray(replies) || replies.length === 0) return;
+  for (const reply of replies) {
+    const text = typeof reply === 'string' ? reply : '';
+    if (!text.trim()) continue; // skip empty/blank replies
+    try {
+      const sent = await sock.sendMessage(remoteJid, { text });
+      // Record the id of OUR outgoing message so its fromMe echo is ignored.
+      rememberSentId(sent?.key?.id);
+      log.info({ textLen: text.length }, 'sent bot reply into self-chat');
+    } catch (err) {
+      // Never log the reply text or the jid (PII) — message only.
+      log.error({ err: err.message }, 'failed to send bot reply');
+    }
+  }
+}
+
+// ── Handle one inbound message ───────────────────────────────────────────────
+// Decides whether to skip, forward, and (for self-chat) reply. Wrapped so it
+// never throws into the Baileys event loop. SAFE logging only.
+async function handleInbound(msg) {
+  try {
+    if (!msg?.message) return; // skip receipts / empty envelopes
+
+    const remoteJid = msg.key?.remoteJid;
+    const selfChat = isSelfChat(remoteJid);
+
+    // LOOP PREVENTION (must be at the very top of handling): skip any message
+    // whose id is one WE sent. In the self-chat our replies echo back with
+    // fromMe=true; without this the bot would answer its own messages forever.
+    const msgId = msg.key?.id;
+    if (msgId && sentMessageIds.has(msgId)) return;
+
+    // fromMe policy: skip our own outgoing for NORMAL chats (unchanged), BUT
+    // for the self-chat the owner's own typed input IS fromMe — process it.
+    if (msg.key?.fromMe && !selfChat) return;
+
+    if (selfChat) {
+      // M6a "Message Yourself": run through the real bot pipeline and reply.
+      const text = extractText(msg.message || {});
+      if (!text || !text.trim()) return; // empty/blank -> skip (resilience)
+
+      const payload = buildWebhookPayload(msg, config.gatewayAccountId, {
+        selfTest: true,
+        conversationId: remoteJid,
+      });
+      const response = await forwardToBackend(payload);
+      // replies=[] when not published / no mapping / silent — sendReplies no-ops.
+      await sendReplies(remoteJid, response?.replies);
+      return;
+    }
+
+    // NORMAL chat: forward exactly as before (no self_test field).
+    const payload = buildWebhookPayload(msg, config.gatewayAccountId);
+    forwardToBackend(payload);
+    // DEV-ONLY: stash the content so GET /inbox can show it.
+    rememberMessage({
+      from: payload.from,
+      pushName: payload.push_name,
+      text: payload.text,
+      type: payload.type,
+      at: new Date().toISOString(),
+    });
+  } catch (err) {
+    // err.message carries no PII here; the socket must survive.
+    log.error({ err: err.message }, 'failed to handle inbound message');
   }
 }
 
@@ -157,12 +285,20 @@ async function startSocket() {
       if (connection === 'open') {
         state.status = 'connected';
         state.qrDataUrl = null; // drop the QR once linked
+        // Compute the linked account's OWN jid once, now that sock.user exists.
+        // Used to detect self-chat messages. Never logged (embeds the phone).
+        try {
+          ownJid = sock?.user?.id ? jidNormalizedUser(sock.user.id) : null;
+        } catch {
+          ownJid = null;
+        }
         log.info('WhatsApp connection open (linked)');
       }
 
       if (connection === 'close') {
         state.status = 'disconnected';
         state.qrDataUrl = null;
+        ownJid = null; // identity is no longer valid until we reconnect
         const statusCode =
           lastDisconnect?.error instanceof Boom
             ? lastDisconnect.error.output?.statusCode
@@ -181,23 +317,14 @@ async function startSocket() {
       }
     });
 
-    // THE RECEIVE SPIKE: forward inbound messages to the backend.
+    // Forward inbound messages to the backend, and (M6a) reply into self-chat.
     sock.ev.on('messages.upsert', ({ messages, type }) => {
       // Only act on live notifications; skip history-sync / append noise.
       if (type !== 'notify') return;
       for (const msg of messages || []) {
-        if (!msg?.message) continue; // skip receipts / empty envelopes
-        if (msg.key?.fromMe) continue; // skip our own outgoing
-        const payload = buildWebhookPayload(msg, config.gatewayAccountId);
-        forwardToBackend(payload);
-        // DEV-ONLY: stash the content so GET /inbox can show it.
-        rememberMessage({
-          from: payload.from,
-          pushName: payload.push_name,
-          text: payload.text,
-          type: payload.type,
-          at: new Date().toISOString(),
-        });
+        // Each message is handled independently and async so one error / one
+        // slow webhook can't block the others. handleInbound never throws.
+        handleInbound(msg);
       }
     });
   } catch (err) {
@@ -226,6 +353,29 @@ app.use(express.urlencoded({ extended: false }));
 // Health: 200, NO QR / NO secret. Used by the docker-compose healthcheck.
 app.get('/healthz', (_req, res) => {
   res.status(200).json({ ok: true, service: 'gateway', status: state.status });
+});
+
+/*
+ * GET /info — INTERNAL (backend -> gateway, Docker network). M6a contract:
+ *   { account_id: <config account id>, status: <state.status>, phone: <digits|null> }
+ * phone = the linked OWN number digits (E.164 without '+'), or null when not
+ * connected. This is the gateway-side identity the backend uses to record /
+ * verify the whatsapp_connections mapping. Not exposed publicly (internal net).
+ */
+app.get('/info', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  // Derive own-number digits from ownJid (e.g. "972501234567@s.whatsapp.net").
+  // null when not connected (ownJid is cleared on disconnect).
+  let phone = null;
+  if (ownJid) {
+    const digits = String(ownJid).split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
+    phone = digits || null;
+  }
+  res.status(200).json({
+    account_id: config.gatewayAccountId,
+    status: state.status,
+    phone,
+  });
 });
 
 /*

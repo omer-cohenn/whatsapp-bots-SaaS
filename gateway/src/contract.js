@@ -7,6 +7,12 @@
  * shape lives in exactly one place. Body shape (do not change without updating
  * the backend + the shared spec):
  *   { gateway_account_id, from, push_name, message_id, timestamp, type, text, raw }
+ *
+ * M6a (decision 0014) adds two OPTIONAL fields for the "Message Yourself" flow:
+ *   self_test: bool        -> true ONLY for self-chat messages
+ *   conversation_id: string -> the self-chat jid (stable per chat)
+ * Non-self chats are forwarded EXACTLY as before (these fields are omitted),
+ * so the existing behavior is unchanged.
  */
 
 function extractText(message) {
@@ -35,11 +41,18 @@ function jidToE164(jid) {
   return user ? `+${user}` : '';
 }
 
-function buildWebhookPayload(msg, gatewayAccountId) {
+/**
+ * @param {object} msg Baileys WAMessage (from messages.upsert)
+ * @param {string} gatewayAccountId fixed routing key (e.g. "spike")
+ * @param {object} [opts]
+ * @param {boolean} [opts.selfTest] true ONLY for self-chat messages
+ * @param {string}  [opts.conversationId] the self-chat jid (stable per chat)
+ */
+function buildWebhookPayload(msg, gatewayAccountId, opts = {}) {
   const messageContent = msg.message || {};
   // The backend requires gateway_account_id / from / message_id / type to be
   // non-null STRINGS — always send strings (never null) to honor the contract (fixes the B1-class mismatch).
-  return {
+  const payload = {
     gateway_account_id: gatewayAccountId,
     from: jidToE164(msg.key?.remoteJid),
     push_name: msg.pushName || '',
@@ -49,6 +62,15 @@ function buildWebhookPayload(msg, gatewayAccountId) {
     text: extractText(messageContent),
     raw: msg,
   };
+
+  // M6a self-test fields: only attached for the "Message Yourself" path so the
+  // non-self contract stays byte-for-byte identical to before.
+  if (opts.selfTest) {
+    payload.self_test = true;
+    payload.conversation_id = opts.conversationId || msg.key?.remoteJid || '';
+  }
+
+  return payload;
 }
 
 module.exports = { buildWebhookPayload, extractText };

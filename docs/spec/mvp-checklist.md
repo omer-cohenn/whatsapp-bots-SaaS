@@ -89,6 +89,18 @@ You can build **M0–M7 entirely on your laptop first**, then do **M8 (AWS)** wh
 
 ✅ **Done when:** an owner scans the QR, a real customer message comes in and gets a reply, reliably.
 
+### M6a — "Message Yourself" self-test slice (decision 0014) — ✅ QA-VERIFIED 2026-06-22
+- [x] **Self-chat → real bot:** a `self_test:true` webhook for a mapped + **published** business runs the FULL pipeline (`bot_runtime.run_turn`, `is_test=False`) and returns `{status:"ok", replies:[...]}` for the gateway to send back into the self-chat.
+- [x] **Real lead persists:** a full questionnaire over the webhook saves a **real** (`is_test=False`) lead that shows in `GET /api/leads` (test rows hidden), phone **encrypted at rest** + decrypted on read.
+- [x] **Booking link:** a booking turn's reply carries **this tenant's** real `/book/{slug}` link, never the demo placeholder.
+- [x] **Publish gate:** a **draft** bot stays silent (`{status:"not published", replies:[]}`) — proven with an active negative control (un-publish → silent → re-publish → answers).
+- [x] **Unknown account:** an unmapped `gateway_account_id` → `{status:"no business", replies:[]}`, 200 (no crash).
+- [x] **Loop-prevention** (gateway): sent-id Set (cap 200, oldest-evicted) skips the bot's own echo — logic-level check (real phone echo is manual).
+- [x] **Auth:** bad/missing `X-Gateway-Token` → 401; `/api/whatsapp/{status,link,qr}` → 401 without a session, tenant-scoped with one.
+- **Verify:** `tests/test_m6a.bat` → M6a narrated **10/10** (incl. the negative control) + strict `tests/test_m6a.py` **12/12**; the strict M3–M11.2 + M6a bundle **202 passed**; M2 **12/12** (no isolation regression).
+- **Integration fix made by QA:** `backend/app/api/me.py` imported `whatsapp_router` but never `include_router`'d it → the `/api/whatsapp/*` admin routes 404'd. Added the missing `api.include_router(whatsapp_router)`.
+- ⚠️ **MANUAL for Omer:** the real WhatsApp send/receive on a phone (scan QR → "Message Yourself" → bot replies). Also: recreate the long-running `backend` + `gateway` containers so they load the M6a `/api/whatsapp/*` routes + the gateway `/info` route (both currently 404 on the 18–19h-old running containers — no auto-reload).
+
 ## M7 — The dashboard 🖥️
 - [x] Leads dashboard + **funnel** (started → completed → abandoned) — verified; counts match DB truth, is_test excluded by default
 - [x] Leads table + the **abandoned-lead follow-up list** (phone + partial answers) — verified; decrypted phone/name/ALL answers, status (incl. synthetic 'open') + flow filters work

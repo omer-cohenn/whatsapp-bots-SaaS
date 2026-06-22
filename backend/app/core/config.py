@@ -92,6 +92,14 @@ class Settings(BaseSettings):
         default="http://localhost:5173", alias="PUBLIC_BASE_URL"
     )
 
+    # --- M6a WhatsApp gateway base URL (internal Docker network) -------------
+    # The admin status/QR endpoints proxy the Node gateway over the internal
+    # Docker network at this address. NON-secret (an internal hostname), so it
+    # gets a safe explicit default and is NOT in the fail-closed validator.
+    gateway_base_url: str = Field(
+        default="http://gateway:3000", alias="GATEWAY_BASE_URL"
+    )
+
     @field_validator(
         "gateway_api_token", "database_url", "redis_url",
         "pii_data_key", "wa_cred_kek", "phone_hmac_key",
