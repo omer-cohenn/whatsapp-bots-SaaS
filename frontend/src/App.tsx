@@ -1,6 +1,8 @@
-// App router. Public routes (/login, /terms, /privacy) are reachable without a
-// session; the protected dashboard at "/" is wrapped by <AuthGate>. The whole
-// tree sits inside <AuthProvider> so every route can read auth state.
+// App router. Public routes (/login, /terms, /privacy, /accessibility) are
+// reachable without a session. The root "/" renders <Home>, which shows the
+// public marketing landing page to visitors and the dashboard to logged-in
+// owners. The other dashboard routes stay wrapped by <AuthGate>. The whole tree
+// sits inside <AuthProvider> so every route can read auth state.
 
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './auth/AuthContext'
@@ -8,7 +10,8 @@ import AuthGate from './components/AuthGate'
 import LoginPage from './pages/LoginPage'
 import TermsPage from './pages/TermsPage'
 import PrivacyPage from './pages/PrivacyPage'
-import DashboardHome from './pages/DashboardHome'
+import AccessibilityPage from './pages/AccessibilityPage'
+import Home from './pages/Home'
 import BotBuilderPage from './pages/BotBuilderPage'
 import TryMePage from './pages/TryMePage'
 import LeadsPage from './pages/LeadsPage'
@@ -26,20 +29,16 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/accessibility" element={<AccessibilityPage />} />
 
           {/* Public booking (NO auth — tenant resolved server-side from the slug). */}
           <Route path="/book/:slug" element={<PublicBookingPage />} />
           <Route path="/book/:slug/manage/:token" element={<PublicManagePage />} />
 
+          {/* Root: public landing for visitors, dashboard for logged-in owners. */}
+          <Route path="/" element={<Home />} />
+
           {/* Protected */}
-          <Route
-            path="/"
-            element={
-              <AuthGate>
-                <DashboardHome />
-              </AuthGate>
-            }
-          />
           <Route
             path="/bot-builder"
             element={

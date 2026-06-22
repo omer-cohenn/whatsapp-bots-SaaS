@@ -12,6 +12,9 @@ export default function SiteFooter() {
         <Link to="/privacy" className="rounded text-slate-500 hover:text-brand hover:underline">
           מדיניות פרטיות
         </Link>
+        <Link to="/accessibility" className="rounded text-slate-500 hover:text-brand hover:underline">
+          הצהרת נגישות
+        </Link>
       </div>
     </footer>
   )
