@@ -8,7 +8,7 @@ day one.**
 
 ## Status: M0+M1 minimal scaffold ✅
 A bootable Vite + React 18 + Tailwind app — **RTL Hebrew** (`dir="rtl"`, `lang="he"`, Heebo font) — showing:
-- a placeholder hero (**"Bizz_up — בקרוב 🚀"**),
+- a placeholder hero (**"בוטיק — בקרוב 🚀"**),
 - a **"בריאות המערכת" (Stack health)** panel that calls the backend `GET /healthz` *through the Vite dev
   proxy* and shows ✅/❌/⚪ for backend + its Postgres/Redis checks.
 

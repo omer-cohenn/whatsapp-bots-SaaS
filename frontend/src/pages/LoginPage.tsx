@@ -33,7 +33,7 @@ export default function LoginPage() {
           <div className="mb-4 text-4xl" aria-hidden="true">
             🤖
           </div>
-          <h1 className="mb-2 text-2xl font-bold text-slate-900">Bizz_up</h1>
+          <h1 className="mb-2 text-2xl font-bold text-slate-900">בוטיק</h1>
           <p className="mb-8 text-sm leading-relaxed text-slate-600">
             התחברו כדי לנהל את בוט הוואטסאפ של העסק שלכם.
           </p>

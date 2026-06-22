@@ -21,7 +21,7 @@ export default function LegalPage({ title, children }: LegalPageProps) {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-3xl items-center px-6 py-4">
           <Link to="/" className="text-xl font-bold text-brand hover:underline">
-            Bizz_up
+            בוטיק
           </Link>
         </div>
       </header>

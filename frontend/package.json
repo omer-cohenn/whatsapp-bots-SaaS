@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Bizz_up owner/admin/public UI — RTL Hebrew (M0+M1 minimal scaffold).",
+  "description": "בוטיק owner/admin/public UI — RTL Hebrew (M0+M1 minimal scaffold).",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

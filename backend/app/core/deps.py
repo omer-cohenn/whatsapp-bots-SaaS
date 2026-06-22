@@ -17,6 +17,7 @@ from typing import Any
 
 from fastapi import Depends, HTTPException, Request, status
 
+from app.core.config import get_settings
 from app.services.auth import SESSION_COOKIE_NAME, load_session
 
 
@@ -52,3 +53,30 @@ async def current_business(
 ) -> str:
     """The VERIFIED business id for the request (safe for tenant_connection)."""
     return str(session["business_id"])
+
+
+async def current_admin(
+    session: dict[str, Any] = Depends(current_session),
+    user: dict[str, str] = Depends(current_user),
+) -> dict[str, str]:
+    """The platform-operator gate (M12) — 403 for anyone not on ADMIN_EMAILS.
+
+    This is the ONLY trust boundary protecting the cross-tenant admin SECURITY
+    DEFINER functions, so it must be airtight. It first requires a valid session
+    (via `current_session`), then checks the authenticated user's email against
+    `ADMIN_EMAILS` LIVE on every request (`get_settings().is_admin_email`) — we
+    NEVER store an admin flag in the session, so revoking an email takes effect
+    without a re-login.
+
+    Returns the admin's user dict (id = the verified Google sub from the session,
+    email) so endpoints have the real admin identity to feed `admin_set_subscription`
+    for the audit trail. NEVER trusts an admin claim from the client.
+    """
+    if not get_settings().is_admin_email(user.get("email")):
+        # Generic 403; do not reveal whether the email is "almost" an admin.
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="forbidden"
+        )
+    # `id` is the verified session user_id (the Google sub), which always exists
+    # in users(id) — the FK that admin_audit.admin_user_id points at.
+    return {"id": session["user_id"], "email": user["email"]}

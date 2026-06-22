@@ -87,7 +87,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           >
             <Icon name="message-circle" size={18} />
           </span>
-          <span className="text-base font-medium text-white">Bizz_up</span>
+          <span className="text-base font-medium text-white">בוטיק</span>
         </div>
 
         {NAV_ITEMS.map((item) => (

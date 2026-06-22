@@ -79,6 +79,15 @@ class Settings(BaseSettings):
         default=None, alias="GOOGLE_CALENDAR_REDIRECT_URI"
     )
 
+    # --- M12 back-office admin allow-list (NON-secret, fail-OPEN-on-empty) ----
+    # ADMIN_EMAILS is a comma-separated list of platform-operator emails that may
+    # reach /api/admin/*. It is NOT a secret and NOT fail-closed: an EMPTY value
+    # is allowed and simply means "no admins yet" (nobody can reach the panel).
+    # It is checked LIVE against the session email on every request (deps.py /
+    # me.py), so changing it takes effect without a re-login. We keep the RAW
+    # string here and expose a normalized lowercased set via `admin_emails`.
+    admin_emails_raw: str = Field(default="", alias="ADMIN_EMAILS")
+
     # --- Non-secret operational knobs (safe, explicit defaults allowed) ---
     app_env: str = Field(default="dev", alias="APP_ENV")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
@@ -132,6 +141,28 @@ class Settings(BaseSettings):
         if not value.strip():
             raise ValueError("GOOGLE_REDIRECT_URI must be set to a non-empty value (fail-closed)")
         return value
+
+    @property
+    def admin_emails(self) -> frozenset[str]:
+        """The platform-operator allow-list as a normalized (lowercased, trimmed) set.
+
+        Parsed from the comma-separated `ADMIN_EMAILS`. Blank entries are dropped.
+        An empty env → an empty set (no admins) — that is intentional, NOT a boot
+        failure. Returned as a frozenset so it's cheap + hashable to compare.
+        """
+        parts = (e.strip().lower() for e in self.admin_emails_raw.split(","))
+        return frozenset(e for e in parts if e)
+
+    def is_admin_email(self, email: str | None) -> bool:
+        """True iff `email` (case-insensitively) is on the admin allow-list.
+
+        Used live on every admin-gated request (deps.current_admin) and by
+        /api/me — never a stored session flag, so an ADMIN_EMAILS change takes
+        effect immediately without a re-login.
+        """
+        if not email:
+            return False
+        return email.strip().lower() in self.admin_emails
 
 
 @lru_cache(maxsize=1)

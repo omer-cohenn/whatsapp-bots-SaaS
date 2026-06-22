@@ -33,8 +33,11 @@ class MeConnection(BaseModel):
 
 
 class MeResponse(BaseModel):
-    """GET /api/me — who am I + which tenant + WhatsApp status."""
+    """GET /api/me — who am I + which tenant + WhatsApp status + admin flag."""
 
     user: MeUser
     business: MeBusiness
     connection: MeConnection
+    # M12: True iff this user's email is on ADMIN_EMAILS (computed LIVE per request,
+    # never a stored session flag). The frontend uses it to reveal the admin nav.
+    is_admin: bool = False
