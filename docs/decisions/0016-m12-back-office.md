@@ -99,3 +99,14 @@ Omer הוא בעל **הקניון** (Bizz_up). כל עסק = חנות עם מפ�
 
 ## Workflow
 data → backend → frontend (טורי) → QA ∥ security (מקבילי, קוראים בלבד) → אימות+תיקון ב‑main loop → checkpoint + עדכון STATUS/זיכרון.
+
+## תוצאה (2026-06-22)
+**נבנה, אומת, ומקומיט.** QA: `test_m12.py` 26/26 + narrated 13/13 + negative-control בידוד פעיל; חבילת strict
+מלאה **257 passed**; M2 12/12 (אפס רגרסיה). אבטחה: verdict **SHIP** (0 CRITICAL/HIGH). commits: חצי ה‑backend/data
+ב‑`4633c9c` (נדחף ל‑origin, מעורבב עם rebrand דף הנחיתה 0015), ההשלמה ב‑`e304f5f` (לוקאלי, טרם נדחף).
+
+### Security follow-ups (לא חוסמים — לשלב ההקשחה ל‑production / M6b/AWS)
+- **MED-1:** `admin_set_subscription` סומך על שער ה‑app בלבד לזהות ה‑admin (כמו `provision_owner`). לשמור שהיא נקראת **רק** מ‑`api/admin.py`; בעתיד לשקול קשירת זהות ה‑admin בצד‑DB (session GUC) במקום ארגומנט.
+- **LOW-1:** `business_id` ב‑path מאומת כמחרוזת ≤64; ערך לא‑UUID נדחה רק ב‑cast של Postgres (→404). לשקול אימות UUID בקצה (שים לב: הטסט הנוכחי מצפה ל‑404 על id פגום — שינוי ל‑422 ידרוש עדכון טסט).
+- **LOW-2:** ה‑JSON log formatter מקדם כל שדה `extra`; אין דליפה היום, אבל כדאי allow-list אמיתי לפני שיצטברו שדות.
+- **LOW-3:** דליי קוסמטי ב‑`admin_overview` — דליי active נספר לפי `businesses.is_active`, suspended/cancelled לפי שורות subscription; עקבי כל עוד `admin_set_subscription` הוא הכותב היחיד.
