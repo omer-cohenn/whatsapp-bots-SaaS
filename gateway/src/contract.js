@@ -8,11 +8,13 @@
  * the backend + the shared spec):
  *   { gateway_account_id, from, push_name, message_id, timestamp, type, text, raw }
  *
- * M6a (decision 0014) adds two OPTIONAL fields for the "Message Yourself" flow:
- *   self_test: bool        -> true ONLY for self-chat messages
- *   conversation_id: string -> the self-chat jid (stable per chat)
- * Non-self chats are forwarded EXACTLY as before (these fields are omitted),
- * so the existing behavior is unchanged.
+ * M6a (decision 0014) adds:
+ *   conversation_id: string -> ALWAYS sent (the chat jid, stable per chat) so
+ *                              both self-chat AND external test-number inbound
+ *                              carry a stable conversation key for run_turn.
+ *   self_test: bool        -> attached ONLY for the owner's self-chat messages,
+ *                              so the backend keeps the owner-always-allowed gate
+ *                              distinct from the external-number allowlist gate.
  */
 
 function extractText(message) {
@@ -63,11 +65,15 @@ function buildWebhookPayload(msg, gatewayAccountId, opts = {}) {
     raw: msg,
   };
 
-  // M6a self-test fields: only attached for the "Message Yourself" path so the
-  // non-self contract stays byte-for-byte identical to before.
+  // conversation_id is ALWAYS sent (a stable per-chat key) so non-self inbound
+  // also carries a conversation key for run_turn. Falls back to the remoteJid.
+  payload.conversation_id = opts.conversationId || msg.key?.remoteJid || '';
+
+  // self_test marks ONLY the owner's "Message Yourself" path. It is attached
+  // exclusively for the self-chat so the backend can keep the owner-always-allowed
+  // gate distinct from the allowlist gate used for external test numbers.
   if (opts.selfTest) {
     payload.self_test = true;
-    payload.conversation_id = opts.conversationId || msg.key?.remoteJid || '';
   }
 
   return payload;

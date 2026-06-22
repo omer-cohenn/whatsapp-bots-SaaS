@@ -229,9 +229,24 @@ async function handleInbound(msg) {
       return;
     }
 
-    // NORMAL chat: forward exactly as before (no self_test field).
-    const payload = buildWebhookPayload(msg, config.gatewayAccountId);
-    forwardToBackend(payload);
+    // NORMAL chat (M6a allowlist): a non-self inbound from someone else. If there
+    // is extractable text, run it through the same forward->reply core as the
+    // self-chat — the ONLY difference is no self_test field, so the BACKEND decides
+    // who is actually allowed (it returns replies:[] for anyone not on the owner's
+    // test-number allowlist / unpublished bot, and sendReplies then no-ops).
+    const text = extractText(msg.message || {});
+    if (!text || !text.trim()) return; // empty/blank -> skip (same as self-chat)
+
+    // No selfTest -> payload carries conversation_id but NOT self_test.
+    const payload = buildWebhookPayload(msg, config.gatewayAccountId, {
+      conversationId: remoteJid,
+    });
+    const response = await forwardToBackend(payload);
+    // replies=[] when not allowed / not published / silent — sendReplies no-ops.
+    // Same loop-prevention as self-chat: each sent id is remembered so its fromMe
+    // echo is skipped at the top of handleInbound.
+    await sendReplies(remoteJid, response?.replies);
+
     // DEV-ONLY: stash the content so GET /inbox can show it.
     rememberMessage({
       from: payload.from,

@@ -1,12 +1,16 @@
-"""Response models for the WhatsApp admin API (M6a, decision 0014).
+"""Response models for the WhatsApp admin API (M6a / M6a.1, decision 0014).
 
 The frozen owner-facing contract:
 
-  GET  /api/whatsapp/status -> WhatsAppStatusResponse
-  POST /api/whatsapp/link   -> WhatsAppLinkResponse (same shape — the status after linking)
+  GET  /api/whatsapp/status       -> WhatsAppStatusResponse
+  POST /api/whatsapp/link         -> WhatsAppLinkResponse (same shape — status after linking)
+  GET  /api/whatsapp/test-numbers -> TestNumbersResponse
+  PUT  /api/whatsapp/test-numbers -> TestNumbersRequest (body) -> TestNumbersResponse
 
 `phone` is the owner's OWN linked number; it is the only PII here and is returned
-ONLY to the authenticated owner (their own number) — never logged.
+ONLY to the authenticated owner (their own number) — never logged. The
+test-numbers `phone`/`label` are likewise PII (the owner's own allow-list) and
+are never logged.
 """
 
 from __future__ import annotations
@@ -45,3 +49,36 @@ class WhatsAppQrResponse(BaseModel):
 
     status: str = Field(..., description="Gateway status for the QR flow")
     qr_data_url: str | None = Field(default=None, description="PNG data URL of the QR, or null")
+
+
+# --- M6a.1: owner's external test allow-list -------------------------------- --
+
+class TestNumber(BaseModel):
+    """One entry on the owner's external test allow-list.
+
+      * phone — the test number (digits, with/without '+'; normalized server-side
+                so e.g. '054-740-8309' and '+972547408309' compare equal). PII.
+      * label — an optional friendly name for the owner's own reference. PII.
+    """
+
+    phone: str = Field(..., description="Test phone number (normalized server-side); PII — never logged")
+    label: str | None = Field(default=None, description="Optional friendly name; PII — never logged")
+
+
+class TestNumbersResponse(BaseModel):
+    """The owner's saved test allow-list (decrypted, owner-only)."""
+
+    numbers: list[TestNumber] = Field(default_factory=list, description="The saved test numbers")
+
+
+class TestNumbersRequest(BaseModel):
+    """The owner's desired test allow-list (the full set to save).
+
+    Capped at 5 entries (the contract). Each phone is normalized + validated
+    server-side; blanks/dupes are dropped before save. A >5 list is rejected
+    (422), not silently truncated.
+    """
+
+    numbers: list[TestNumber] = Field(
+        default_factory=list, max_length=5, description="Up to 5 test numbers to save"
+    )

@@ -101,6 +101,19 @@ You can build **M0–M7 entirely on your laptop first**, then do **M8 (AWS)** wh
 - **Integration fix made by QA:** `backend/app/api/me.py` imported `whatsapp_router` but never `include_router`'d it → the `/api/whatsapp/*` admin routes 404'd. Added the missing `api.include_router(whatsapp_router)`.
 - ⚠️ **MANUAL for Omer:** the real WhatsApp send/receive on a phone (scan QR → "Message Yourself" → bot replies). Also: recreate the long-running `backend` + `gateway` containers so they load the M6a `/api/whatsapp/*` routes + the gateway `/info` route (both currently 404 on the 18–19h-old running containers — no auto-reload).
 
+### M6a.1 — external "test numbers" allow-list (decision 0014) — ✅ QA-VERIFIED 2026-06-22
+- [x] **Allow-listed → real bot:** a `self_test:false` inbound from a number on the business's allow-list, for a **published** bot, runs the FULL pipeline (`run_turn`, `is_test=False`) → `{status:"ok", replies:[...]}`.
+- [x] **Real lead persists:** a full questionnaire from an allow-listed outside number saves a **real** (`is_test=False`) lead that shows in `GET /api/leads` (test rows hidden), phone **encrypted at rest** + decrypted on read.
+- [x] **Non-allow-listed → silent:** a sender not on the list → `{status:"not allowed", replies:[]}` (the gateway sends nothing).
+- [x] **Publish gate still wins:** an allow-listed number on a **draft** bot → `{status:"not published", replies:[]}`; a blank/non-text inbound → `{status:"received", replies:[]}` (ack-only, no run).
+- [x] **normalize() match:** a stored Israeli-local `0547408309` matches an inbound `+972547408309` (same `normalize()` on both); blanks/dupes dropped on save.
+- [x] **Admin API:** `GET/PUT /api/whatsapp/test-numbers` session-gated (401 without one) + tenant-scoped (A never sees B's list); ≤5 cap → **422**; labels round-trip; phone + label stored as **ciphertext** (asserted on the raw `bytea` columns).
+- [x] **Auth:** bad/missing `X-Gateway-Token` on the inbound path → 401 before any business work.
+- [x] **No regression:** the self-chat (M6a) still returns `ok`+replies (owner always allowed); the shared gateway loop-guard (cap 200, oldest-evicted) holds for the normal-chat branch too.
+- **Verify:** `tests/test_m6a1.bat` → M6a.1 narrated **11/11** (incl. an active negative control: drop a number → ignored → restore → answers) + strict `tests/test_m6a1.py` **16/16**; the strict M3–M11.2 + M6a + M6a.1 bundle **218 passed**; M2 **12/12** (no isolation regression).
+- **No QA source fix needed:** the frozen M6a.1 contract was already correctly implemented across data (migration 0014), backend (service + webhook refactor + admin routes), and gateway (always-on `conversation_id`, normal-chat forward+reply).
+- ⚠️ **MANUAL for Omer:** the real phone send/receive from a SECOND phone you own — add it to "מספרים לבדיקה" in the dashboard, message your linked WhatsApp from it → the bot replies; a phone NOT on the list gets no reply.
+
 ## M7 — The dashboard 🖥️
 - [x] Leads dashboard + **funnel** (started → completed → abandoned) — verified; counts match DB truth, is_test excluded by default
 - [x] Leads table + the **abandoned-lead follow-up list** (phone + partial answers) — verified; decrypted phone/name/ALL answers, status (incl. synthetic 'open') + flow filters work

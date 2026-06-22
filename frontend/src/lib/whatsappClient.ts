@@ -64,3 +64,40 @@ export function link(): Promise<WhatsAppStatus> {
 export function getQr(): Promise<WhatsAppQr> {
   return api.get<WhatsAppQr>('/api/whatsapp/qr')
 }
+
+// --- test numbers (M6a.1 allowlist) -----------------------------------------
+//
+// The owner may register up to 5 phone numbers (each with an optional name).
+// Only those numbers — plus the owner's own self-chat — receive bot replies,
+// and only while the bot is published. Everyone else is silently ignored.
+// The tenant is resolved server-side from the session, as everywhere else.
+
+/** One allowed test number: the phone digits + an optional friendly name. */
+export type TestNumber = {
+  /** Phone digits. Stored normalised server-side (international, no '+'). */
+  phone: string
+  /** Optional name for the owner's own reference. null/empty when unset. */
+  label: string | null
+}
+
+/** Shape returned by GET/PUT /api/whatsapp/test-numbers. */
+export type TestNumbersResponse = {
+  numbers: TestNumber[]
+}
+
+/**
+ * GET /api/whatsapp/test-numbers — the business's current allowlist (decrypted,
+ * RLS-scoped server-side). Returns at most 5 numbers.
+ */
+export function getTestNumbers(): Promise<TestNumbersResponse> {
+  return api.get<TestNumbersResponse>('/api/whatsapp/test-numbers')
+}
+
+/**
+ * PUT /api/whatsapp/test-numbers — replace the whole allowlist in one call.
+ * The server validates (≤5, non-empty phone after normalisation), normalises,
+ * encrypts, and returns the saved list. Throws ApiError(422) on bad input.
+ */
+export function setTestNumbers(numbers: TestNumber[]): Promise<TestNumbersResponse> {
+  return api.put<TestNumbersResponse>('/api/whatsapp/test-numbers', { numbers })
+}

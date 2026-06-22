@@ -8,9 +8,14 @@ Flow:
   4. Branch on the message kind:
        * SELF-TEST (`self_test=True`, decision 0014 / M6a): the owner messaged
          their OWN number. Run it through the REAL bot pipeline and reply in the
-         same self-chat. See `_handle_self_test` below.
-       * Otherwise (real customer inbound): ack-only for now — M6b wires the live
-         customer path. We still log the redacted receipt.
+         same self-chat. The owner is ALWAYS allowed.
+       * ALLOW-LIST INBOUND (`self_test=False`, M6a.1): a message from any other
+         phone. We resolve the business server-side, then run the REAL bot ONLY
+         when the sender is on that business's test allow-list. Everyone else is
+         ignored (silent, replies=[]). Blank/non-text messages are ack-only.
+     Both run paths share ONE core (`_run_bot_turn`): resolve → published →
+     run_turn. They differ ONLY in the allow gate (self-test: always allowed;
+     inbound: must be on the allow-list).
 
 The response contract (BOTH branches return this shape):
   { "status": str, "replies": [str, ...] }
@@ -35,6 +40,7 @@ from app.core.logging import get_logger
 from app.models.webhook import WhatsAppWebhook
 from app.services import bot_runtime, bot_settings as bot_settings_service
 from app.services import whatsapp as whatsapp_service
+from app.services import whatsapp_test_numbers as test_numbers_service
 
 router = APIRouter(tags=["webhook"])
 log = get_logger("app.webhook")
@@ -78,18 +84,21 @@ async def whatsapp_webhook(
         },
     )
 
-    # 4) Self-test path (M6a): the owner messaged their own number. Run the REAL
-    #    bot and reply in the same self-chat. Anything else stays ack-only (M6b).
+    # 4) Self-test path (M6a): the owner messaged their own number. The owner is
+    #    ALWAYS allowed — run the REAL bot and reply in the same self-chat.
     if msg.self_test:
         return await _handle_self_test(request, msg)
 
-    # 4b) Real customer inbound — ack-only for now (M6b wires the live path).
-    #     Stable response shape: a status + an (empty) replies list.
-    return {"status": "received", "replies": []}
+    # 4b) Allow-list inbound (M6a.1): a message from any OTHER phone. Run the REAL
+    #     bot ONLY when the sender is on the resolved business's test allow-list;
+    #     everyone else is silent. Blank/non-text messages stay ack-only.
+    return await _handle_allowlist_inbound(request, msg)
 
 
-async def _handle_self_test(request: Request, msg: WhatsAppWebhook) -> dict[str, Any]:
-    """Run a self-chat message through the real bot pipeline and return replies.
+async def _run_bot_turn(
+    request: Request, msg: WhatsAppWebhook, *, log_label: str
+) -> dict[str, Any]:
+    """Shared core for both run paths: resolve → published → run_turn.
 
     Steps (tenant id is resolved SERVER-SIDE, never from the body):
       1. Resolve the gateway account → business_id via the `resolve_wa_account`
@@ -101,8 +110,10 @@ async def _handle_self_test(request: Request, msg: WhatsAppWebhook) -> dict[str,
          REAL data. `run_turn` opens its own `tenant_connection(business_id)` so
          every write (leads + funnel) is RLS-scoped to this tenant.
 
-    Returns the frozen webhook shape { status, replies }. NEVER logs the phone,
-    text, replies, or token.
+    The CALLER is responsible for the allow gate BEFORE invoking this (self-test:
+    always allowed; inbound: must be on the allow-list). Returns the frozen
+    webhook shape { status, replies }. NEVER logs the phone, text, replies, or
+    token — only the redacted `log_label` + a reply count.
     """
     pool = request.app.state.pg_pool
     redis = request.app.state.redis
@@ -114,16 +125,16 @@ async def _handle_self_test(request: Request, msg: WhatsAppWebhook) -> dict[str,
     )
     if business_id is None:
         # No business has linked this gateway account → the bot stays silent.
-        log.info("self-test: no business for account")
+        log.info("%s: no business for account", log_label)
         return {"status": "no business", "replies": []}
 
     # 2) The live bot answers ONLY when the bot is published (gate BEFORE run_turn).
     settings = await bot_settings_service.get_settings(pool, business_id)
     if not settings.get("is_published"):
-        log.info("self-test: bot not published")
+        log.info("%s: bot not published", log_label)
         return {"status": "not published", "replies": []}
 
-    # 3) The conversation key is the stable self-chat id. Fall back to the gateway
+    # 3) The conversation key is the stable chat id. Fall back to the gateway
     #    account id if the gateway didn't send one, so a turn still has a stable
     #    key (scoped under business_id inside run_turn).
     conversation_id = msg.conversation_id or msg.gateway_account_id
@@ -139,7 +150,55 @@ async def _handle_self_test(request: Request, msg: WhatsAppWebhook) -> dict[str,
         is_test=False,
     )
 
-    # Return the replies for the gateway to send back into the self-chat. Never
-    # log the reply text (PII / content) — only that we handled the turn.
-    log.info("self-test handled", extra={"reply_count": len(result["replies"])})
+    # Return the replies for the gateway to send back. Never log the reply text
+    # (PII / content) — only that we handled the turn.
+    log.info("%s handled", log_label, extra={"reply_count": len(result["replies"])})
     return {"status": "ok", "replies": result["replies"]}
+
+
+async def _handle_self_test(request: Request, msg: WhatsAppWebhook) -> dict[str, Any]:
+    """Self-chat path: the owner is ALWAYS allowed — run the shared bot core."""
+    return await _run_bot_turn(request, msg, log_label="self-test")
+
+
+async def _handle_allowlist_inbound(
+    request: Request, msg: WhatsAppWebhook
+) -> dict[str, Any]:
+    """Inbound from another phone: run the bot ONLY if the sender is allow-listed.
+
+    Order matters and mirrors the contract:
+      * Blank/non-text inbound → ack-only ("received", replies=[]); we don't even
+        resolve a business for an empty message.
+      * Resolve the business server-side (resolve_wa_account). No mapping →
+        "no business", silent.
+      * Check the allow-list INSIDE this tenant (RLS-scoped). Not on the list →
+        "not allowed", silent. The sender phone is NEVER logged.
+      * Allowed → hand to the shared core (published gate + run_turn).
+    """
+    # Blank/whitespace-only or non-text messages get a stable ack, no bot run.
+    if not (msg.text or "").strip():
+        return {"status": "received", "replies": []}
+
+    pool = request.app.state.pg_pool
+
+    # Resolve the business server-side BEFORE the allow-list check (the allow-list
+    # is read inside this tenant's RLS scope).
+    business_id = await whatsapp_service.get_connection_by_account(
+        pool, msg.gateway_account_id
+    )
+    if business_id is None:
+        log.info("inbound: no business for account")
+        return {"status": "no business", "replies": []}
+
+    # The allow gate: only senders on THIS business's test allow-list are run.
+    # `from_` is the sender phone (PII) — passed to the service, NEVER logged.
+    allowed = await test_numbers_service.is_number_allowed(
+        pool, business_id, msg.from_
+    )
+    if not allowed:
+        log.info("inbound: sender not on allow-list")
+        return {"status": "not allowed", "replies": []}
+
+    # Allowed → shared core (re-resolves the business; cheap definer lookup, keeps
+    # one code path for resolve → published → run_turn).
+    return await _run_bot_turn(request, msg, log_label="inbound")

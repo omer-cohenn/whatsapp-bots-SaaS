@@ -6,16 +6,20 @@ business (`current_business`) — never a client value.
 
 Routes (frozen contract):
 
-  GET  /api/whatsapp/status -> { linked, connected, phone, gateway_status }
-  POST /api/whatsapp/link   -> { linked, connected, phone, gateway_status }
-  GET  /api/whatsapp/qr     -> { status, qr_data_url }
+  GET  /api/whatsapp/status       -> { linked, connected, phone, gateway_status }
+  POST /api/whatsapp/link         -> { linked, connected, phone, gateway_status }
+  GET  /api/whatsapp/qr           -> { status, qr_data_url }
+  GET  /api/whatsapp/test-numbers -> { numbers: [{ phone, label }] }
+  PUT  /api/whatsapp/test-numbers -> { numbers: [{ phone, label }] }
 
 `status` + `qr` proxy the Node gateway over the internal Docker network
 (GATEWAY_BASE_URL); `link` reads the gateway's account id + own number from
 /info, then records the business_id ↔ account mapping via the whatsapp service
-(phone encrypted at rest). The owner's own phone is the only PII and is NEVER
-logged. Gateway failures degrade gracefully to a "disconnected"/"unknown" view
-rather than 500ing the owner's dashboard.
+(phone encrypted at rest). `test-numbers` manages the owner's external test
+allow-list (up to 5 numbers, each encrypted at rest). The owner's own phone and
+the test numbers/labels are the only PII and are NEVER logged. Gateway failures
+degrade gracefully to a "disconnected"/"unknown" view rather than 500ing the
+owner's dashboard.
 """
 
 from __future__ import annotations
@@ -23,18 +27,22 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status as http_status
 
 from app.core.config import get_settings
 from app.core.deps import current_business
 from app.core.logging import get_logger
 from app.db.session import tenant_connection
 from app.models.whatsapp import (
+    TestNumber,
+    TestNumbersRequest,
+    TestNumbersResponse,
     WhatsAppLinkResponse,
     WhatsAppQrResponse,
     WhatsAppStatusResponse,
 )
 from app.services import whatsapp as whatsapp_service
+from app.services import whatsapp_test_numbers as test_numbers_service
 
 router = APIRouter(prefix="/whatsapp", tags=["whatsapp"])
 log = get_logger("app.whatsapp")
@@ -164,4 +172,54 @@ async def whatsapp_qr(
     return WhatsAppQrResponse(
         status=data.get("status") or "unknown",
         qr_data_url=data.get("qr_data_url"),
+    )
+
+
+# --- M6a.1: owner's external test allow-list -------------------------------- --
+
+@router.get("/test-numbers", response_model=TestNumbersResponse)
+async def get_test_numbers(
+    request: Request,
+    business_id: str = Depends(current_business),
+) -> TestNumbersResponse:
+    """Return this tenant's test allow-list (decrypted, owner-only).
+
+    The tenant is always the verified session business; the read is RLS-scoped
+    inside the service. Phone numbers and labels are never logged.
+    """
+    numbers = await test_numbers_service.get_test_numbers(
+        request.app.state.pg_pool, business_id
+    )
+    return TestNumbersResponse(
+        numbers=[TestNumber(phone=n["phone"], label=n["label"]) for n in numbers]
+    )
+
+
+@router.put("/test-numbers", response_model=TestNumbersResponse)
+async def put_test_numbers(
+    request: Request,
+    body: TestNumbersRequest,
+    business_id: str = Depends(current_business),
+) -> TestNumbersResponse:
+    """Replace this tenant's whole test allow-list with `body.numbers`.
+
+    The pydantic model already caps the list at 5 (a >5 body → 422 before we get
+    here). The service normalizes each phone, drops blanks/dupes, and rejects a
+    too-long cleaned set (ValueError → 422 here). Phone numbers and labels are
+    encrypted at rest and never logged.
+    """
+    items = [{"phone": n.phone, "label": n.label} for n in body.numbers]
+    try:
+        saved = await test_numbers_service.set_test_numbers(
+            request.app.state.pg_pool, business_id, items
+        )
+    except ValueError:
+        # Too many numbers after cleaning. Generic message — never echo input.
+        raise HTTPException(
+            status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="at most 5 test numbers are allowed",
+        )
+
+    return TestNumbersResponse(
+        numbers=[TestNumber(phone=n["phone"], label=n["label"]) for n in saved]
     )
