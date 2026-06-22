@@ -59,19 +59,31 @@ const state = {
 // can recognize the owner's self-chat (the chat with themselves). Null until
 // connected. Used by isSelfChat(); never logged (it embeds the phone number).
 let ownJid = null;
+// Modern WhatsApp also addresses our own identity by a "LID" (@lid — a hidden
+// id distinct from the phone number). The self-chat live message arrives with
+// remoteJid = our own @lid, NOT our @s.whatsapp.net jid, so we must recognize
+// BOTH forms. Computed on connect alongside ownJid; null until connected.
+let ownLid = null;
+
+function normalizeJidSafe(jid) {
+  if (!jid) return null;
+  try {
+    return jidNormalizedUser(jid);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The self-chat is the conversation a user has with their OWN number. A message
- * is a self-chat message when its remoteJid normalizes to our own jid.
- * Returns false until we are connected (ownJid known).
+ * is a self-chat message when its remoteJid normalizes to our own identity — in
+ * EITHER addressing form: the phone-number jid (@s.whatsapp.net) or the modern
+ * hidden id (@lid). Returns false until we are connected (own ids known).
  */
 function isSelfChat(remoteJid) {
-  if (!ownJid || !remoteJid) return false;
-  try {
-    return jidNormalizedUser(remoteJid) === ownJid;
-  } catch {
-    return false;
-  }
+  const n = normalizeJidSafe(remoteJid);
+  if (!n) return false;
+  return (ownJid && n === ownJid) || (ownLid && n === ownLid);
 }
 
 // LOOP PREVENTION: ids of messages WE (the gateway) sent. In the self-chat,
@@ -287,18 +299,24 @@ async function startSocket() {
         state.qrDataUrl = null; // drop the QR once linked
         // Compute the linked account's OWN jid once, now that sock.user exists.
         // Used to detect self-chat messages. Never logged (embeds the phone).
-        try {
-          ownJid = sock?.user?.id ? jidNormalizedUser(sock.user.id) : null;
-        } catch {
-          ownJid = null;
-        }
-        log.info('WhatsApp connection open (linked)');
+        ownJid = normalizeJidSafe(sock?.user?.id);
+        ownLid = normalizeJidSafe(sock?.user?.lid);
+        // Safe: log only WHICH addressing forms we resolved (domains/booleans),
+        // never the number/lid itself (PII / identity).
+        log.info(
+          {
+            hasOwnJid: Boolean(ownJid),
+            hasOwnLid: Boolean(ownLid),
+          },
+          'WhatsApp connection open (linked)'
+        );
       }
 
       if (connection === 'close') {
         state.status = 'disconnected';
         state.qrDataUrl = null;
         ownJid = null; // identity is no longer valid until we reconnect
+        ownLid = null;
         const statusCode =
           lastDisconnect?.error instanceof Boom
             ? lastDisconnect.error.output?.statusCode
@@ -375,6 +393,22 @@ app.get('/info', (_req, res) => {
     account_id: config.gatewayAccountId,
     status: state.status,
     phone,
+  });
+});
+
+/*
+ * GET /qr.json — INTERNAL (backend -> gateway, Docker network). M6a contract:
+ *   { status: <state.status>, qr_data_url: <data: URL | null> }
+ * The backend's gated /api/whatsapp/qr proxies THIS (JSON) so the owner's
+ * dashboard can render the QR as an image. The plain /qr route below returns
+ * HTML (a dev convenience), which is why a separate JSON route is needed.
+ * qr_data_url is null once linked (no QR needed) or before the QR is ready.
+ */
+app.get('/qr.json', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.status(200).json({
+    status: state.status,
+    qr_data_url: state.qrDataUrl,
   });
 });
 

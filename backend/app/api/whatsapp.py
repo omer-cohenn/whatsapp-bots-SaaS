@@ -152,7 +152,9 @@ async def whatsapp_qr(
     base = get_settings().gateway_base_url.rstrip("/")
     try:
         async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-            resp = await client.get(f"{base}/qr")
+            # /qr.json returns JSON {status, qr_data_url}; the plain /qr route is
+            # an HTML dev page (not parseable here).
+            resp = await client.get(f"{base}/qr.json")
             resp.raise_for_status()
             data = resp.json()
     except Exception:  # noqa: BLE001 — degrade gracefully; never leak details.

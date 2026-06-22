@@ -2,7 +2,8 @@
 
 # Spike Baileys auth state — MUST never be committed (session creds).
 # Real design encrypts these in the DB; on disk is dev-spike only (M6).
-auth/
+# `auth*/` also covers backup copies (e.g. auth_corrupt_bak/ from a re-link).
+auth*/
 credentials/
 
 # deps + local env
