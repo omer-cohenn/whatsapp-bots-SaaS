@@ -165,10 +165,17 @@ class ConversationReplyRequest(BaseModel):
 
 
 class ConversationReplyResponse(BaseModel):
-    """Acknowledge a queued reply."""
+    """Acknowledge a queued reply.
+
+    `delivered` (M6a.2) is the best-effort WhatsApp send result on TOP of the
+    queue: the reply is ALWAYS queued (`queued=True`); `delivered` is True only
+    when the gateway confirmed it actually sent the message. Backward-compatible:
+    defaults to False, so older clients that ignore it still see `queued`.
+    """
 
     conversation_id: str
     queued: bool
+    delivered: bool = False
 
 
 # --- PUT /api/bot/publish ----------------------------------------------------

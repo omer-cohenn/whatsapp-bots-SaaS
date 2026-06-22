@@ -56,6 +56,7 @@ from app.services import (
     bot_settings as bot_settings_service,
     conversation_state,
     leads as leads_service,
+    whatsapp as whatsapp_service,
 )
 
 router = APIRouter(tags=["dashboard"])
@@ -287,15 +288,24 @@ async def reply_to_conversation(
     conversation_id: str = Path(..., min_length=1, max_length=_CONV_ID_MAX),
     business_id: str = Depends(current_business),
 ) -> ConversationReplyResponse:
-    """Queue the owner's manual reply to a human-handled chat (sent for real in M6).
+    """Queue the owner's manual reply AND send it to the customer on WhatsApp (M6a.2).
 
-    The reply is appended to the live conversation record (preview + outbound
-    queue) tenant-scoped. We never log the reply text.
+    The reply is FIRST appended to the live conversation record (preview +
+    transcript + outbound queue) tenant-scoped, so it is never lost. Then we
+    best-effort send it to WhatsApp via the gateway: `conversation_id` IS the
+    customer's WhatsApp jid, so it doubles as the send `to`. The send is on TOP of
+    the queue — if it fails we still return `queued=True` with `delivered=False`,
+    never erroring the owner's request. We never log the reply text.
     """
     await conversation_state.append_reply(
         request.app.state.redis, business_id, conversation_id, body.text
     )
-    return ConversationReplyResponse(conversation_id=conversation_id, queued=True)
+    # Best-effort delivery on top of the queue: the conversation id is the
+    # customer's WhatsApp jid, so it doubles as the send target. Never logs text.
+    delivered = await whatsapp_service.send_outbound(conversation_id, body.text)
+    return ConversationReplyResponse(
+        conversation_id=conversation_id, queued=True, delivered=delivered
+    )
 
 
 @router.put("/bot/publish", response_model=BotPublishResponse)

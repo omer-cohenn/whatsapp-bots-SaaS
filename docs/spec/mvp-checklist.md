@@ -114,6 +114,17 @@ You can build **M0–M7 entirely on your laptop first**, then do **M8 (AWS)** wh
 - **No QA source fix needed:** the frozen M6a.1 contract was already correctly implemented across data (migration 0014), backend (service + webhook refactor + admin routes), and gateway (always-on `conversation_id`, normal-chat forward+reply).
 - ⚠️ **MANUAL for Omer:** the real phone send/receive from a SECOND phone you own — add it to "מספרים לבדיקה" in the dashboard, message your linked WhatsApp from it → the bot replies; a phone NOT on the list gets no reply.
 
+### M6a.2 — owner manual reply → WhatsApp — ✅ QA-VERIFIED 2026-06-22
+- [x] **The reply is sent, not just queued:** `POST /api/conversations/{id}/reply` still queues to the Redis outbox + transcript first (`append_reply` unchanged, never lost), then **best-effort sends** to WhatsApp via the gateway. The `conversation_id` IS the customer's WhatsApp jid → it doubles as the send `to`.
+- [x] **Gateway door `POST /send-bot`** (internal, Docker network): `X-Gateway-Token` constant-time check → **401** before any work; missing/blank `to`/`text` → **400**; not connected → **503**; connected → **200 `{ok:true, message_id}`**, sent id recorded in the loop guard (`rememberSentId`) so the `fromMe` echo never re-triggers the bot (`@s.whatsapp.net` + `@lid` self-chat). SAFE logging only (`{textLen, hasMessageId}`).
+- [x] **Backend `send_outbound(to, text) -> bool`:** True **only** on a 2xx + `{"ok":true}`; graceful **False** on any failure (gateway down/timeout/non-2xx/bad shape) — never errors the owner's request; **never logs the jid/text/token**.
+- [x] **Response shape:** `ConversationReplyResponse` gains `delivered: bool = False` (backward-compatible); route returns `{conversation_id, queued:true, delivered:bool}`. `delivered=false` still keeps `queued=true` (reply never lost when WhatsApp is offline).
+- [x] **Auth:** the reply route stays behind the deny-by-default `/api` gate (no session → **401**).
+- [x] **No regression:** M8/M9/M10 conversation suites + the full strict bundle still green.
+- **Verify:** `tests/test_m6a2.bat` → M6a.2 narrated **10/10** (incl. a **LIVE** gateway send: a real WhatsApp message to the owner's OWN number/self-chat → 200 + message_id, PII-safe gateway log) + strict `tests/test_m6a2.py` **13/13** (live 200 send actually ran — gateway connected); the strict M3–M11.2 + M6a + M6a.1 + M6a.2 bundle **231 passed**; M2 **12/12** (no isolation regression).
+- **No QA source fix needed:** the frozen M6a.2 contract was already correctly implemented across backend (`whatsapp.send_outbound`, `dashboard.reply_to_conversation`, `ConversationReplyResponse`) and gateway (`/send-bot`).
+- ⚠️ **MANUAL for Omer:** from a phone, message your linked WhatsApp so a chat appears in the dashboard → set it to "human" → type a reply → it arrives on the customer's WhatsApp.
+
 ## M7 — The dashboard 🖥️
 - [x] Leads dashboard + **funnel** (started → completed → abandoned) — verified; counts match DB truth, is_test excluded by default
 - [x] Leads table + the **abandoned-lead follow-up list** (phone + partial answers) — verified; decrypted phone/name/ALL answers, status (incl. synthetic 'open') + flow filters work

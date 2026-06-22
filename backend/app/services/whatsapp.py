@@ -24,9 +24,19 @@ Two responsibilities, kept tiny and focused:
 from __future__ import annotations
 
 import asyncpg
+import httpx
 
 from app.core import crypto
+from app.core.config import get_settings
+from app.core.logging import get_logger
 from app.db.session import tenant_connection
+
+log = get_logger("app.services.whatsapp")
+
+# Internal backend -> gateway send call. Same Docker network, but the gateway
+# does a real WhatsApp send, so we allow a touch more than the status/QR proxy
+# (which uses 5s). Fail (return False) rather than hang the owner's request.
+_SEND_TIMEOUT = 8.0
 
 
 async def get_connection_by_account(
@@ -100,3 +110,39 @@ async def upsert_connection(
         "phone": phone,
         "status": status,
     }
+
+
+async def send_outbound(to: str, text: str) -> bool:
+    """Send the owner's manual reply to the customer over WhatsApp (M6a.2).
+
+    Posts to the gateway's internal `/send-bot` endpoint over the Docker network,
+    authenticated with the shared X-Gateway-Token header (the same constant the
+    inbound webhook checks). `to` is the customer's WhatsApp jid — which IS the
+    conversation_id (e.g. '<num>@s.whatsapp.net', or the owner's '@lid' for the
+    self-chat) — and `text` is the reply body.
+
+    Best-effort by design: the reply is ALWAYS already queued in the Redis outbox
+    by the caller; this send is the on-top delivery attempt. Returns True ONLY on
+    a 2xx response whose JSON says {"ok": true}; on ANY failure (gateway down,
+    timeout, non-2xx, bad shape) we return False so the caller can report
+    "queued but not delivered" instead of erroring the owner's request.
+
+    SAFE logging only: we NEVER log `to` (a phone-derived jid) or `text` (the
+    message body) or the token — only that a send failed, with no detail.
+    """
+    base = get_settings().gateway_base_url.rstrip("/")
+    token = get_settings().gateway_api_token.get_secret_value()
+    try:
+        async with httpx.AsyncClient(timeout=_SEND_TIMEOUT) as client:
+            resp = await client.post(
+                f"{base}/send-bot",
+                headers={"X-Gateway-Token": token},
+                json={"to": to, "text": text},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception:  # noqa: BLE001 — best-effort; never leak details or PII.
+        log.warning("gateway /send-bot send failed")
+        return False
+
+    return bool(isinstance(data, dict) and data.get("ok") is True)

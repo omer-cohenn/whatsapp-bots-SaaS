@@ -19,6 +19,7 @@
  */
 
 const path = require('path');
+const crypto = require('crypto');
 const express = require('express');
 const qrcode = require('qrcode');
 const { request } = require('undici');
@@ -116,6 +117,20 @@ function escapeHtml(s) {
     /[&<>"']/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]),
   );
+}
+
+// ── Constant-time gateway-token check (internal backend -> gateway auth) ──────
+// The backend calls our internal POST /send-bot with header X-Gateway-Token.
+// Compare it to config.gatewayApiToken in CONSTANT TIME so we never leak token
+// length / content via timing. crypto.timingSafeEqual throws on a length
+// mismatch, so we hash BOTH sides to fixed-length digests first (the hash also
+// makes the compare itself length-independent). The token is NEVER logged.
+function gatewayTokenValid(provided) {
+  if (typeof provided !== 'string' || provided.length === 0) return false;
+  const a = crypto.createHash('sha256').update(provided).digest();
+  const b = crypto.createHash('sha256').update(config.gatewayApiToken).digest();
+  // Both are 32-byte buffers -> safe to compare directly.
+  return crypto.timingSafeEqual(a, b);
 }
 
 let sock = null;
@@ -425,6 +440,61 @@ app.get('/qr.json', (_req, res) => {
     status: state.status,
     qr_data_url: state.qrDataUrl,
   });
+});
+
+/*
+ * POST /send-bot — INTERNAL (backend -> gateway, Docker network). M6a.2 contract.
+ * Lets the backend deliver an OWNER's manual handoff reply to a customer over
+ * WhatsApp (the bot's own auto-replies are sent inline via sendReplies; this is
+ * the async human-reply path).
+ *
+ *   header: X-Gateway-Token: <GATEWAY_API_TOKEN>  (REQUIRED, constant-time check)
+ *   body:   { "to": "<wa jid>", "text": "<reply text>" }
+ *   ->  401 if the token is missing/bad (checked BEFORE any work)
+ *   ->  400 if `to` or `text` is missing/blank
+ *   ->  503 if WhatsApp is not connected (no live socket)
+ *   ->  200 { ok: true, message_id: <id|null> } on a successful send
+ *   ->  500 generic on an unexpected send failure (no PII echoed)
+ *
+ * `to` is a full WhatsApp jid (customer "<num>@s.whatsapp.net", or the owner's
+ * "<id>@lid" for the self-chat) — sock.sendMessage handles both. We record the
+ * sent id in the loop guard so its fromMe echo never re-triggers the bot.
+ * SAFE logging only: never log `to`, `text`, or the token.
+ */
+app.post('/send-bot', async (req, res) => {
+  // 1) AUTH FIRST — constant-time token check before touching the body/socket.
+  if (!gatewayTokenValid(req.get('x-gateway-token'))) {
+    return res.status(401).json({ ok: false, error: 'unauthorized' });
+  }
+
+  // 2) Validate input. `to`/`text` must be present and non-blank.
+  const to = typeof req.body?.to === 'string' ? req.body.to.trim() : '';
+  const text = typeof req.body?.text === 'string' ? req.body.text : '';
+  if (!to || !text.trim()) {
+    return res.status(400).json({ ok: false, error: 'missing to or text' });
+  }
+
+  // 3) Require a live connection.
+  if (state.status !== 'connected' || !sock) {
+    return res.status(503).json({ ok: false, error: 'not connected' });
+  }
+
+  // 4) Send and record the id in the loop guard.
+  try {
+    const sent = await sock.sendMessage(String(to), { text: String(text) });
+    const messageId = sent?.key?.id || null;
+    // LOOP PREVENTION: remember OUR sent id so its fromMe echo is skipped at the
+    // top of handleInbound (matches sendReplies' behaviour for auto-replies).
+    rememberSentId(messageId);
+    // SAFE log: length + whether we got an id back. Never the jid/text/token.
+    log.info({ textLen: text.length, hasMessageId: Boolean(messageId) }, 'sent owner reply via /send-bot');
+    return res.status(200).json({ ok: true, message_id: messageId });
+  } catch (err) {
+    // Generic 500 — err.message may reference internals, so do NOT echo it to
+    // the client. Log it safely (no to/text/token).
+    log.error({ err: err.message }, 'failed to send owner reply via /send-bot');
+    return res.status(500).json({ ok: false, error: 'send failed' });
+  }
 });
 
 /*
