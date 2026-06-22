@@ -7,6 +7,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './auth/AuthContext'
 import AuthGate from './components/AuthGate'
+import AdminGate from './components/AdminGate'
 import LoginPage from './pages/LoginPage'
 import TermsPage from './pages/TermsPage'
 import PrivacyPage from './pages/PrivacyPage'
@@ -20,6 +21,9 @@ import AppointmentsPage from './pages/AppointmentsPage'
 import WhatsAppPage from './pages/WhatsAppPage'
 import PublicBookingPage from './pages/PublicBookingPage'
 import PublicManagePage from './pages/PublicManagePage'
+import AdminHome from './pages/admin/AdminHome'
+import BusinessesList from './pages/admin/BusinessesList'
+import BusinessDetail from './pages/admin/BusinessDetail'
 
 export default function App() {
   return (
@@ -94,6 +98,40 @@ export default function App() {
             element={
               <AuthGate>
                 <AppointmentsPage defaultTab="settings" />
+              </AuthGate>
+            }
+          />
+
+          {/* Platform-operator back-office (M12). AuthGate ensures a session;
+              AdminGate bounces a logged-in non-admin to "/". The server also
+              re-checks admin identity on every /api/admin/* call. */}
+          <Route
+            path="/admin"
+            element={
+              <AuthGate>
+                <AdminGate>
+                  <AdminHome />
+                </AdminGate>
+              </AuthGate>
+            }
+          />
+          <Route
+            path="/admin/businesses"
+            element={
+              <AuthGate>
+                <AdminGate>
+                  <BusinessesList />
+                </AdminGate>
+              </AuthGate>
+            }
+          />
+          <Route
+            path="/admin/businesses/:id"
+            element={
+              <AuthGate>
+                <AdminGate>
+                  <BusinessDetail />
+                </AdminGate>
               </AuthGate>
             }
           />

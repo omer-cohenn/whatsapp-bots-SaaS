@@ -39,6 +39,7 @@ from typing import Any
 import asyncpg
 
 from app.core import crypto
+from app.services import usage as usage_service
 
 # Lead statuses (mirrors the leads.status column comment in 0003_tables.sql).
 # The status column is free text, so the two OWNER-SETTABLE outcomes below need no
@@ -128,6 +129,11 @@ async def create_lead(
         crypto.CURRENT_KEY_VERSION,
         cache_chat_ref,
     )
+    # M12 usage: count a new lead for this tenant. Best-effort on the SAME
+    # tenant-bound conn (RLS WITH CHECK passes); a counter failure must never
+    # break lead creation. Test leads ARE counted here (pure number, no PII) —
+    # the admin overview's total_leads still excludes test rows at read time.
+    await usage_service.bump_safe(conn, business_id, usage_service.METRIC_LEAD)
     return str(row["id"])
 
 

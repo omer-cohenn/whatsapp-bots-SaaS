@@ -21,6 +21,8 @@ type AuthState = {
   user: User | null
   business: Business | null
   connection: Connection | null
+  /** Platform-operator flag (M12). Defaults to false until /api/me confirms it. */
+  isAdmin: boolean
   loading: boolean
   authed: boolean
   error: string | null
@@ -73,6 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: me?.user ?? null,
       business: me?.business ?? null,
       connection: me?.connection ?? null,
+      // Default false: a missing/false flag must never grant admin UI.
+      isAdmin: me?.is_admin ?? false,
       loading,
       authed: me !== null,
       error,

@@ -115,11 +115,13 @@ async def test_api_me_valid_session_returns_own_business(client, redis_client):
         resp = await client.get("/api/me", cookies={SESSION_COOKIE_NAME: sid})
         assert resp.status_code == 200
         body = resp.json()
-        # Frozen contract shape.
-        assert set(body) == {"user", "business", "connection"}
+        # Frozen contract shape. M12 added is_admin (computed live vs ADMIN_EMAILS;
+        # Avi is NOT an admin, so it must be False here).
+        assert set(body) == {"user", "business", "connection", "is_admin"}
         assert body["business"]["id"] == BIZ_A
         assert body["user"]["id"] == AVI_USER
         assert "status" in body["connection"]
+        assert body["is_admin"] is False
     finally:
         await redis_client.delete(f"{_SESSION_KEY_PREFIX}{sid}")
 

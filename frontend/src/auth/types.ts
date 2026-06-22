@@ -26,4 +26,6 @@ export type Me = {
   user: User
   business: Business
   connection: Connection
+  /** True only for platform operators (email ∈ server's ADMIN_EMAILS). */
+  is_admin: boolean
 }

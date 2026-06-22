@@ -42,6 +42,10 @@ export type IconName =
   | 'photo'
   | 'menu'
   | 'brand-whatsapp'
+  | 'shield'
+  | 'building-store'
+  | 'currency-shekel'
+  | 'activity'
 
 // Path/element markup per icon (stroke-based, inherits currentColor).
 const PATHS: Record<IconName, JSX.Element> = {
@@ -138,6 +142,16 @@ const PATHS: Record<IconName, JSX.Element> = {
   'brand-whatsapp': (
     <path d="M3 21l1.65-4.8A8 8 0 1 1 7.8 19.3L3 21zM9 9.5c0 3 2.5 5.5 5.5 5.5l1-1c.3-.3.8-.4 1.1-.2l1.4.7c.3.2.5.5.5.9 0 .8-.6 1.4-1.4 1.6C13 17.6 7.4 13 7.4 9.4c.1-.8.8-1.4 1.6-1.4.4 0 .7.2.9.5l.7 1.4c.2.3.1.8-.2 1.1l-1 1z" />
   ),
+  // Admin / "control room" shield with a check.
+  shield: <path d="M12 3l8 3v5c0 4.5-3 8.3-8 10-5-1.7-8-5.5-8-10V6l8-3zM9 12l2 2 4-4" />,
+  // Storefront — used for the businesses table.
+  'building-store': (
+    <path d="M3 9l1-4h16l1 4M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9M4 9a2 2 0 0 0 4 0 2 2 0 0 0 4 0 2 2 0 0 0 4 0 2 2 0 0 0 4 0M9 20v-5h6v5" />
+  ),
+  // Shekel sign for plan price.
+  'currency-shekel': <path d="M7 17V7h5a3 3 0 0 1 3 3v7M17 7v10a3 3 0 0 1-3 3H9" />,
+  // Activity pulse for usage charts.
+  activity: <path d="M3 12h4l3 8 4-16 3 8h4" />,
 }
 
 type IconProps = SVGProps<SVGSVGElement> & {

@@ -19,9 +19,12 @@ type NavSpec = {
   icon: IconName
   /** When false the item is shown but disabled with a "בקרוב" badge. */
   enabled: boolean
+  /** When true the item renders only for platform admins (M12). */
+  adminOnly?: boolean
 }
 
-// Order + labels mirror the prototype sidebar.
+// Order + labels mirror the prototype sidebar. The admin-only "ניהול" entry is
+// filtered out for non-admins below (it never reaches the DOM for them).
 const NAV_ITEMS: NavSpec[] = [
   { to: '/', label: 'בית', icon: 'home', enabled: true },
   { to: '/bot-builder', label: 'בונה הבוט', icon: 'robot', enabled: true },
@@ -30,6 +33,7 @@ const NAV_ITEMS: NavSpec[] = [
   { to: '/conversations', label: 'שיחות', icon: 'message-circle', enabled: true },
   { to: '/appointments', label: 'ניהול פגישות', icon: 'calendar-event', enabled: true },
   { to: '/whatsapp', label: 'וואטסאפ', icon: 'brand-whatsapp', enabled: true },
+  { to: '/admin', label: 'ניהול', icon: 'shield', enabled: true, adminOnly: true },
   { to: '/settings', label: 'הגדרות', icon: 'settings', enabled: false },
 ]
 
@@ -67,7 +71,11 @@ function NavItem({ item }: { item: NavSpec }) {
 }
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
-  const { logout } = useAuth()
+  const { logout, isAdmin } = useAuth()
+
+  // The admin-only "ניהול" link is removed entirely for non-admins (route is
+  // also guarded server-side and by <AdminGate>).
+  const navItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin)
 
   return (
     <div className="flex min-h-screen bg-[#ece9e1]">
@@ -90,7 +98,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <span className="text-base font-medium text-white">בוטיק</span>
         </div>
 
-        {NAV_ITEMS.map((item) => (
+        {navItems.map((item) => (
           <NavItem key={item.to} item={item} />
         ))}
 

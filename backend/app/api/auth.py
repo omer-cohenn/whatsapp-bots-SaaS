@@ -22,6 +22,8 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 
 from app.core.logging import get_logger
+from app.db.session import tenant_connection
+from app.services import usage as usage_service
 from app.services.auth import (
     SESSION_COOKIE_NAME,
     SESSION_TTL_SECONDS,
@@ -111,6 +113,15 @@ async def auth_callback(
     sid = await create_session(
         redis, user, {"id": business_id, "name": business_name}
     )
+
+    # M12 usage: count a successful login for this tenant. The provision step above
+    # used a PLAIN app_role connection (no tenant context), but usage_daily is an
+    # RLS table whose WITH CHECK needs current_business_id() set — so we open our
+    # OWN short tenant_connection scoped to the just-provisioned business. The
+    # business_id comes from provision_owner (server-side), never the client.
+    # Best-effort: a counter failure must never break login.
+    async with tenant_connection(pool, str(business_id)) as conn:
+        await usage_service.bump_safe(conn, str(business_id), usage_service.METRIC_LOGIN)
     redirect = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
     redirect.set_cookie(
         key=SESSION_COOKIE_NAME,

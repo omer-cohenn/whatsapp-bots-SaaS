@@ -44,6 +44,7 @@ import asyncpg
 from app.core import crypto
 from app.core.logging import get_logger
 from app.services import leads as leads_service
+from app.services import usage as usage_service
 
 log = get_logger("app.services.booking")
 
@@ -817,6 +818,12 @@ async def create_public_booking(
         is_test,
         crypto.CURRENT_KEY_VERSION,
     )
+
+    # M12 usage: count a new booking for this tenant. Best-effort on the SAME
+    # tenant-bound conn (RLS WITH CHECK passes); a counter failure must never break
+    # booking creation. (create_lead above already bumped 'lead' for the unified
+    # lead row.)
+    await usage_service.bump_safe(conn, business_id, usage_service.METRIC_BOOKING)
 
     return {
         "booking_id": str(row["id"]),
