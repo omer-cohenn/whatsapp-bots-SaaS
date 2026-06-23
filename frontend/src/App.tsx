@@ -22,6 +22,8 @@ import WhatsAppPage from './pages/WhatsAppPage'
 import PublicBookingPage from './pages/PublicBookingPage'
 import PublicManagePage from './pages/PublicManagePage'
 import AdminHome from './pages/admin/AdminHome'
+import AdminBilling from './pages/admin/AdminBilling'
+import AdminCrm from './pages/admin/AdminCrm'
 import BusinessesList from './pages/admin/BusinessesList'
 import BusinessDetail from './pages/admin/BusinessDetail'
 
@@ -111,6 +113,26 @@ export default function App() {
               <AuthGate>
                 <AdminGate>
                   <AdminHome />
+                </AdminGate>
+              </AuthGate>
+            }
+          />
+          <Route
+            path="/admin/crm"
+            element={
+              <AuthGate>
+                <AdminGate>
+                  <AdminCrm />
+                </AdminGate>
+              </AuthGate>
+            }
+          />
+          <Route
+            path="/admin/billing"
+            element={
+              <AuthGate>
+                <AdminGate>
+                  <AdminBilling />
                 </AdminGate>
               </AuthGate>
             }

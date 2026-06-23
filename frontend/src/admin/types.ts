@@ -16,7 +16,10 @@ export type UsageMetric = 'msg_in' | 'msg_out' | 'lead' | 'booking' | 'login'
 
 // --- GET /api/admin/overview -------------------------------------------------
 
-/** Platform-wide KPI counts. All ints. */
+/**
+ * Platform-wide KPI counts. All ints, except the M13 LTV fields which are
+ * float|null (null when there's nothing to estimate — e.g. no paying tenants).
+ */
 export type AdminOverview = {
   total_businesses: number
   active_count: number
@@ -26,6 +29,9 @@ export type AdminOverview = {
   total_leads: number
   msgs_today: number
   msgs_month: number
+  // M13 additive — Lifetime-Value estimate (plan price × tenure). "הערכה".
+  avg_ltv: number | null
+  total_ltv: number | null
 }
 
 // --- GET /api/admin/businesses ----------------------------------------------
@@ -66,6 +72,17 @@ export type BusinessDetail = {
   wa_status: string | null
   leads_count: number
   msgs_30d: number
+  // M13 additive — LTV estimate, successful AI calls, and CRM snapshot.
+  ltv_estimate: number | null
+  ai_calls: number | null
+  crm: BusinessCrmSummary | null
+}
+
+/** The CRM snapshot embedded in a business detail (M13). */
+export type BusinessCrmSummary = {
+  stage: CrmStage
+  last_contacted_at: string | null // ISO
+  next_followup_at: string | null // ISO
 }
 
 // --- GET /api/admin/businesses/{id}/usage -----------------------------------
@@ -104,4 +121,132 @@ export type SetSubscriptionResponse = {
   plan_code: string
   status: SubscriptionStatus
   is_active: boolean
+}
+
+// === M13: back-office analytics ============================================
+// All under /api/admin/analytics/*, same current_admin gate (401/403).
+
+/** Time window for the analytics filters. `all` = since the start of time. */
+export type AnalyticsPeriod = 'week' | 'month' | 'all'
+
+/**
+ * GET /api/admin/analytics/leads-by-type — derived lead counts split three
+ * ways: bookings (פגישה), plain leads (ליד) and handoff requests (נציג).
+ */
+export type LeadsByType = {
+  booking: number
+  lead: number
+  handoff: number
+}
+
+/**
+ * GET /api/admin/analytics/messages — total messages per business, the basis
+ * for billing. Sorted by `total` DESC server-side.
+ */
+export type MessagesByBusinessRow = {
+  business_id: string
+  name: string | null
+  plan_code: string
+  msg_in: number
+  msg_out: number
+  total: number
+}
+
+export type MessagesByBusinessResponse = {
+  businesses: MessagesByBusinessRow[]
+}
+
+/** One day in the AI-ops series — successful Gemini calls that day. */
+export type AiOpsPoint = {
+  day: string // ISO date (YYYY-MM-DD)
+  count: number
+}
+
+export type AiOpsResponse = {
+  series: AiOpsPoint[]
+}
+
+/**
+ * GET /api/admin/analytics/by-plan — one metric, split per plan code. `metric`
+ * is required server-side (no default); `value` is the metric total per plan.
+ */
+export type ByPlanMetric =
+  | 'msg_in'
+  | 'msg_out'
+  | 'lead'
+  | 'booking'
+  | 'login'
+  | 'ai_call'
+
+export type ByPlanRow = {
+  plan_code: string
+  value: number
+}
+
+export type ByPlanResponse = {
+  metric: ByPlanMetric
+  period: AnalyticsPeriod
+  rows: ByPlanRow[]
+}
+
+/**
+ * GET /api/admin/analytics/trends — the daily platform snapshot series
+ * (accrues forward; can't be back-filled). MRR is a float; the rest are ints.
+ */
+export type TrendPoint = {
+  day: string // ISO date (YYYY-MM-DD)
+  total_businesses: number
+  active_count: number
+  paid_count: number
+  mrr: number
+  churn_count: number
+}
+
+export type TrendsResponse = {
+  series: TrendPoint[]
+}
+
+// === M13: platform sales CRM ===============================================
+// All under /api/admin/crm + /api/admin/businesses/{id}/crm. admin-only.
+
+/** A sales-pipeline stage for a business (a customer of the SaaS). */
+export type CrmStage = 'new' | 'contacted' | 'warming' | 'won' | 'lost'
+
+/** One card on the pipeline board. */
+export type CrmBusiness = {
+  business_id: string
+  name: string | null
+  plan_code: string
+  stage: CrmStage
+  last_contacted_at: string | null // ISO
+  next_followup_at: string | null // ISO
+  note_count: number
+}
+
+export type CrmResponse = {
+  businesses: CrmBusiness[]
+}
+
+/** PATCH /api/admin/businesses/{id}/crm response. */
+export type SetCrmStageResponse = {
+  business_id: string
+  stage: CrmStage
+  next_followup_at: string | null // ISO
+}
+
+/** POST /api/admin/businesses/{id}/crm/notes response (201). */
+export type AddCrmNoteResponse = {
+  note_id: string
+}
+
+/** One note in a business's CRM activity log. */
+export type CrmNote = {
+  id: string
+  admin_email: string | null
+  note: string
+  created_at: string | null // ISO
+}
+
+export type CrmNotesResponse = {
+  notes: CrmNote[]
 }

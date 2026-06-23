@@ -12,11 +12,16 @@ import { Link } from 'react-router-dom'
 import DashboardLayout from '../../components/DashboardLayout'
 import StatCard from '../../components/dashboard/StatCard'
 import BusinessesTable from '../../components/admin/BusinessesTable'
+import TrendsCard from '../../components/admin/TrendsCard'
+import LeadsByTypeCard from '../../components/admin/LeadsByTypeCard'
+import ByPlanCard from '../../components/admin/ByPlanCard'
+import AiOpsCard from '../../components/admin/AiOpsCard'
 import Spinner from '../../components/ui/Spinner'
 import Alert from '../../components/ui/Alert'
 import Icon from '../../components/ui/Icon'
 import { getOverview, listBusinesses, getPlans } from '../../lib/adminClient'
 import { toFriendlyError } from '../../lib/friendlyError'
+import { formatMoney } from '../../admin/labels'
 import type { AdminOverview, BusinessRow, Plan } from '../../admin/types'
 
 export default function AdminHome() {
@@ -144,8 +149,40 @@ export default function AdminHome() {
                 value={overview.msgs_month}
                 label="הודעות החודש"
               />
+              {/* LTV is money|null → render a StatCard-shaped card by hand so the
+                  shared StatCard primitive can stay number-only. */}
+              <div className="flex flex-col gap-2 rounded-xl border border-black/10 bg-white p-3">
+                <span
+                  aria-hidden="true"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#534AB7] text-white"
+                >
+                  <Icon name="currency-shekel" size={18} />
+                </span>
+                <span className="text-2xl font-medium leading-none text-slate-900">
+                  {formatMoney(overview.avg_ltv)}
+                </span>
+                <span className="text-xs text-slate-500">LTV ממוצע (הערכה)</span>
+              </div>
             </div>
           ) : null}
+        </section>
+
+        {/* Analytics (M13): trends + leads-by-type + by-plan + AI ops. Each card
+            owns its own fetch/loading/empty/error state. */}
+        <section aria-labelledby="analytics-heading" className="flex flex-col gap-4">
+          <h2
+            id="analytics-heading"
+            className="flex items-center gap-2 text-lg font-medium text-slate-900"
+          >
+            <Icon name="chart-bar" size={20} className="text-leaf" />
+            אנליטיקה
+          </h2>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <TrendsCard />
+            <LeadsByTypeCard />
+            <ByPlanCard />
+            <AiOpsCard />
+          </div>
         </section>
 
         {/* Recent businesses */}

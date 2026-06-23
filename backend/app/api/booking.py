@@ -52,6 +52,7 @@ from app.services import booking as booking_service
 from app.services import booking_alerts
 from app.services import booking_reminders
 from app.services import booking_welcome
+from app.services import usage as usage_service
 
 router = APIRouter(tags=["booking"])
 log = get_logger("app.api.booking")
@@ -156,6 +157,12 @@ async def generate_welcome_message(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="AI is temporarily unavailable",
         ) from None
+
+    # M13: count one successful AI call for this tenant (the Gemini call returned).
+    # usage_daily is RLS-scoped, so open a short tenant_connection just for the
+    # counter. Best-effort: bump_safe swallows any error — never break the request.
+    async with tenant_connection(request.app.state.pg_pool, business_id) as conn:
+        await usage_service.bump_safe(conn, business_id, usage_service.METRIC_AI_CALL)
 
     return WelcomeGenerateResponse(message=message)
 

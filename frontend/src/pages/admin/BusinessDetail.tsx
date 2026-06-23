@@ -14,12 +14,18 @@ import Icon from '../../components/ui/Icon'
 import StatusBadge from '../../components/admin/StatusBadge'
 import SubscriptionPanel from '../../components/admin/SubscriptionPanel'
 import UsageSection from '../../components/admin/UsageSection'
+import CrmPanel from '../../components/admin/CrmPanel'
 import { getBusiness, getPlans } from '../../lib/adminClient'
 import { ApiError } from '../../lib/apiClient'
 import { toFriendlyError } from '../../lib/friendlyError'
-import { formatPrice } from '../../admin/labels'
+import { formatPrice, formatMoney } from '../../admin/labels'
 import { fullDateTime } from '../../lib/formatDate'
-import type { BusinessDetail as BusinessDetailType, Plan } from '../../admin/types'
+import type {
+  BusinessCrmSummary,
+  BusinessDetail as BusinessDetailType,
+  CrmStage,
+  Plan,
+} from '../../admin/types'
 
 // One labelled fact in the header grid; null values show an em-dash.
 function Fact({ label, value }: { label: string; value: string | null | undefined }) {
@@ -75,6 +81,25 @@ export default function BusinessDetail() {
       setBusiness((prev) =>
         prev ? { ...prev, plan_code: planCode, status, is_active: isActive } : prev,
       )
+    },
+    [],
+  )
+
+  // After a CRM stage/follow-up save, reflect it in the local crm summary.
+  const handleCrmChanged = useCallback(
+    (stage: CrmStage, nextFollowupAt: string | null) => {
+      setBusiness((prev) => {
+        if (!prev) return prev
+        const base: BusinessCrmSummary = prev.crm ?? {
+          stage,
+          last_contacted_at: null,
+          next_followup_at: nextFollowupAt,
+        }
+        return {
+          ...prev,
+          crm: { ...base, stage, next_followup_at: nextFollowupAt },
+        }
+      })
     },
     [],
   )
@@ -143,6 +168,14 @@ export default function BusinessDetail() {
                   <Fact label="לידים" value={String(business.leads_count)} />
                   <Fact label="הודעות (30 ימים)" value={String(business.msgs_30d)} />
                 </div>
+                <Fact
+                  label="LTV (הערכה)"
+                  value={business.ltv_estimate != null ? formatMoney(business.ltv_estimate) : null}
+                />
+                <Fact
+                  label="פעולות AI"
+                  value={business.ai_calls != null ? String(business.ai_calls) : null}
+                />
               </dl>
             </Card>
 
@@ -154,6 +187,26 @@ export default function BusinessDetail() {
               status={business.status}
               onSaved={handleSaved}
             />
+
+            {/* Sales CRM (M13): stage + next follow-up + notes. */}
+            <Card>
+              <h2 className="flex items-center gap-2 text-lg font-medium text-slate-900">
+                <Icon name="layout-columns" size={20} className="text-leaf" />
+                מכירות (CRM)
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                שלב המכירה של העסק בצינור, תזכורת חזרה ויומן פתקים — לניהול הלקוח עד
+                שהוא משלם.
+              </p>
+              <div className="mt-4">
+                <CrmPanel
+                  businessId={business.business_id}
+                  stage={business.crm?.stage ?? 'new'}
+                  nextFollowupAt={business.crm?.next_followup_at ?? null}
+                  onChanged={handleCrmChanged}
+                />
+              </div>
+            </Card>
 
             {/* Usage charts */}
             <UsageSection businessId={business.business_id} />

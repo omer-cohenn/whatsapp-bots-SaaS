@@ -873,8 +873,17 @@ async def test_admin_responses_carry_no_lead_or_booking_content(
     for row in listing["businesses"]:
         assert set(row.keys()) <= allowed_row_keys, set(row.keys())
 
-    allowed_detail_keys = allowed_row_keys | {"business_type", "wa_status"}
+    # M13 added three ADDITIVE detail keys (aggregate money + AI usage + the
+    # sales-pipeline block) — all operator analytics, never end-customer content.
+    allowed_detail_keys = allowed_row_keys | {
+        "business_type", "wa_status", "ltv_estimate", "ai_calls", "crm",
+    }
     assert set(detail.keys()) <= allowed_detail_keys, set(detail.keys())
+    # The nested M13 `crm` block is sales-pipeline meta only — no customer PII.
+    if detail.get("crm"):
+        assert set(detail["crm"].keys()) <= {
+            "stage", "last_contacted_at", "next_followup_at",
+        }, set(detail["crm"].keys())
 
     # The usage series is pure numbers: a day + a metric→int map, nothing else.
     assert set(usage.keys()) == {"business_id", "metrics_present", "series"}

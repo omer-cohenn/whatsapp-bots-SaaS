@@ -44,6 +44,7 @@ from app.services import (
     bot_engine,
     bot_runtime,
     bot_settings as bot_settings_service,
+    usage as usage_service,
 )
 
 router = APIRouter(prefix="/bot", tags=["bot-builder"])
@@ -175,6 +176,14 @@ async def bot_ai_chat(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="AI builder is temporarily unavailable",
         ) from None
+
+    # 1b) M13: count one successful AI call for this tenant. The Gemini call above
+    #     returned, so this is a real ai_call. usage_daily is an RLS table whose
+    #     WITH CHECK needs current_business_id(), so we open our OWN short
+    #     tenant_connection (like the login bump) just for the counter. Best-effort:
+    #     bump_safe swallows any error so telemetry never breaks the AI request.
+    async with tenant_connection(request.app.state.pg_pool, business_id) as conn:
+        await usage_service.bump_safe(conn, business_id, usage_service.METRIC_AI_CALL)
 
     # 2) Parse + validate any proposed change (untrusted LLM output).
     changes: dict[str, Any] | None = None

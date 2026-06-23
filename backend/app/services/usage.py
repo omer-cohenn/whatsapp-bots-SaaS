@@ -34,6 +34,9 @@ METRIC_MSG_OUT = "msg_out"
 METRIC_LEAD = "lead"
 METRIC_BOOKING = "booking"
 METRIC_LOGIN = "login"
+# M13: one successful Gemini call (the AI bot builder turn or the booking-welcome
+# generator). Bumped AFTER the model returns, so a failed call counts nothing.
+METRIC_AI_CALL = "ai_call"
 
 
 async def bump(

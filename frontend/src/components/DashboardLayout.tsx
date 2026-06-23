@@ -36,6 +36,8 @@ const NAV_ITEMS: NavSpec[] = [
   { to: '/appointments', label: 'ניהול פגישות', icon: 'calendar-event', enabled: true },
   { to: '/whatsapp', label: 'וואטסאפ', icon: 'brand-whatsapp', enabled: true },
   { to: '/admin', label: 'ניהול', icon: 'shield', enabled: true, adminOnly: true, accent: 'blue' },
+  { to: '/admin/crm', label: 'צינור מכירות', icon: 'layout-columns', enabled: true, adminOnly: true, accent: 'blue' },
+  { to: '/admin/billing', label: 'שימוש וחיוב', icon: 'chart-bar', enabled: true, adminOnly: true, accent: 'blue' },
   { to: '/settings', label: 'הגדרות', icon: 'settings', enabled: false },
 ]
 
@@ -61,7 +63,9 @@ function NavItem({ item }: { item: NavSpec }) {
   return (
     <NavLink
       to={item.to}
-      end={item.to === '/'}
+      // `/` and the admin home `/admin` must match exactly, otherwise the admin
+      // sub-routes (/admin/crm, /admin/billing) would also light up the parent.
+      end={item.to === '/' || item.to === '/admin'}
       className={({ isActive }) => {
         const base = 'flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition'
         if (isBlue) {

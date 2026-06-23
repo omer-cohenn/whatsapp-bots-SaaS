@@ -46,6 +46,12 @@ export type IconName =
   | 'building-store'
   | 'currency-shekel'
   | 'activity'
+  | 'chart-bar'
+  | 'layout-columns'
+  | 'sparkles-ai'
+  | 'note'
+  | 'calendar-due'
+  | 'trending-up'
 
 // Path/element markup per icon (stroke-based, inherits currentColor).
 const PATHS: Record<IconName, JSX.Element> = {
@@ -152,6 +158,18 @@ const PATHS: Record<IconName, JSX.Element> = {
   'currency-shekel': <path d="M7 17V7h5a3 3 0 0 1 3 3v7M17 7v10a3 3 0 0 1-3 3H9" />,
   // Activity pulse for usage charts.
   activity: <path d="M3 12h4l3 8 4-16 3 8h4" />,
+  // Bar chart — the billing / usage page.
+  'chart-bar': <path d="M4 20V10M10 20V4M16 20v-7M22 20H2M22 16v4" />,
+  // Kanban columns — the CRM pipeline board.
+  'layout-columns': <path d="M4 4h16a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM9 4v16M15 4v16" />,
+  // Sparkles for AI operations.
+  'sparkles-ai': <path d="M12 3l1.6 4L18 8.5l-4.4 1.5L12 14l-1.6-4L6 8.5 10.4 7 12 3zM18 14l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2z" />,
+  // A note / sticky for CRM notes.
+  note: <path d="M5 4h11l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM8 9h8M8 13h6M8 17h4" />,
+  // Calendar with a due-marker — the next-follow-up date.
+  'calendar-due': <path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7zM16 3v4M8 3v4M4 11h16M12 14v3M12 19v.01" />,
+  // Trending-up arrow for MRR / growth.
+  'trending-up': <path d="M3 17l6-6 4 4 8-8M21 7v4M21 7h-4" />,
 }
 
 type IconProps = SVGProps<SVGSVGElement> & {
