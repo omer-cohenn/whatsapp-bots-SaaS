@@ -14,6 +14,7 @@ import Alert from '../ui/Alert'
 import Icon from '../ui/Icon'
 import SegmentedControl, { type Segment } from '../dashboard/SegmentedControl'
 import UsageBarChart from './UsageBarChart'
+import LineChart from './LineChart'
 import { getUsage } from '../../lib/adminClient'
 import { toFriendlyError } from '../../lib/friendlyError'
 import { METRIC_META, METRIC_ORDER } from '../../admin/labels'
@@ -26,6 +27,16 @@ const WINDOW_SEGMENTS: Segment<WindowDays>[] = [
   { value: '90', label: '90 ימים' },
 ]
 
+// Two ways to read the same numbers: a per-day bar chart ("מקלות"), or the
+// running total accumulating over the window ("מצטבר") — a line that only ever
+// climbs, so growth over time is obvious at a glance.
+type ChartMode = 'bars' | 'cumulative'
+
+const MODE_SEGMENTS: Segment<ChartMode>[] = [
+  { value: 'bars', label: 'מקלות' },
+  { value: 'cumulative', label: 'מצטבר' },
+]
+
 // Format a Date as YYYY-MM-DD in local time (what the API expects).
 function toYmd(d: Date): string {
   const y = d.getFullYear()
@@ -36,6 +47,7 @@ function toYmd(d: Date): string {
 
 export default function UsageSection({ businessId }: { businessId: string }) {
   const [days, setDays] = useState<WindowDays>('30')
+  const [mode, setMode] = useState<ChartMode>('bars')
   const [data, setData] = useState<UsageResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -76,8 +88,10 @@ export default function UsageSection({ businessId }: { businessId: string }) {
         day: d.day,
         value: d.metrics[metric] ?? 0,
       }))
-      const total = points.reduce((sum, p) => sum + p.value, 0)
-      return { metric, points, total }
+      // Running total per day (for the "מצטבר" line). The last value is the sum.
+      let run = 0
+      const cumulative = points.map((p) => (run += p.value))
+      return { metric, points, cumulative, total: run }
     })
   }, [data])
 
@@ -91,12 +105,20 @@ export default function UsageSection({ businessId }: { businessId: string }) {
           <Icon name="activity" size={20} className="text-leaf" />
           נתוני שימוש
         </h2>
-        <SegmentedControl
-          label="טווח זמן"
-          segments={WINDOW_SEGMENTS}
-          value={days}
-          onChange={setDays}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <SegmentedControl
+            label="סוג גרף"
+            segments={MODE_SEGMENTS}
+            value={mode}
+            onChange={setMode}
+          />
+          <SegmentedControl
+            label="טווח זמן"
+            segments={WINDOW_SEGMENTS}
+            value={days}
+            onChange={setDays}
+          />
+        </div>
       </div>
 
       {loading ? (
@@ -105,7 +127,7 @@ export default function UsageSection({ businessId }: { businessId: string }) {
         <Alert tone="error">{error}</Alert>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
-          {charts.map(({ metric, points, total }) => (
+          {charts.map(({ metric, points, cumulative, total }) => (
             <Card key={metric} className="!p-4">
               <div className="mb-3 flex items-baseline justify-between gap-2">
                 <h3 className="text-sm font-medium text-slate-700">
@@ -115,11 +137,25 @@ export default function UsageSection({ businessId }: { businessId: string }) {
                   {total}
                 </span>
               </div>
-              <UsageBarChart
-                points={points}
-                color={METRIC_META[metric].color}
-                ariaLabel={`${METRIC_META[metric].label}: סך ${total} לאורך ${days} הימים האחרונים`}
-              />
+              {mode === 'bars' ? (
+                <UsageBarChart
+                  points={points}
+                  color={METRIC_META[metric].color}
+                  ariaLabel={`${METRIC_META[metric].label}: סך ${total} לאורך ${days} הימים האחרונים`}
+                />
+              ) : (
+                <LineChart
+                  labels={points.map((p) => p.day)}
+                  series={[
+                    {
+                      values: cumulative,
+                      color: METRIC_META[metric].color,
+                      name: METRIC_META[metric].label,
+                    },
+                  ]}
+                  ariaLabel={`${METRIC_META[metric].label}: מצטבר ל-${total} לאורך ${days} הימים האחרונים`}
+                />
+              )}
             </Card>
           ))}
         </div>

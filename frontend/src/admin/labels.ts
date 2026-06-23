@@ -26,6 +26,7 @@ export const METRIC_META: Record<UsageMetric, { label: string; color: string }> 
   lead: { label: 'לידים', color: '#639922' },
   booking: { label: 'הזמנות', color: '#D85A30' },
   login: { label: 'כניסות', color: '#7C3AED' },
+  ai_call: { label: 'פעולות AI', color: '#BA7517' },
 }
 
 /** Order metrics appear in (matches the funnel mental model). */
@@ -35,6 +36,7 @@ export const METRIC_ORDER: UsageMetric[] = [
   'lead',
   'booking',
   'login',
+  'ai_call',
 ]
 
 /** Format a plan price as shekels, e.g. 49 → "₪49", 0 → "חינם". */

@@ -12,7 +12,7 @@
 export type SubscriptionStatus = 'active' | 'suspended' | 'cancelled'
 
 /** Usage metric names tracked per day (v1). Absent metrics chart as 0. */
-export type UsageMetric = 'msg_in' | 'msg_out' | 'lead' | 'booking' | 'login'
+export type UsageMetric = 'msg_in' | 'msg_out' | 'lead' | 'booking' | 'login' | 'ai_call'
 
 // --- GET /api/admin/overview -------------------------------------------------
 
