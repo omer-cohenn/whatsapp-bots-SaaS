@@ -21,6 +21,8 @@ type NavSpec = {
   enabled: boolean
   /** When true the item renders only for platform admins (M12). */
   adminOnly?: boolean
+  /** Optional distinct accent so a special item stands out (M12 admin = blue). */
+  accent?: 'blue'
 }
 
 // Order + labels mirror the prototype sidebar. The admin-only "ניהול" entry is
@@ -33,7 +35,7 @@ const NAV_ITEMS: NavSpec[] = [
   { to: '/conversations', label: 'שיחות', icon: 'message-circle', enabled: true },
   { to: '/appointments', label: 'ניהול פגישות', icon: 'calendar-event', enabled: true },
   { to: '/whatsapp', label: 'וואטסאפ', icon: 'brand-whatsapp', enabled: true },
-  { to: '/admin', label: 'ניהול', icon: 'shield', enabled: true, adminOnly: true },
+  { to: '/admin', label: 'ניהול', icon: 'shield', enabled: true, adminOnly: true, accent: 'blue' },
   { to: '/settings', label: 'הגדרות', icon: 'settings', enabled: false },
 ]
 
@@ -52,17 +54,29 @@ function NavItem({ item }: { item: NavSpec }) {
     )
   }
 
+  // The admin item gets a distinct, always-on blue treatment (a blue-tinted pill
+  // with a blue outline) so it's instantly recognizable among the green tabs.
+  const isBlue = item.accent === 'blue'
+
   return (
     <NavLink
       to={item.to}
       end={item.to === '/'}
-      className={({ isActive }) =>
-        `flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition ${
+      className={({ isActive }) => {
+        const base = 'flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition'
+        if (isBlue) {
+          return `${base} ${
+            isActive
+              ? 'bg-[#378ADD] font-medium text-white'
+              : 'bg-[#378ADD]/20 text-[#bfe0ff] ring-1 ring-inset ring-[#378ADD]/50 hover:bg-[#378ADD]/35 hover:text-white'
+          }`
+        }
+        return `${base} ${
           isActive
             ? 'bg-leaf font-medium text-white'
             : 'text-leaf-light hover:bg-white/10 hover:text-white'
         }`
-      }
+      }}
     >
       <Icon name={item.icon} size={19} />
       <span>{item.label}</span>

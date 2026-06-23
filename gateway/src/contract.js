@@ -54,9 +54,17 @@ function buildWebhookPayload(msg, gatewayAccountId, opts = {}) {
   const messageContent = msg.message || {};
   // The backend requires gateway_account_id / from / message_id / type to be
   // non-null STRINGS — always send strings (never null) to honor the contract (fixes the B1-class mismatch).
+  // LID → phone resolution (the real customer identity). Modern WhatsApp
+  // addresses 1:1 chats by a hidden "@lid" id, so msg.key.remoteJid is often a
+  // LID, NOT the phone number. Baileys (6.7.x) also puts the sender's REAL
+  // phone-number jid on the key as `senderPn` (e.g. "972508648315@s.whatsapp.net").
+  // We must report `from` as the phone so the backend's test-number allow-list
+  // (and, later, real per-customer routing) can match it. Prefer senderPn; fall
+  // back to remoteJid for plain @s.whatsapp.net chats where no LID is involved.
+  // conversation_id below stays the remoteJid (the stable chat key replies route to).
   const payload = {
     gateway_account_id: gatewayAccountId,
-    from: jidToE164(msg.key?.remoteJid),
+    from: jidToE164(msg.key?.senderPn || msg.key?.remoteJid),
     push_name: msg.pushName || '',
     message_id: msg.key?.id || '',
     timestamp: Number(msg.messageTimestamp) || null,
