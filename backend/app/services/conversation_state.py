@@ -19,7 +19,7 @@ there is no path to read/write another tenant's conversation.
 
 TTL DEPENDS ON STATUS (decision 0010) — the transcript must NOT vanish while a
 human is needed:
-  * bot     → sliding ~60-min inactivity window (silence ⇒ expire).
+  * bot     → sliding ~30-min inactivity window (silence ⇒ expire).
   * waiting → PERSIST (no expiry): the customer asked for a human; keep the chat
               alive until a person answers.
   * human   → PERSIST (no expiry): an owner is handling it; keep it alive.
@@ -38,7 +38,8 @@ from typing import Any
 import redis.asyncio as aioredis
 
 # Sliding inactivity window: silence for this long ⇒ the conversation expires.
-CONVERSATION_TTL_SECONDS = 60 * 60
+# The bot's working memory of a chat lives for 30 minutes of silence, then clears.
+CONVERSATION_TTL_SECONDS = 30 * 60
 
 # A CLOSED conversation lingers this long before it's swept (kept so the owner can
 # still review a finished chat for a while). 30 days.
@@ -184,7 +185,7 @@ async def set_status(
     await redis.hset(key, mapping={"status": status, "last_activity_at": _now_iso()})
     await _register(redis, business_id, conversation_id)
     # Apply the TTL policy for the NEW status (persist for waiting/human, slide for
-    # bot, 30-day for closed) — NOT a flat 60-min expire (decision 0010).
+    # bot, 30-day for closed) — NOT a flat 30-min expire (decision 0010).
     await _apply_ttl(redis, business_id, conversation_id, status)
     return key
 
@@ -310,7 +311,7 @@ async def append_message(
         key, mapping={"preview": _preview(body), "last_activity_at": _now_iso()}
     )
     await _register(redis, business_id, conversation_id)
-    # Apply the TTL policy for the CURRENT status, NOT an unconditional 60-min
+    # Apply the TTL policy for the CURRENT status, NOT an unconditional 30-min
     # expire — otherwise a new message would resurrect a TTL on a waiting/human
     # chat that must PERSIST (decision 0010). Default to 'bot' if none set yet.
     current_status = await redis.hget(key, "status") or STATUS_BOT
@@ -355,7 +356,7 @@ async def _apply_ttl(
     set consistent:
       * waiting / human → PERSIST all three (no expiry) — a human is (or will be)
         on it, so the transcript must not disappear.
-      * bot             → slide all three to CONVERSATION_TTL_SECONDS (~60 min).
+      * bot             → slide all three to CONVERSATION_TTL_SECONDS (~30 min).
       * closed          → set all three to CLOSED_TTL_SECONDS (30 days).
 
     Tenant-scoped: `_assert_owns` is re-checked on the conv + log keys; the index
