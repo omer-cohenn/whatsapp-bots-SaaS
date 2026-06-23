@@ -26,6 +26,8 @@ type Props = {
   ariaLabel: string
   /** Optional formatter for the tooltip value (e.g. money). Defaults to String. */
   formatValue?: (v: number) => string
+  /** Fill the area under each line (clearer "body" for cumulative charts). */
+  fillArea?: boolean
 }
 
 // Fixed viewBox; the SVG scales responsively to its container width.
@@ -46,6 +48,7 @@ export default function LineChart({
   series,
   ariaLabel,
   formatValue = (v) => String(v),
+  fillArea = false,
 }: Props) {
   const n = labels.length
   // Shared y-scale across both series so they're comparable.
@@ -83,8 +86,19 @@ export default function LineChart({
         {series.map((s) => {
           // Build the polyline path; guard against empty/mismatched series.
           const pts = s.values.map((v, i) => `${xAt(i)},${yAt(v)}`).join(' ')
+          const baseY = PAD_TOP + plotH
           return (
             <g key={s.name}>
+              {fillArea && n > 1 ? (
+                // Close the line down to the baseline so the area below it fills —
+                // a flat cumulative line reads as a solid block, not a floating wire.
+                <polygon
+                  points={`${xAt(0)},${baseY} ${pts} ${xAt(n - 1)},${baseY}`}
+                  fill={s.color}
+                  fillOpacity="0.14"
+                  stroke="none"
+                />
+              ) : null}
               {n > 1 ? (
                 <polyline
                   points={pts}

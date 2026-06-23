@@ -45,6 +45,13 @@ function toYmd(d: Date): string {
   return `${y}-${m}-${day}`
 }
 
+// Short he-IL date (day/month) for the cumulative chart's range caption.
+function shortDate(ymd: string): string {
+  const d = new Date(ymd)
+  if (Number.isNaN(d.getTime())) return ymd
+  return d.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })
+}
+
 export default function UsageSection({ businessId }: { businessId: string }) {
   const [days, setDays] = useState<WindowDays>('30')
   const [mode, setMode] = useState<ChartMode>('bars')
@@ -144,17 +151,28 @@ export default function UsageSection({ businessId }: { businessId: string }) {
                   ariaLabel={`${METRIC_META[metric].label}: סך ${total} לאורך ${days} הימים האחרונים`}
                 />
               ) : (
-                <LineChart
-                  labels={points.map((p) => p.day)}
-                  series={[
-                    {
-                      values: cumulative,
-                      color: METRIC_META[metric].color,
-                      name: METRIC_META[metric].label,
-                    },
-                  ]}
-                  ariaLabel={`${METRIC_META[metric].label}: מצטבר ל-${total} לאורך ${days} הימים האחרונים`}
-                />
+                <>
+                  <LineChart
+                    labels={points.map((p) => p.day)}
+                    series={[
+                      {
+                        values: cumulative,
+                        color: METRIC_META[metric].color,
+                        name: METRIC_META[metric].label,
+                      },
+                    ]}
+                    fillArea
+                    ariaLabel={`${METRIC_META[metric].label}: מצטבר ל-${total} לאורך ${days} הימים האחרונים`}
+                  />
+                  {/* Date range (LTR so it lines up with the chart's left→right x-axis). */}
+                  <div
+                    dir="ltr"
+                    className="mt-1 flex justify-between text-xs text-slate-400"
+                  >
+                    <span>{shortDate(from)}</span>
+                    <span>{shortDate(to)}</span>
+                  </div>
+                </>
               )}
             </Card>
           ))}
