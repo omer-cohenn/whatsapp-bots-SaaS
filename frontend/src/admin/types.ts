@@ -250,3 +250,9 @@ export type CrmNote = {
 export type CrmNotesResponse = {
   notes: CrmNote[]
 }
+
+/** DELETE /api/admin/businesses/{id} response — the wiped business's name. */
+export type DeleteBusinessResponse = {
+  deleted: boolean
+  name: string | null
+}

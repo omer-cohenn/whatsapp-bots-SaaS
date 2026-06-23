@@ -20,6 +20,7 @@ import type {
   CrmNotesResponse,
   CrmResponse,
   CrmStage,
+  DeleteBusinessResponse,
   LeadsByType,
   MessagesByBusinessResponse,
   PlansResponse,
@@ -205,5 +206,16 @@ export function addCrmNote(id: string, note: string): Promise<AddCrmNoteResponse
 export function getCrmNotes(id: string): Promise<CrmNotesResponse> {
   return api.get<CrmNotesResponse>(
     `/api/admin/businesses/${encodeURIComponent(id)}/crm/notes`,
+  )
+}
+
+/**
+ * DELETE /api/admin/businesses/{id} — PERMANENTLY delete a business and ALL its
+ * data (cascade). Irreversible. The server refuses to delete the admin's OWN
+ * session business (→ 400); unknown id → 404.
+ */
+export function deleteBusiness(id: string): Promise<DeleteBusinessResponse> {
+  return api.delete<DeleteBusinessResponse>(
+    `/api/admin/businesses/${encodeURIComponent(id)}`,
   )
 }

@@ -29,7 +29,7 @@ from typing import Literal
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 
-from app.core.deps import current_admin
+from app.core.deps import current_admin, current_business
 from app.core.logging import get_logger
 from app.models.admin import (
     AdminAiOpsPoint,
@@ -48,6 +48,7 @@ from app.models.admin import (
     AdminCrmRow,
     AdminCrmStageRequest,
     AdminCrmStageResponse,
+    AdminDeleteResponse,
     AdminLeadsByType,
     AdminMessagesResponse,
     AdminMessagesRow,
@@ -725,3 +726,51 @@ async def admin_crm_notes(
         for r in rows
     ]
     return AdminCrmNotesResponse(notes=notes)
+
+
+@router.delete("/businesses/{business_id}", response_model=AdminDeleteResponse)
+async def admin_delete_business(
+    request: Request,
+    business_id: str = Path(..., min_length=1, max_length=_BUSINESS_ID_MAX),
+    admin: dict[str, str] = Depends(current_admin),
+    own_business_id: str = Depends(current_business),
+) -> AdminDeleteResponse:
+    """HARD-delete a business and ALL its data (cascade), audited. Admin-only.
+
+    Destructive + irreversible: removes the businesses row, which CASCADES to
+    every tenant table (members, bot, leads, bookings, usage, subscription, crm,
+    whatsapp creds, …). The admin_delete_business SD function audits BEFORE the
+    delete (the admin_audit row has no FK to businesses, so it survives).
+
+    Guard: an admin may NOT delete the business tied to their OWN session — that
+    would orphan their own login → 400. Everything else maps:
+      * own business                                   → 400
+      * foreign_key_violation / DataError (unknown id) → 404
+    The business id flows ONLY into the admin-gated SD function (never a
+    tenant_connection). We log the action + the redacted id, never PII.
+    """
+    if business_id == own_business_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cannot delete your own business",
+        )
+    try:
+        async with request.app.state.pg_pool.acquire() as conn:
+            name = await conn.fetchval(
+                "SELECT admin_delete_business($1, $2, $3)",
+                admin["id"],
+                admin["email"],
+                business_id,
+            )
+    except asyncpg.exceptions.ForeignKeyViolationError:
+        # Unknown business (the SD function raises foreign_key_violation).
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="business not found"
+        ) from None
+    except asyncpg.exceptions.DataError:
+        # A malformed business uuid never matches a business.
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="business not found"
+        ) from None
+    log.info("admin deleted a business", extra={"business_id": business_id})
+    return AdminDeleteResponse(deleted=True, name=name)

@@ -5,7 +5,7 @@
 // Hebrew state. Admin-gated server-side; deliberate cross-tenant view.
 
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import DashboardLayout from '../../components/DashboardLayout'
 import Card from '../../components/ui/Card'
 import Spinner from '../../components/ui/Spinner'
@@ -15,7 +15,8 @@ import StatusBadge from '../../components/admin/StatusBadge'
 import SubscriptionPanel from '../../components/admin/SubscriptionPanel'
 import UsageSection from '../../components/admin/UsageSection'
 import CrmPanel from '../../components/admin/CrmPanel'
-import { getBusiness, getPlans } from '../../lib/adminClient'
+import Modal from '../../components/ui/Modal'
+import { getBusiness, getPlans, deleteBusiness } from '../../lib/adminClient'
 import { ApiError } from '../../lib/apiClient'
 import { toFriendlyError } from '../../lib/friendlyError'
 import { formatPrice, formatMoney } from '../../admin/labels'
@@ -40,11 +41,17 @@ function Fact({ label, value }: { label: string; value: string | null | undefine
 export default function BusinessDetail() {
   const { id = '' } = useParams<{ id: string }>()
 
+  const navigate = useNavigate()
   const [business, setBusiness] = useState<BusinessDetailType | null>(null)
   const [plans, setPlans] = useState<Plan[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Danger zone — the permanent-delete confirmation flow.
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmText, setConfirmText] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const load = useCallback(() => {
     let cancelled = false
@@ -103,6 +110,25 @@ export default function BusinessDetail() {
     },
     [],
   )
+
+  // Permanent delete: wipe the business (cascade) then return to the list. A 400
+  // means the admin tried to delete their OWN session business (server guard).
+  const handleDelete = useCallback(async () => {
+    if (!business) return
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      await deleteBusiness(business.business_id)
+      navigate('/admin/businesses', { replace: true })
+    } catch (err) {
+      setDeleteError(
+        err instanceof ApiError && err.status === 400
+          ? 'אי אפשר למחוק את העסק שמקושר לחשבון שלך.'
+          : toFriendlyError(err, 'מחיקת העסק נכשלה. נסו שוב.'),
+      )
+      setDeleting(false)
+    }
+  }, [business, navigate])
 
   // The current plan's display name for the header fact.
   const planLabel = business
@@ -210,6 +236,80 @@ export default function BusinessDetail() {
 
             {/* Usage charts */}
             <UsageSection businessId={business.business_id} />
+
+            {/* Danger zone (M13): permanent, irreversible delete. */}
+            <Card className="!border-red-200">
+              <h2 className="flex items-center gap-2 text-lg font-medium text-red-700">
+                <Icon name="trash" size={20} />
+                אזור מסוכן
+              </h2>
+              <p className="mt-1 text-sm text-slate-600">
+                מחיקת העסק היא <strong>סופית ובלתי הפיכה</strong> — נמחקים כל
+                הנתונים שלו (הבוט, הלידים, הפגישות, השיחות, נתוני השימוש, המנוי
+                וה‑CRM). לא ניתן לשחזר.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmText('')
+                  setDeleteError(null)
+                  setConfirmOpen(true)
+                }}
+                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white outline-none transition hover:bg-red-700 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+              >
+                <Icon name="trash" size={16} />
+                מחיקת העסק
+              </button>
+            </Card>
+
+            <Modal
+              open={confirmOpen}
+              title="מחיקת עסק — פעולה בלתי הפיכה"
+              onClose={() => {
+                if (!deleting) setConfirmOpen(false)
+              }}
+            >
+              <p className="text-sm text-slate-700">
+                הפעולה תמחק לצמיתות את{' '}
+                <strong>{business.name || 'העסק'}</strong> ואת כל הנתונים שלו. כדי
+                לאשר, הקלד/י{' '}
+                <span className="font-medium">"{business.name?.trim() || 'מחק'}"</span>:
+              </p>
+              <input
+                type="text"
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder={business.name?.trim() || 'מחק'}
+                aria-label="אישור מחיקה"
+                className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-200"
+              />
+              {deleteError ? (
+                <div className="mt-3">
+                  <Alert tone="error">{deleteError}</Alert>
+                </div>
+              ) : null}
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmOpen(false)}
+                  disabled={deleting}
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                >
+                  ביטול
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={
+                    deleting ||
+                    confirmText.trim() !== (business.name?.trim() || 'מחק')
+                  }
+                  className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {deleting ? 'מוחק…' : 'מחק לצמיתות'}
+                </button>
+              </div>
+            </Modal>
           </>
         ) : null}
       </div>

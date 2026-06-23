@@ -383,3 +383,17 @@ class AdminCrmNotesResponse(BaseModel):
     """GET .../crm/notes — the note log, newest first."""
 
     notes: list[AdminCrmNote]
+
+
+# === M13: hard-delete a business =============================================
+
+
+class AdminDeleteResponse(BaseModel):
+    """DELETE /api/admin/businesses/{id} — confirmation of the wiped business.
+
+    `deleted` is always True on success (a missing business is a 404, not a
+    False); `name` echoes the deleted business name (for the success toast).
+    """
+
+    deleted: bool = True
+    name: str | None = None
