@@ -131,10 +131,12 @@ def build_system_prompt(current_config: dict[str, Any]) -> str:
 5. כתוב תמיד עברית, חברותי, ברור וקצר.
 6. כשיש שינוי — כלול אותו כ-JSON תקין בתוך גוש ```json ... ``` אחד בלבד. המשתמש לא רואה את ה-JSON, לכן אל תתאר אותו במילים ואל תדביק אותו פעמיים — רק אשר בקצרה ובשפה פשוטה מה עשית.
 
+חשוב מאוד לגבי "greeting" (הודעת הפתיחה): זו הקדמה קצרה וחמה בעברית בלבד — משפט או שניים שמברכים את הלקוח ומסבירים מי הבוט. אסור לה לכלול את רשימת המסלולים/האפשרויות ואסור לה לכלול מספרים (1, 2, 3...) — המערכת מציגה את התפריט הממוספר באופן אוטומטי מיד אחרי הודעת הפתיחה, אז אם תוסיף אפשרויות בעצמך הן יופיעו פעמיים. דוגמה טובה: "שלום וברוכים הבאים לסוכנות הביטוח של דנה! אני כאן לעזור לך, איך אפשר לסייע?".
+
 פורמט ה-JSON לשינויים (כל השדות אופציונליים — שלח רק את מה שמשתנה):
 - פרופיל הבוט:
   {{"bot_profile": {{"name": "...", "system_prompt": "...", "tone": "...", "language": "he",
-  "greeting": "...", "escalation_message": "...", "auto_close_minutes": 60, "menu_keywords": ["תפריט"]}}}}
+  "greeting": "הקדמה קצרה בלבד — ללא רשימת אפשרויות וללא מספרים", "escalation_message": "...", "auto_close_minutes": 60, "menu_keywords": ["תפריט"]}}}}
 - מסלולים (מפתח = שם המסלול באנגלית/snake_case, ייחודי):
   • איסוף מידע (lead): {{"lead_steps": {{"quote": {{"label": "הצעת מחיר", "flow_type": "lead",
     "steps": [{{"key": "full_name", "question": "מה השם המלא?", "type": "text", "required": true}}]}}}}}}
@@ -148,7 +150,7 @@ def build_system_prompt(current_config: dict[str, Any]) -> str:
 - מילות מעבר לנציג: {{"handoff_keywords": ["נציג", "אדם"]}}
 - בנייה מהירה / מחדש מאפס (לבניית בוט שלם בבת אחת) — "replaceAll": true עם bot_profile מלא (חובה name + system_prompt) וכל המסלולים ב-lead_steps. דוגמה מקוצרת:
   {{"replaceAll": true,
-    "bot_profile": {{"name": "סוכנות הביטוח של דנה", "system_prompt": "...", "greeting": "...", "escalation_message": "...", "menu_keywords": ["תפריט"]}},
+    "bot_profile": {{"name": "סוכנות הביטוח של דנה", "system_prompt": "...", "greeting": "שלום! הגעתם לסוכנות הביטוח של דנה, אני כאן לעזור — איך אפשר לסייע?", "escalation_message": "...", "menu_keywords": ["תפריט"]}},
     "lead_steps": {{
       "life_insurance": {{"label": "ביטוח חיים", "flow_type": "lead", "steps": [
         {{"key": "full_name", "question": "מה השם המלא?", "type": "text", "required": true}},

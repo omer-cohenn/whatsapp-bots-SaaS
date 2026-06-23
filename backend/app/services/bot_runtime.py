@@ -95,6 +95,16 @@ async def run_turn(
         )
         return {"replies": [], "event": None, "lead_id": None, "silent": True}
 
+    # 1a) A CLOSED chat that gets a new inbound starts over fresh. We wipe this
+    #     conversation's Redis state, transcript, and status hash, then FALL
+    #     THROUGH to the normal flow below. Because the reset clears everything,
+    #     the rest of run_turn now behaves exactly like a brand-new conversation:
+    #     a fresh transcript, get_state → None (→ initial_state), and the engine
+    #     emits the greeting+menu open turn. The OLD closed lead row in Postgres
+    #     is left untouched, so the finished chat's history is preserved.
+    if status == conversation_state.STATUS_CLOSED:
+        await conversation_state.reset_conversation(redis, business_id, conversation_id)
+
     # 1b) Non-silent turn: record the inbound customer message on the transcript
     #     so the in-app chat view shows it alongside the bot's replies below.
     await conversation_state.append_message(

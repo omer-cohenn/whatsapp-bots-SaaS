@@ -153,6 +153,37 @@ async def clear_state(
     await redis.srem(_index_key(business_id), conversation_id)
 
 
+async def reset_conversation(
+    redis: aioredis.Redis, business_id: str, conversation_id: str
+) -> None:
+    """Wipe a conversation back to brand-new so the next inbound starts fresh.
+
+    Deletes ALL three Redis keys for this conversation:
+      * the conv hash (status + last-activity + preview)  → `_key`
+      * the engine state lives inside that same hash field → cleared with it
+      * the transcript LIST                                → `_log_key`
+    and drops it from this tenant's index set.
+
+    After this, `get_state` → None (engine falls back to `initial_state()`),
+    `get_status` → None (callers treat None as the default 'bot'), and the
+    transcript is empty — i.e. exactly the state of a conversation that has
+    never been seen. Used when a CLOSED chat receives a new inbound, so the
+    customer effectively begins a clean new conversation (the old closed lead
+    row stays in Postgres untouched, preserving history).
+
+    Tenant-isolated: `_assert_owns` is re-checked on both per-conversation keys;
+    `business_id` is the caller's verified id, never client-supplied.
+    """
+    key = _key(business_id, conversation_id)
+    log_key = _log_key(business_id, conversation_id)
+    _assert_owns(business_id, key)
+    _assert_owns(business_id, log_key)
+    # Delete the hash (carries both status AND the engine `state` field) and the
+    # transcript list, then unregister from this tenant's index set.
+    await redis.delete(key, log_key)
+    await redis.srem(_index_key(business_id), conversation_id)
+
+
 # --- chat status ------------------------------------------------------------
 
 async def get_status(
