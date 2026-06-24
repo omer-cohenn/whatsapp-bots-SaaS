@@ -63,7 +63,7 @@ echo.
 echo [3/5] Running the FULL EXPLAINED M7 test (read this part)...
 echo   (it first drives POST /api/bot/sim + bot_runtime to seed REAL leads/chats)
 echo --------------------------------------------------------------------------
-%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m7_full_test.py"
+%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/narrated/m7_full_test.py"
 echo --------------------------------------------------------------------------
 echo   NOTE: the narrated run is expected to show 13/15 today - the 2 red checks
 echo   are the KNOWN period=week/month bug (see the report). The strict gate below
@@ -71,29 +71,29 @@ echo   marks those two as xfail so CI stays green on the working surface.
 echo.
 
 echo [4/5] Running the strict M7 gate (pytest - the version CI uses)...
-%COMPOSE% run --rm backend sh -c "cd /app && pip install -q pytest==8.3.4 pytest-asyncio==0.25.2 && PYTHONPATH=/app python -m pytest tests/test_dashboard.py -q"
+%COMPOSE% run --rm backend sh -c "cd /app && pip install -q pytest==8.3.4 pytest-asyncio==0.25.2 && PYTHONPATH=/app python -m pytest tests/strict/test_dashboard.py -q"
 if errorlevel 1 goto :fail
 echo.
 
 echo [5/5] No-regression check: re-running M2 + M3 + M4 + M5 (try-me + sim)...
 echo --------------------------------------------------------------------------
 echo   --- the M2 tenant wall (must still be 12/12)...
-%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m2_full_test.py"
+%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/narrated/m2_full_test.py"
 if errorlevel 1 goto :fail
 echo   --- the M3 login front-door...
-%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m3_full_test.py"
+%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/narrated/m3_full_test.py"
 if errorlevel 1 goto :fail
 echo   --- the M4 bot-builder full test...
-%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m4_full_test.py"
+%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/narrated/m4_full_test.py"
 if errorlevel 1 goto :fail
 echo   --- the M5 try-me full test...
-%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m5_full_test.py"
+%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/narrated/m5_full_test.py"
 if errorlevel 1 goto :fail
 echo   --- the M5b lead-memory full test...
-%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m5b_full_test.py"
+%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/narrated/m5b_full_test.py"
 if errorlevel 1 goto :fail
 echo   --- the strict suites (isolation + auth gate + builder + secret guard + tryme + sim + dashboard)...
-%COMPOSE% run --rm backend sh -c "cd /app && pip install -q pytest==8.3.4 pytest-asyncio==0.25.2 && PYTHONPATH=/app python -m pytest tests/isolation tests/test_auth_gate.py tests/test_bot_builder.py tests/test_secret_guard.py tests/test_bot_tryme.py tests/test_bot_sim.py tests/test_dashboard.py -q"
+%COMPOSE% run --rm backend sh -c "cd /app && pip install -q pytest==8.3.4 pytest-asyncio==0.25.2 && PYTHONPATH=/app python -m pytest tests/isolation tests/strict/test_auth_gate.py tests/strict/test_bot_builder_*.py tests/strict/test_secret_guard.py tests/strict/test_bot_tryme.py tests/strict/test_bot_sim.py tests/strict/test_dashboard.py -q"
 if errorlevel 1 goto :fail
 echo --------------------------------------------------------------------------
 echo.

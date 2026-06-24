@@ -61,23 +61,24 @@ One business must **NEVER** see another business's data.
 
 ## 4. Folder map
 
+Five clear domains in ONE monorepo. **Full human-readable map → [`STRUCTURE.md`](STRUCTURE.md)**
+(Hebrew "signs" over the technical names) + a `README.md` inside each domain folder.
+
 ```
 Bizz_up/
 ├── CLAUDE.md              ← you are here (the rulebook)
+├── STRUCTURE.md           ← the master map (5 domains, every folder/key file explained in Hebrew)
+├── ENV_SETUP.md           ← what to fill to run with REAL APIs (env vars + generators)
 ├── README.md
-├── .claude/              ← the "AI control room"
-│   ├── agents/           ← specialist scanning sub-agents
-│   ├── workflows/        ← recipes that run agents in order
-│   └── settings.json     ← project Claude settings (+ last_bo write-deny)
-├── docs/                ← our living documentation (the deliverable)
-│   ├── 00_overview.md
-│   ├── system-map/       ← detailed map of the existing system
-│   ├── bugs.md
-│   ├── security-issues.md
-│   └── decisions/        ← architecture decisions we make together
-├── backend/             ← (future) Python / FastAPI — empty for now
-├── frontend/            ← (future) React + Tailwind — empty for now
-└── whatsapp-gateway/    ← (future) Node gateway — empty for now
+├── run.bat / stop.bat / Makefile   ← one-command run/stop/verbs
+├── backend/              🧠 FastAPI — api/(doors) services/(brain) models/(forms) core/(vault) db/(pipe) tests/
+├── gateway/             💬 Node/Baileys — src/{index,socket,webhook,routes,contract,config,logger}.js
+├── frontend/            🎨 React+Tailwind — src/{pages/,components/(landing,whatsapp,admin,booking,dashboard,ui,botbuilder),lib/,i18n/}
+├── infra/               🧱 docker-compose.yml + .env(.local).example
+├── supabase/            🗄️ migrations/ 0001…0021 (RLS lives here) + seed.sql
+├── tests/               🛡️ test_*.bat runners (test code lives in backend/tests/)
+├── docs/                📚 STATUS.md + decisions/ + spec/ + system-map/
+└── .claude/             🤖 the "AI control room": agents/ workflows/ settings.json (+ last_bo write-deny)
 ```
 
 ---

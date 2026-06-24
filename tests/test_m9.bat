@@ -51,23 +51,23 @@ echo.
 
 echo [3/5] Running the FULL EXPLAINED M9 test (read this part)...
 echo --------------------------------------------------------------------------
-%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m9_full_test.py"
+%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/narrated/m9_full_test.py"
 if errorlevel 1 goto :fail
 echo --------------------------------------------------------------------------
 echo.
 
 echo [4/5] Running the strict M9 gate (pytest - the version CI uses)...
-%COMPOSE% run --rm backend sh -c "cd /app && pip install -q pytest pytest-asyncio && PYTHONPATH=/app python -m pytest tests/test_m9.py -q"
+%COMPOSE% run --rm backend sh -c "cd /app && pip install -q pytest pytest-asyncio && PYTHONPATH=/app python -m pytest tests/strict/test_m9.py -q"
 if errorlevel 1 goto :fail
 echo.
 
 echo [5/5] No-regression check: re-running M2..M8...
 echo --------------------------------------------------------------------------
 echo   --- the M2 tenant wall (must still be 12/12)...
-%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m2_full_test.py"
+%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/narrated/m2_full_test.py"
 if errorlevel 1 goto :fail
 echo   --- the strict M3..M8 pytest bundle...
-%COMPOSE% run --rm backend sh -c "cd /app && pip install -q pytest pytest-asyncio && PYTHONPATH=/app python -m pytest tests/test_auth_gate.py tests/test_bot_builder.py tests/test_bot_tryme.py tests/test_bot_sim.py tests/test_dashboard.py tests/test_lead_status.py tests/test_m8.py tests/isolation tests/test_secret_guard.py -q"
+%COMPOSE% run --rm backend sh -c "cd /app && pip install -q pytest pytest-asyncio && PYTHONPATH=/app python -m pytest tests/strict/test_auth_gate.py tests/strict/test_bot_builder_*.py tests/strict/test_bot_tryme.py tests/strict/test_bot_sim.py tests/strict/test_dashboard.py tests/strict/test_lead_status.py tests/strict/test_m8.py tests/isolation tests/strict/test_secret_guard.py -q"
 if errorlevel 1 goto :fail
 echo --------------------------------------------------------------------------
 echo.

@@ -43,19 +43,19 @@ echo.
 
 echo [3/5] Running the FULL EXPLAINED M3 test (read this part)...
 echo --------------------------------------------------------------------------
-%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m3_full_test.py"
+%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/narrated/m3_full_test.py"
 if errorlevel 1 goto :fail
 echo --------------------------------------------------------------------------
 echo.
 
 echo [4/5] Running the strict M3 gate (pytest - the version CI uses)...
-%COMPOSE% run --rm backend sh -c "cd /app && pip install -q pytest==8.3.4 pytest-asyncio==0.25.2 && PYTHONPATH=/app python -m pytest tests/test_auth_gate.py -q"
+%COMPOSE% run --rm backend sh -c "cd /app && pip install -q pytest==8.3.4 pytest-asyncio==0.25.2 && PYTHONPATH=/app python -m pytest tests/strict/test_auth_gate.py -q"
 if errorlevel 1 goto :fail
 echo.
 
 echo [5/5] No-regression check: re-running the M2 tenant wall (must be 12/12)...
 echo --------------------------------------------------------------------------
-%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m2_full_test.py"
+%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/narrated/m2_full_test.py"
 if errorlevel 1 goto :fail
 echo --------------------------------------------------------------------------
 echo.

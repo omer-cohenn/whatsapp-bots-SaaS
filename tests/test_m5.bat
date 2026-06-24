@@ -50,29 +50,29 @@ echo.
 echo [3/5] Running the FULL EXPLAINED M5 test (read this part)...
 echo   (PART A is the pure engine - no DB needed; PART B hits /api/bot/tryme)
 echo --------------------------------------------------------------------------
-%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m5_full_test.py"
+%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/narrated/m5_full_test.py"
 if errorlevel 1 goto :fail
 echo --------------------------------------------------------------------------
 echo.
 
 echo [4/5] Running the strict M5 gate (pytest - the version CI uses)...
-%COMPOSE% run --rm backend sh -c "cd /app && pip install -q pytest==8.3.4 pytest-asyncio==0.25.2 && PYTHONPATH=/app python -m pytest tests/test_bot_tryme.py -q"
+%COMPOSE% run --rm backend sh -c "cd /app && pip install -q pytest==8.3.4 pytest-asyncio==0.25.2 && PYTHONPATH=/app python -m pytest tests/strict/test_bot_tryme.py -q"
 if errorlevel 1 goto :fail
 echo.
 
 echo [5/5] No-regression check: re-running M2 + M3 + M4...
 echo --------------------------------------------------------------------------
 echo   --- the M2 tenant wall (must still be 12/12)...
-%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m2_full_test.py"
+%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/narrated/m2_full_test.py"
 if errorlevel 1 goto :fail
 echo   --- the M3 login front-door...
-%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m3_full_test.py"
+%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/narrated/m3_full_test.py"
 if errorlevel 1 goto :fail
 echo   --- the M4 bot-builder full test...
-%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m4_full_test.py"
+%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/narrated/m4_full_test.py"
 if errorlevel 1 goto :fail
 echo   --- the strict suites (isolation + auth gate + bot builder + secret guard)...
-%COMPOSE% run --rm backend sh -c "cd /app && pip install -q pytest==8.3.4 pytest-asyncio==0.25.2 && PYTHONPATH=/app python -m pytest tests/isolation tests/test_auth_gate.py tests/test_bot_builder.py tests/test_secret_guard.py -q"
+%COMPOSE% run --rm backend sh -c "cd /app && pip install -q pytest==8.3.4 pytest-asyncio==0.25.2 && PYTHONPATH=/app python -m pytest tests/isolation tests/strict/test_auth_gate.py tests/strict/test_bot_builder_*.py tests/strict/test_secret_guard.py -q"
 if errorlevel 1 goto :fail
 echo --------------------------------------------------------------------------
 echo.

@@ -60,28 +60,28 @@ echo.
 
 echo [4/6] Running the FULL EXPLAINED M14 test (read this part)...
 echo --------------------------------------------------------------------------
-%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m14_full_test.py"
+%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/narrated/m14_full_test.py"
 if errorlevel 1 goto :fail
 echo --------------------------------------------------------------------------
 echo.
 
 echo [5/6] Running the strict M14 gate (pytest - the version CI uses)...
-%COMPOSE% run --rm backend sh -c "cd /app && pip install -q pytest pytest-asyncio && PYTHONPATH=/app python -m pytest tests/test_m14.py -q"
+%COMPOSE% run --rm backend sh -c "cd /app && pip install -q pytest pytest-asyncio && PYTHONPATH=/app python -m pytest tests/strict/test_m14.py -q"
 if errorlevel 1 goto :fail
 echo.
 
 echo [6/6] No-regression check: re-running the tenant wall + the bundle...
 echo --------------------------------------------------------------------------
 echo   --- the M2 tenant wall (must still be 12/12)...
-%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m2_full_test.py"
+%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/narrated/m2_full_test.py"
 if errorlevel 1 goto :fail
 echo   --- the M5 engine + M5b runtime narrated suites...
-%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m5_full_test.py"
+%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/narrated/m5_full_test.py"
 if errorlevel 1 goto :fail
-%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m5b_full_test.py"
+%COMPOSE% run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/narrated/m5b_full_test.py"
 if errorlevel 1 goto :fail
 echo   --- the strict M8/M9/M10/M11 + bot_sim/tryme + builder + isolation bundle...
-%COMPOSE% run --rm backend sh -c "cd /app && pip install -q pytest pytest-asyncio && PYTHONPATH=/app python -m pytest tests/test_bot_builder.py tests/test_bot_tryme.py tests/test_bot_sim.py tests/test_m8.py tests/test_m9.py tests/test_m10.py tests/test_m11.py tests/test_m11_1.py tests/test_m11_2.py tests/test_lead_status.py tests/test_dashboard.py tests/isolation tests/test_auth_gate.py tests/test_secret_guard.py -q"
+%COMPOSE% run --rm backend sh -c "cd /app && pip install -q pytest pytest-asyncio && PYTHONPATH=/app python -m pytest tests/strict/test_bot_builder_*.py tests/strict/test_bot_tryme.py tests/strict/test_bot_sim.py tests/strict/test_m8.py tests/strict/test_m9.py tests/strict/test_m10.py tests/strict/test_m11_slots.py tests/strict/test_m11_booking.py tests/strict/test_m11_isolation.py tests/strict/test_m11_google.py tests/strict/test_m11_1_*.py tests/strict/test_m11_2.py tests/strict/test_lead_status.py tests/strict/test_dashboard.py tests/isolation tests/strict/test_auth_gate.py tests/strict/test_secret_guard.py -q"
 if errorlevel 1 goto :fail
 echo --------------------------------------------------------------------------
 echo.
