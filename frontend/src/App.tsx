@@ -6,6 +6,7 @@
 
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './auth/AuthContext'
+import AccessibilityWidget from './components/AccessibilityWidget'
 import AuthGate from './components/AuthGate'
 import AdminGate from './components/AdminGate'
 import LoginPage from './pages/LoginPage'
@@ -31,6 +32,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        {/* Always-available accessibility menu, shown on every page. */}
+        <AccessibilityWidget />
         <Routes>
           {/* Public */}
           <Route path="/login" element={<LoginPage />} />
