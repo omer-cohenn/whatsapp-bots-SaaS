@@ -240,6 +240,19 @@ async def run_turn(
             redis, business_id, conversation_id, "bot", reply
         )
 
+    # 7b) When the bot FINISHES the conversation — a lead questionnaire completed,
+    #     or a booking link was delivered — the session is DONE. Mark the chat
+    #     'closed' so the NEXT inbound restarts a brand-new conversation (greeting +
+    #     fresh transcript + a new lead), per the "each interaction is its own
+    #     conversation" rule. The reset itself runs on that next inbound (the
+    #     `status == closed` branch in step 1a). The completed lead row stays in
+    #     Postgres (the owner reviews it in the leads list). Handoff is excluded —
+    #     it goes to 'waiting' so a human can take over, not reset.
+    if event in ("lead_completed", "booking"):
+        await conversation_state.set_status(
+            redis, business_id, conversation_id, conversation_state.STATUS_CLOSED
+        )
+
     return {
         "replies": replies,
         "event": event,

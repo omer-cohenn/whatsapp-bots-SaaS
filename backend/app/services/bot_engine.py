@@ -58,6 +58,7 @@ _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _MIN_PHONE_DIGITS = 9
 
 # Conversation phases.
+PHASE_NEW = "new"            # brand-new conversation, not yet greeted (first turn).
 PHASE_MENU = "menu"
 PHASE_IN_FLOW = "in_flow"
 PHASE_HANDED_OFF = "handed_off"
@@ -66,7 +67,7 @@ PHASE_HANDED_OFF = "handed_off"
 def initial_state() -> dict[str, Any]:
     """The state of a brand-new conversation (before the first message)."""
     return {
-        "phase": PHASE_MENU,
+        "phase": PHASE_NEW,
         "active_flow": None,
         "step_index": 0,
         "collected": {},
@@ -95,6 +96,16 @@ def advance(settings: dict, state: dict, message: str) -> dict[str, Any]:
 
     flows = _ordered_flows(settings)
     profile = settings.get("bot_profile") or {}
+
+    # (NEW) First contact: a brand-new conversation ALWAYS opens with the greeting
+    # + menu — whatever the first message says. A customer's opening "היי" must get
+    # a warm welcome, NEVER "לא בטוח שהבנתי" on message #1. Afterwards we sit at the
+    # menu, where an unrecognized message DOES get the gentle nudge.
+    if state["phase"] == PHASE_NEW:
+        return _result(
+            [_greeting_and_menu(profile, flows)],
+            _menu_state(),
+        )
 
     # (a) Empty/blank message → the "open" turn: greeting + menu, sit at menu.
     if not text:
@@ -391,7 +402,7 @@ def _normalize_state(state: dict | None) -> dict[str, Any]:
     if not isinstance(state, dict):
         return initial_state()
     phase = state.get("phase")
-    if phase not in (PHASE_MENU, PHASE_IN_FLOW, PHASE_HANDED_OFF):
+    if phase not in (PHASE_NEW, PHASE_MENU, PHASE_IN_FLOW, PHASE_HANDED_OFF):
         phase = PHASE_MENU
     collected = state.get("collected")
     if not isinstance(collected, dict):
