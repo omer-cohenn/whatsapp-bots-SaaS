@@ -30,8 +30,7 @@ export default function Footer() {
             <div className="bx-footer-name"><strong>בוטיק</strong><small>העוזר החכם לוואטסאפ</small></div>
           </div>
           <nav className="bx-footer-links">
-            <Link to="/terms">תנאי שימוש</Link>
-            <Link to="/privacy">מדיניות פרטיות</Link>
+            <Link to="/terms">מדיניות ותנאי שימוש</Link>
             <Link to="/accessibility">הצהרת נגישות</Link>
           </nav>
         </div>

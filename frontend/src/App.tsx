@@ -10,8 +10,7 @@ import AccessibilityWidget from './components/AccessibilityWidget'
 import AuthGate from './components/AuthGate'
 import AdminGate from './components/AdminGate'
 import LoginPage from './pages/LoginPage'
-import TermsPage from './pages/TermsPage'
-import PrivacyPage from './pages/PrivacyPage'
+import TermsPrivacyPage from './pages/TermsPrivacyPage'
 import AccessibilityPage from './pages/AccessibilityPage'
 import Home from './pages/Home'
 import BotBuilderPage from './pages/BotBuilderPage'
@@ -37,8 +36,8 @@ export default function App() {
         <Routes>
           {/* Public */}
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/terms" element={<TermsPage />} />
-          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/terms" element={<TermsPrivacyPage />} />
+          <Route path="/privacy" element={<TermsPrivacyPage />} />
           <Route path="/accessibility" element={<AccessibilityPage />} />
 
           {/* Public booking (NO auth — tenant resolved server-side from the slug). */}
