@@ -24,10 +24,7 @@ export default function Footer() {
       <footer className="bx-footer">
         <div className="bx-footer-inner">
           <div className="bx-footer-brand">
-            <span className="bx-logo-mark">
-              <svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2a10 10 0 00-8.7 14.9L2 22l5.3-1.4A10 10 0 1012 2z" fill="#fff" /><circle cx="9" cy="12" r="1.6" fill="#0a7d40" /><circle cx="15" cy="12" r="1.6" fill="#0a7d40" /></svg>
-            </span>
-            <div className="bx-footer-name"><strong>בוטיק</strong><small>העוזר החכם לוואטסאפ</small></div>
+            <img src="/logo.png" alt="בוטיק" className="bx-logo-img" />
           </div>
           <nav className="bx-footer-links">
             <Link to="/terms">מדיניות ותנאי שימוש</Link>

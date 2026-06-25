@@ -106,14 +106,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         aria-label="ניווט ראשי"
         className="flex w-40 flex-shrink-0 flex-col gap-1 bg-leaf-dark p-3"
       >
-        <div className="flex items-center gap-2 px-1 pb-4 pt-1">
-          <span
-            aria-hidden="true"
-            className="flex h-7 w-7 items-center justify-center rounded-lg bg-leaf text-white"
-          >
-            <Icon name="message-circle" size={18} />
-          </span>
-          <span className="text-base font-medium text-white">בוטיק</span>
+        <div className="pb-4 pt-1">
+          {/* white wordmark variant — the sidebar is deep-green (dark) */}
+          <img src="/logo-on-dark.png" alt="בוטיק" className="h-14 w-auto" />
         </div>
 
         {navItems.map((item) => (

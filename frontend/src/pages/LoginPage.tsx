@@ -30,10 +30,8 @@ export default function LoginPage() {
         className="flex flex-1 flex-col items-center justify-center px-6 py-12"
       >
         <Card className="w-full max-w-sm text-center">
-          <div className="mb-4 text-4xl" aria-hidden="true">
-            🤖
-          </div>
-          <h1 className="mb-2 text-2xl font-bold text-slate-900">בוטיק</h1>
+          <img src="/logo.png" alt="בוטיק" className="mx-auto mb-4 h-24 w-auto" />
+          <h1 className="sr-only">בוטיק</h1>
           <p className="mb-8 text-sm leading-relaxed text-slate-600">
             התחברו כדי לנהל את בוט הוואטסאפ של העסק שלכם.
           </p>
