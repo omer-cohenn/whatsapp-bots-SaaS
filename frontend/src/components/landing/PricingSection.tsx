@@ -22,8 +22,13 @@ export default function PricingSection() {
                   {pl.popular && <span className="bx-plan-badge">הכי פופולרי</span>}
                 </div>
                 <div className="bx-plan-price">
-                  <span className="bx-plan-amt">{pl.amt}</span>
-                  <span className="bx-plan-per">{pl.per}</span>
+                  <div className="bx-plan-price-row">
+                    <span className="bx-plan-amt">{pl.amt}</span>
+                    <span className="bx-plan-per">{pl.per}</span>
+                    {pl.was && <span className="bx-plan-was">{pl.was}</span>}
+                  </div>
+                  {pl.note && <p className="bx-plan-note">{pl.note}</p>}
+                  {pl.annual && <p className="bx-plan-annual">{pl.annual}</p>}
                 </div>
                 <ul className="bx-plan-feats">
                   {pl.feats.map((f, j) => (

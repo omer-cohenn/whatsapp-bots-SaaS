@@ -39,14 +39,14 @@ export const INDUSTRIES: Industry[] = [
   { key: 'consult', theme: 'violet', title: 'יועצים ומאמנים', desc: 'מענה ראשוני וקביעת שיחות ייעוץ.' },
 ]
 
-export type Plan = { name: string; amt: string; per: string; popular: boolean; feats: string[] }
+export type Plan = { name: string; amt: string; per: string; was?: string; note?: string; annual?: string; popular: boolean; feats: string[] }
 export const PLANS: Plan[] = [
-  { name: 'חינם', amt: 'חינם', per: 'לתמיד', popular: false,
-    feats: ['בנייה וניהול של הבוט', 'עד 5 לקוחות', 'מערכת לניהול לידים'] },
-  { name: 'מקצועי', amt: '₪150', per: '/לחודש', popular: true,
-    feats: ['כל מה שבחינם', 'לקוחות ללא הגבלה', 'קביעת פגישות + סנכרון Google Calendar ו-Meet', 'מענה אנושי מתוך המערכת'] },
-  { name: 'עסקי', amt: '₪300', per: '/לחודש', popular: false,
-    feats: ['כל מה שבמקצועי', 'מענה חכם ללקוח על סמך העסק שלך (RAG)', 'ריבוי משתמשים'] },
+  { name: 'חינמי', amt: 'חינם', per: 'לתמיד', popular: false,
+    feats: ['בניית בוט עם AI', 'מסלול איסוף לידים אחד', '30 לידים בחודש', 'מענה לעד 5 מספרי טלפון', 'מערכת לניהול לידים'] },
+  { name: 'מקצועי', amt: '₪149', per: '/לחודש', was: '₪200', note: 'מחיר השקה לזמן מוגבל', annual: 'או ₪1,490 לשנה — חודשיים מתנה', popular: true,
+    feats: ['כל מה שבחינם', 'עד 5 מסלולי איסוף לידים', 'עד 600 לידים בחודש', 'מספרי טלפון ללא הגבלה', 'דשבורד מלא'] },
+  { name: 'עסקי', amt: '₪299', per: '/לחודש', was: '₪349', note: 'מחיר השקה לזמן מוגבל', annual: 'או ₪2,990 לשנה — חודשיים מתנה', popular: false,
+    feats: ['כל מה שבמקצועי', 'קביעת וניהול פגישות + סנכרון Google Calendar ו-Meet', 'עד 9 מסלולי איסוף לידים', 'עד 2,000 לידים בחודש'] },
 ]
 
 export type FaqItem = { q: string; a: string }

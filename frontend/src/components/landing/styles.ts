@@ -22,6 +22,8 @@ export const CSS = `
 .bx-blob{position:absolute;top:-10%;left:-6%;width:55%;height:80%;z-index:-1;pointer-events:none;background:radial-gradient(closest-side,rgba(79,160,70,.16),transparent 75%);filter:blur(8px);}
 .bx-brand{display:flex;align-items:center;justify-content:space-between;padding:22px 40px;}
 .bx-logo{display:flex;align-items:center;gap:11px;}
+.bx-logo-img{height:160px;width:auto;display:block;}
+.bx-footer-brand .bx-logo-img{height:64px;}
 .bx-logo-mark{display:grid;place-items:center;width:40px;height:40px;border-radius:13px;background:linear-gradient(145deg,#5cb04e,#3f9a39);box-shadow:0 6px 16px rgba(63,154,57,.28);}
 .bx-logo-text{display:flex;flex-direction:column;line-height:1.05;}
 .bx-logo-text strong{font-family:'Rubik';font-weight:800;font-size:19px;color:#1b3a28;}
@@ -189,9 +191,13 @@ export const CSS = `
 .bx-plan-top{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:30px;}
 .bx-plan-name{margin:0;font-family:'Rubik';font-weight:800;font-size:21px;color:#1b3a28;}
 .bx-plan-badge{background:#e7f4e1;color:#3f9a39;font-weight:700;font-size:12px;padding:5px 12px;border-radius:999px;white-space:nowrap;}
-.bx-plan-price{display:flex;align-items:baseline;gap:7px;margin-top:16px;padding-bottom:22px;border-bottom:1px solid #eadfce;}
+.bx-plan-price{margin-top:16px;padding-bottom:22px;border-bottom:1px solid #eadfce;}
+.bx-plan-price-row{display:flex;align-items:baseline;gap:7px;}
 .bx-plan-amt{font-family:'Rubik';font-weight:800;font-size:clamp(34px,3.3vw,44px);color:#1b3a28;direction:ltr;}
 .bx-plan-per{font-size:14px;color:#8a958b;font-weight:600;}
+.bx-plan-was{font-size:16px;color:#8a958b;font-weight:600;text-decoration:line-through;direction:ltr;}
+.bx-plan-note{margin-top:6px;font-size:13px;color:#3f9a39;font-weight:700;}
+.bx-plan-annual{margin-top:4px;font-size:13px;color:#8a958b;font-weight:600;}
 .bx-plan-feats{list-style:none;margin:22px 0;padding:0;display:flex;flex-direction:column;gap:13px;flex:1;}
 .bx-plan-feats li{display:flex;align-items:flex-start;gap:9px;font-size:14.5px;color:#46524a;line-height:1.5;}
 .bx-plan-feats svg{flex:none;margin-top:1px;}
