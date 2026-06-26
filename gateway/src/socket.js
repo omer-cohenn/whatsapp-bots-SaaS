@@ -317,7 +317,13 @@ function scheduleReconnect() {
   }, 3000);
 }
 
-module.exports = {
+// Mutate the EXISTING exports object instead of reassigning it. webhook.js does
+// `const socketModule = require('./socket')` at load time — during the
+// socket<->webhook require cycle it captures THIS object before we get here, so
+// a fresh `module.exports = {…}` would leave webhook holding the old empty
+// reference (→ "socketModule.getSock is not a function" at reply time).
+// Object.assign keeps the same reference both modules share.
+Object.assign(module.exports, {
   state,
   recentMessages,
   rememberSentId,
@@ -329,4 +335,4 @@ module.exports = {
   normalizeJidSafe,
   handleInbound,
   getOwnJid: () => ownJid,
-};
+});
