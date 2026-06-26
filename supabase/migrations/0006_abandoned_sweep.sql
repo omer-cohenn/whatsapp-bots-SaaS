@@ -26,6 +26,13 @@
 -- Idempotent: CREATE OR REPLACE + idempotent REVOKE/GRANT.
 -- ============================================================================
 
+-- REPLAY-SAFETY: the migrate runner has NO schema_migrations ledger — it re-runs
+-- EVERY file on each pass. Later migration 0023 redefines this function with a
+-- different RETURN TYPE (TABLE instead of integer); on an existing DB this 0006
+-- would then hit "cannot change return type of existing function". DROP first so
+-- 0006 can always rebuild the integer version, then 0023 rebuilds the TABLE one.
+DROP FUNCTION IF EXISTS sweep_abandoned_leads(int);
+
 CREATE OR REPLACE FUNCTION sweep_abandoned_leads(p_idle_minutes int)
 RETURNS integer
 LANGUAGE plpgsql

@@ -18,6 +18,7 @@ import Alert from '../components/ui/Alert'
 import Icon from '../components/ui/Icon'
 import { getConversations } from '../lib/dashboardClient'
 import { toFriendlyError } from '../lib/friendlyError'
+import { useUnread } from '../dashboard/UnreadContext'
 import type { Conversation, ConversationStatus } from '../dashboard/types'
 
 type StatusFilter = 'all' | ConversationStatus
@@ -31,6 +32,7 @@ const FILTER_SEGMENTS: Segment<StatusFilter>[] = [
 ]
 
 export default function ConversationsPage() {
+  const { refresh: refreshUnread } = useUnread()
   const [filter, setFilter] = useState<StatusFilter>('all')
   const [conversations, setConversations] = useState<Conversation[] | null>(null)
   const [loading, setLoading] = useState(true)
@@ -52,7 +54,11 @@ export default function ConversationsPage() {
     setError(null)
     getConversations(statusFilter === 'all' ? undefined : statusFilter)
       .then((res) => {
-        if (!cancelled) setConversations(res.conversations)
+        if (!cancelled) {
+          setConversations(res.conversations)
+          // Keep the nav badge in sync with the freshly-fetched total.
+          refreshUnread()
+        }
       })
       .catch((err) => {
         if (!cancelled) setError(toFriendlyError(err, 'טעינת השיחות נכשלה. נסו שוב.'))
@@ -63,7 +69,7 @@ export default function ConversationsPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [refreshUnread])
 
   useEffect(() => load(filter), [load, filter])
 
@@ -118,9 +124,28 @@ export default function ConversationsPage() {
                     conversation={conv}
                     open={openId === conv.conversation_id}
                     onToggle={() =>
-                      setOpenId((cur) =>
-                        cur === conv.conversation_id ? null : conv.conversation_id,
-                      )
+                      setOpenId((cur) => {
+                        const next =
+                          cur === conv.conversation_id
+                            ? null
+                            : conv.conversation_id
+                        // Opening a row loads GET /api/conversations/{id}, which
+                        // resets that conversation's unread to 0 server-side —
+                        // refresh the badge shortly after so it reflects that.
+                        if (next) {
+                          setConversations((list) =>
+                            list
+                              ? list.map((c) =>
+                                  c.conversation_id === next
+                                    ? { ...c, unread: 0 }
+                                    : c,
+                                )
+                              : list,
+                          )
+                          window.setTimeout(refreshUnread, 600)
+                        }
+                        return next
+                      })
                     }
                     onStatusChange={handleStatusChange}
                   />

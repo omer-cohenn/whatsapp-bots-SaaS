@@ -46,6 +46,9 @@ attached to the same connection as the query.
 from __future__ import annotations
 
 from app.services.leads._common import (
+    CLOSE_REASON_ABANDONED,
+    CLOSE_REASON_ANSWERED,
+    CLOSE_REASON_COMPLETED,
     EVENT_ABANDONED,
     EVENT_COMPLETED,
     EVENT_HANDOFF,
@@ -61,11 +64,14 @@ from app.services.leads.crud import (
     complete_lead,
     create_lead,
     set_lead_status,
+    touch_lead_activity,
     update_lead,
 )
 from app.services.leads.funnel import funnel_stats, log_event
 from app.services.leads.query import (
     STATUS_OPEN,
+    get_active_lead_id_by_conversation,
+    get_conversation_id_for_lead,
     get_lead_by_conversation,
     list_leads,
 )
@@ -78,6 +84,10 @@ __all__ = [
     "STATUS_DEAL",
     "STATUS_CLOSED",
     "STATUS_OPEN",
+    # close_reason vocabulary (why a conversation closed)
+    "CLOSE_REASON_COMPLETED",
+    "CLOSE_REASON_ABANDONED",
+    "CLOSE_REASON_ANSWERED",
     # funnel event vocabulary
     "EVENT_STARTED",
     "EVENT_STEP",
@@ -89,9 +99,12 @@ __all__ = [
     "update_lead",
     "complete_lead",
     "set_lead_status",
+    "touch_lead_activity",
     # read side
     "list_leads",
     "get_lead_by_conversation",
+    "get_active_lead_id_by_conversation",
+    "get_conversation_id_for_lead",
     # funnel
     "log_event",
     "funnel_stats",

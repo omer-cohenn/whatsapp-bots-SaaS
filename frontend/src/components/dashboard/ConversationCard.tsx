@@ -25,6 +25,7 @@ import {
 } from '../../lib/dashboardClient'
 import { toFriendlyError } from '../../lib/friendlyError'
 import { relativeTime } from '../../lib/formatDate'
+import { closeReasonMeta } from '../../dashboard/closeReason'
 import Badge from '../ui/Badge'
 import Button from '../ui/Button'
 import Icon from '../ui/Icon'
@@ -162,6 +163,9 @@ export default function ConversationCard({
 
   const lead = detail?.lead ?? null
   const answers = Object.entries(lead?.answers ?? {})
+  // "Why it closed" (decision 0021) — additional context shown next to the live
+  // status when the backend has stamped a close_reason.
+  const closeMeta = closeReasonMeta(lead?.close_reason ?? null)
 
   return (
     <article className="overflow-hidden rounded-xl border border-black/10 bg-white">
@@ -220,6 +224,9 @@ export default function ConversationCard({
                       <p className="text-xs text-slate-500" dir="ltr">
                         {lead.phone}
                       </p>
+                    ) : null}
+                    {closeMeta ? (
+                      <Badge tone={closeMeta.tone}>{closeMeta.label}</Badge>
                     ) : null}
                   </div>
 

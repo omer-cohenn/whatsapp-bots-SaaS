@@ -93,6 +93,23 @@ async def run_turn(
         await conversation_state.append_message(
             redis, business_id, conversation_id, "customer", message
         )
+        # Unread badge (decision 0021): every inbound CUSTOMER message bumps the
+        # owner's unread counter — even on this silent human/waiting path, since
+        # "unread" means the owner hasn't opened the chat, not "the bot answered".
+        await conversation_state.incr_unread(redis, business_id, conversation_id)
+        # Clock fix (decision 0021): the bot never runs here, so nothing would
+        # bump the lead's last_activity_at — a customer chatting with a HUMAN for
+        # >60 min would be wrongly swept to 'abandoned'. Reset the clock on the
+        # active lead for this conversation (no-op if there is none). Tenant-scoped
+        # via tenant_connection + a business_id-filtered UPDATE; touches no PII.
+        async with tenant_connection(pool, business_id) as conn:
+            active_lead_id = await leads_service.get_active_lead_id_by_conversation(
+                conn, business_id, conversation_id
+            )
+            if active_lead_id is not None:
+                await leads_service.touch_lead_activity(
+                    conn, business_id, active_lead_id
+                )
         return {"replies": [], "event": None, "lead_id": None, "silent": True}
 
     # 1a) A CLOSED chat that gets a new inbound starts over fresh. We wipe this
@@ -102,6 +119,12 @@ async def run_turn(
     #     a fresh transcript, get_state → None (→ initial_state), and the engine
     #     emits the greeting+menu open turn. The OLD closed lead row in Postgres
     #     is left untouched, so the finished chat's history is preserved.
+    #
+    #     Goal 7 (verified, decision 0021): both paths yield greeting+menu —
+    #       * a BRAND-NEW number → get_status is None (not waiting/human/closed),
+    #         get_state is None → initial_state → the engine's open turn greets.
+    #       * a CLOSED chat → this reset wipes state, so it behaves identically to
+    #         the brand-new case on the SAME turn (no behavior change, just clarity).
     if status == conversation_state.STATUS_CLOSED:
         await conversation_state.reset_conversation(redis, business_id, conversation_id)
 
@@ -110,6 +133,11 @@ async def run_turn(
     await conversation_state.append_message(
         redis, business_id, conversation_id, "customer", message
     )
+    # Unread badge (decision 0021): bump the owner's unread counter on every
+    # inbound CUSTOMER message — the bot answering does NOT mark it read, only the
+    # owner opening the chat does (see conversation_state.mark_read). If this is a
+    # fresh start after a CLOSED reset (step 1a wiped the counter), it begins at 1.
+    await conversation_state.incr_unread(redis, business_id, conversation_id)
 
     # 2) Load the saved engine state (fall back to a fresh conversation) + pull
     #    the runtime-only active lead_id that rides along on it.

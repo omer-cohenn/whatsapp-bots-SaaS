@@ -21,6 +21,7 @@ from app.services.leads._common import (
     _NAME_KEYS,
     _PHONE_KEYS,
     _SETTABLE_STATUSES,
+    CLOSE_REASON_COMPLETED,
     STATUS_IN_PROGRESS,
     STATUS_NEW,
     _answers_json,
@@ -119,7 +120,10 @@ async def complete_lead(
 
     'new' means "completed and waiting for the owner to read it". Re-encrypts the
     final `collected` (and the PII columns) so a completed lead is fully captured
-    even if no prior `update_lead` ran. NEVER logs any collected value.
+    even if no prior `update_lead` ran. Also stamps `close_reason='completed'`
+    (decision 0021) so the dashboard can label WHY this conversation closed —
+    in the SAME UPDATE/transaction as the rest of the finalize. NEVER logs any
+    collected value.
     """
     phone_ct = crypto.encrypt_pii(_first_present(collected, _PHONE_KEYS))
     name_ct = crypto.encrypt_pii(_first_present(collected, _NAME_KEYS))
@@ -132,7 +136,8 @@ async def complete_lead(
             contact_name     = $4,
             answers          = $5::jsonb,
             status           = $6,
-            key_version      = $7,
+            close_reason     = $7,
+            key_version      = $8,
             last_activity_at = now(),
             submitted_at     = now()
         WHERE id = $1 AND business_id = $2
@@ -143,7 +148,34 @@ async def complete_lead(
         name_ct,
         _answers_json(answers_blob),
         STATUS_NEW,
+        CLOSE_REASON_COMPLETED,
         crypto.CURRENT_KEY_VERSION,
+    )
+
+
+async def touch_lead_activity(
+    conn: asyncpg.Connection,
+    business_id: str,
+    lead_id: str,
+) -> None:
+    """Bump `last_activity_at = now()` on an open lead — nothing else (decision 0021).
+
+    The abandoned-sweep clock keys off `last_activity_at`. The bot's `update_lead`
+    already bumps it on every answered step, but the SILENT human/waiting path in
+    run_turn never calls the engine, so a customer chatting with a HUMAN for >60
+    min would wrongly look idle and get swept to 'abandoned'. The runtime calls
+    this on EVERY inbound customer message (including that silent path) to reset
+    the clock. `business_id` is the caller's verified id and is in the WHERE so
+    RLS scopes the UPDATE to this tenant's own row. Touches no PII; logs nothing.
+    """
+    await conn.execute(
+        """
+        UPDATE leads
+        SET last_activity_at = now()
+        WHERE id = $1 AND business_id = $2
+        """,
+        lead_id,
+        business_id,
     )
 
 
@@ -153,6 +185,7 @@ async def set_lead_status(
     lead_id: str,
     status: str,
     note: str | None = None,
+    close_reason: str | None = None,
 ) -> bool:
     """Owner-set a lead's status (e.g. → 'deal' or 'closed'). RLS-scoped.
 
@@ -167,6 +200,11 @@ async def set_lead_status(
     UPDATE (and `key_version` is stamped so rotation stays possible) — just like
     phone/answers. The note plaintext is PII and is NEVER logged. When `note` is
     None the existing outcome_note is left untouched.
+
+    `close_reason` (decision 0021, e.g. 'answered' on the manual human-close path)
+    is OPTIONAL and structural (no PII). When given it is stamped in the SAME
+    UPDATE so "why it closed" is recorded alongside the owner's outcome; when None
+    the existing close_reason is left untouched.
     """
     if status not in _SETTABLE_STATUSES:
         raise ValueError(f"invalid lead status: {status!r}")
@@ -176,34 +214,30 @@ async def set_lead_status(
     if note is not None:
         note = note.strip() or None
 
+    # Build the SET clause + params dynamically: status + last_activity are always
+    # set; outcome_note (encrypted) and close_reason (structural) are added only
+    # when supplied so a None never wipes a previously-saved value.
+    params: list[Any] = [lead_id, business_id, status]
+    set_parts = ["status = $3", "last_activity_at = now()"]
+
     if note is not None:
-        # Encrypt the outcome note + restamp key_version in the same UPDATE.
-        note_ct = crypto.encrypt_pii(note)
-        result = await conn.execute(
-            """
-            UPDATE leads
-            SET status = $3,
-                outcome_note = $4,
-                key_version = $5,
-                last_activity_at = now()
-            WHERE id = $1 AND business_id = $2
-            """,
-            lead_id,
-            business_id,
-            status,
-            note_ct,
-            crypto.CURRENT_KEY_VERSION,
-        )
-    else:
-        result = await conn.execute(
-            """
-            UPDATE leads
-            SET status = $3, last_activity_at = now()
-            WHERE id = $1 AND business_id = $2
-            """,
-            lead_id,
-            business_id,
-            status,
-        )
+        params.append(crypto.encrypt_pii(note))
+        set_parts.append(f"outcome_note = ${len(params)}")
+        # Restamp key_version whenever we (re)encrypt the note, so rotation works.
+        params.append(crypto.CURRENT_KEY_VERSION)
+        set_parts.append(f"key_version = ${len(params)}")
+
+    if close_reason is not None:
+        params.append(close_reason)
+        set_parts.append(f"close_reason = ${len(params)}")
+
+    result = await conn.execute(
+        f"""
+        UPDATE leads
+        SET {', '.join(set_parts)}
+        WHERE id = $1 AND business_id = $2
+        """,
+        *params,
+    )
     # asyncpg returns the command tag, e.g. "UPDATE 1" / "UPDATE 0".
     return result.rsplit(" ", 1)[-1] != "0"

@@ -80,6 +80,18 @@ def _log_key(business_id: str, conversation_id: str) -> str:
     return f"conv:{business_id}:{conversation_id}:log"
 
 
+def _unread_key(business_id: str, conversation_id: str) -> str:
+    """Tenant-scoped Redis key for one conversation's unread counter (decision 0021).
+
+    A WhatsApp-style badge: how many inbound CUSTOMER messages the owner has not
+    yet read on this conversation. A plain integer string. Business-prefixed
+    exactly like `_key`, so it can never name another tenant's counter;
+    `_assert_owns` re-checks the prefix on every accessor. Same TTL discipline as
+    the conversation (it must not outlive the chat) — see `_apply_ttl`.
+    """
+    return f"conv:{business_id}:{conversation_id}:unread"
+
+
 def _index_key(business_id: str) -> str:
     """Per-business index set of this tenant's conversation ids (for listing).
 
@@ -176,11 +188,13 @@ async def reset_conversation(
     """
     key = _key(business_id, conversation_id)
     log_key = _log_key(business_id, conversation_id)
+    unread_key = _unread_key(business_id, conversation_id)
     _assert_owns(business_id, key)
     _assert_owns(business_id, log_key)
-    # Delete the hash (carries both status AND the engine `state` field) and the
-    # transcript list, then unregister from this tenant's index set.
-    await redis.delete(key, log_key)
+    _assert_owns(business_id, unread_key)
+    # Delete the hash (carries both status AND the engine `state` field), the
+    # transcript list, and the unread counter, then unregister from the index set.
+    await redis.delete(key, log_key, unread_key)
     await redis.srem(_index_key(business_id), conversation_id)
 
 
@@ -266,6 +280,8 @@ async def list_conversations(
             "last_activity_at": meta.get("last_activity_at"),
             "preview": meta.get("preview") or "",
             "assigned_user_id": meta.get("assigned_user_id") or None,
+            # Per-conversation unread count (decision 0021) — 0 when none/read.
+            "unread": await get_unread(redis, business_id, conv_id),
         })
 
     if stale:
@@ -373,6 +389,76 @@ async def get_messages(
     return messages
 
 
+# --- unread counter (M / decision 0021 — WhatsApp-style badge) --------------
+
+async def incr_unread(
+    redis: aioredis.Redis, business_id: str, conversation_id: str
+) -> int:
+    """Bump this conversation's unread counter by 1 and return the new value.
+
+    Called on EVERY inbound CUSTOMER message (both the silent waiting/human path
+    AND the normal bot path in run_turn) — "unread" means the OWNER hasn't opened
+    the chat yet, regardless of who is answering. The counter inherits the SAME
+    TTL as the live conversation (via the current status' policy) so it can never
+    outlive the chat. Tenant-scoped: `_assert_owns` re-checks the prefix;
+    `business_id` is the caller's verified id, never client-supplied.
+    """
+    key = _key(business_id, conversation_id)
+    unread_key = _unread_key(business_id, conversation_id)
+    _assert_owns(business_id, key)
+    _assert_owns(business_id, unread_key)
+    new_value = await redis.incr(unread_key)
+    # Match the conversation's TTL policy so the counter expires WITH the chat.
+    current_status = await redis.hget(key, "status") or STATUS_BOT
+    if current_status in (STATUS_WAITING, STATUS_HUMAN):
+        await redis.persist(unread_key)
+    else:
+        ttl = CLOSED_TTL_SECONDS if current_status == STATUS_CLOSED else CONVERSATION_TTL_SECONDS
+        await redis.expire(unread_key, ttl)
+    return int(new_value)
+
+
+async def mark_read(
+    redis: aioredis.Redis, business_id: str, conversation_id: str
+) -> None:
+    """Reset this conversation's unread counter to 0 (owner opened/read the chat).
+
+    Wired into the single-conversation read (GET /api/conversations/{id}); opening
+    a chat clears its badge, exactly like WhatsApp. Tenant-scoped via `_assert_owns`.
+    """
+    unread_key = _unread_key(business_id, conversation_id)
+    _assert_owns(business_id, unread_key)
+    await redis.delete(unread_key)
+
+
+async def get_unread(
+    redis: aioredis.Redis, business_id: str, conversation_id: str
+) -> int:
+    """Return this conversation's unread count (0 if unset). Tenant-scoped."""
+    unread_key = _unread_key(business_id, conversation_id)
+    _assert_owns(business_id, unread_key)
+    raw = await redis.get(unread_key)
+    try:
+        return int(raw) if raw is not None else 0
+    except (ValueError, TypeError):
+        return 0
+
+
+async def unread_total(redis: aioredis.Redis, business_id: str) -> int:
+    """Sum the unread counts across ALL of THIS tenant's live conversations.
+
+    Reads the per-business index set (same source as `list_conversations`) and
+    sums each conversation's unread counter — so the dashboard can render one
+    badge over the "שיחות" tab. O(this tenant's conversations); strictly
+    business-scoped (`_assert_owns` on every per-conversation key).
+    """
+    conv_ids = await redis.smembers(_index_key(business_id))
+    total = 0
+    for conv_id in conv_ids:
+        total += await get_unread(redis, business_id, conv_id)
+    return total
+
+
 # --- internal helpers -------------------------------------------------------
 
 async def _apply_ttl(
@@ -396,20 +482,27 @@ async def _apply_ttl(
     """
     key = _key(business_id, conversation_id)
     log_key = _log_key(business_id, conversation_id)
+    unread_key = _unread_key(business_id, conversation_id)
     index = _index_key(business_id)
     _assert_owns(business_id, key)
     _assert_owns(business_id, log_key)
+    _assert_owns(business_id, unread_key)
 
     if status in (STATUS_WAITING, STATUS_HUMAN):
         # PERSIST: drop any expiry so the chat survives until a human answers.
         await redis.persist(key)
         await redis.persist(log_key)
+        # The unread badge must persist alongside the chat (only expire/persist
+        # if the counter actually exists — `persist` on a missing key is a no-op).
+        await redis.persist(unread_key)
         await redis.persist(index)
         return
 
     ttl = CLOSED_TTL_SECONDS if status == STATUS_CLOSED else CONVERSATION_TTL_SECONDS
     await redis.expire(key, ttl)
     await redis.expire(log_key, ttl)
+    # Keep the unread counter on the same TTL clock as the chat (no-op if absent).
+    await redis.expire(unread_key, ttl)
     await redis.expire(index, ttl)
 
 

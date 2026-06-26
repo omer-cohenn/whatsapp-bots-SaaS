@@ -39,6 +39,7 @@ import asyncpg
 import redis.asyncio as aioredis
 
 from app.core.logging import get_logger
+from app.services import conversation_state
 
 log = get_logger("app.services.abandoned_sweep")
 
@@ -53,19 +54,71 @@ _SWEEP_LOCK_KEY = "lock:abandoned_sweep"
 _SWEEP_LOCK_TTL_SECONDS = 30
 
 
-async def run_sweep_once(pool: asyncpg.Pool) -> int:
+def _split_chat_ref(chat_ref: str) -> tuple[str, str] | None:
+    """Parse a lead's `cache_chat_ref` into (business_id, conversation_id).
+
+    The ref is stamped by `create_lead` as ``conv:{business_id}:{conversation_id}``.
+    business_id is a UUID (it never contains a colon), so we split on the FIRST
+    two colons: ``conv`` / business_id / the REST (the conversation id, which CAN
+    itself contain colons, e.g. a WhatsApp LID jid). This is tenant-safe because
+    the ref comes from the lead's OWN row (read by the SECURITY DEFINER fn), never
+    from a client. Returns None for a malformed/empty ref (skip it, don't guess).
+    """
+    if not chat_ref:
+        return None
+    parts = chat_ref.split(":", 2)
+    if len(parts) != 3 or parts[0] != "conv" or not parts[1] or not parts[2]:
+        return None
+    return parts[1], parts[2]
+
+
+async def run_sweep_once(pool: asyncpg.Pool, redis: aioredis.Redis) -> int:
     """Run ONE sweep pass. Returns how many leads were marked abandoned.
 
     Delegates the cross-tenant write to the `sweep_abandoned_leads` SECURITY
-    DEFINER function (see migration 0006 + this module's docstring). app_role has
-    EXECUTE on it; no `app.business_id` context is needed because the function
-    keeps every row tenant-correct internally.
+    DEFINER function (see migrations 0006/0023 + this module's docstring). app_role
+    has EXECUTE on it; no `app.business_id` context is needed because the function
+    keeps every row tenant-correct internally. As of decision 0021 the function
+    RETURNS one row per just-abandoned lead — `(lead_id, conversation_id)` where
+    conversation_id is the lead's `cache_chat_ref` (the live Redis key pointer,
+    possibly NULL) — and ALSO stamps close_reason='abandoned' on the row itself.
+
+    For each returned row that has a chat ref, we close the matching Redis
+    conversation (set its status to 'closed', which applies the closed TTL) so the
+    customer's NEXT message starts a brand-new conversation. The chat ref carries
+    its OWN business_id (parsed out of the ref), so each close stays strictly
+    tenant-scoped — we never trust or invent a business_id. The loop is crash-safe:
+    one bad row is logged (no PII) and swallowed, never aborting the whole pass.
     """
     async with pool.acquire() as conn:
-        swept = await conn.fetchval(
-            "SELECT sweep_abandoned_leads($1)", ABANDONED_AFTER_MINUTES
+        rows = await conn.fetch(
+            "SELECT lead_id, conversation_id FROM sweep_abandoned_leads($1)",
+            ABANDONED_AFTER_MINUTES,
         )
-    return int(swept or 0)
+
+    for row in rows:
+        chat_ref = row["conversation_id"]
+        if not chat_ref:
+            # The lead never had a linked conversation → nothing to close in Redis.
+            continue
+        try:
+            parsed = _split_chat_ref(chat_ref)
+            if parsed is None:
+                # Malformed ref — skip rather than guess a (business_id, conv) split.
+                log.warning("abandoned sweep: skipped malformed chat ref")
+                continue
+            business_id, conversation_id = parsed
+            # Tenant-scoped close: set_status re-checks the business prefix on the
+            # key (`_assert_owns`) and applies the closed TTL (decision 0010).
+            await conversation_state.set_status(
+                redis, business_id, conversation_id, conversation_state.STATUS_CLOSED
+            )
+        except Exception:
+            # Never let one bad conversation crash the whole sweep pass. Generic,
+            # no str(e) / no PII / no chat ref in the log.
+            log.warning("abandoned sweep: failed to close one conversation")
+
+    return len(rows)
 
 
 async def sweep_loop(pool: asyncpg.Pool, redis: aioredis.Redis) -> None:
@@ -86,7 +139,7 @@ async def sweep_loop(pool: asyncpg.Pool, redis: aioredis.Redis) -> None:
                 )
                 if not got_lock:
                     continue
-                swept = await run_sweep_once(pool)
+                swept = await run_sweep_once(pool, redis)
                 if swept:
                     # Count only — never lead ids, names, or any PII.
                     log.info("abandoned sweep pass complete", extra={"swept": swept})

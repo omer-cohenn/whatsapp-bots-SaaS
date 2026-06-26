@@ -9,6 +9,7 @@
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import { useUnread } from '../dashboard/UnreadContext'
 import OwnerHeader from './OwnerHeader'
 import Icon, { type IconName } from './ui/Icon'
 import Badge from './ui/Badge'
@@ -41,7 +42,25 @@ const NAV_ITEMS: NavSpec[] = [
   { to: '/settings', label: 'הגדרות', icon: 'settings', enabled: false },
 ]
 
-function NavItem({ item }: { item: NavSpec }) {
+// WhatsApp-style unread pill: a white count on bright WhatsApp-green
+// (brand.light token), sized like WhatsApp's bubble. Hidden when zero; caps at
+// "99+". Carries its own accessible label and is RTL-safe (ms-auto pushes it to
+// the inline-end / far edge in the dir="rtl" sidebar, like WhatsApp).
+function UnreadBadge({ count }: { count: number }) {
+  if (count <= 0) return null
+  const display = count > 99 ? '99+' : String(count)
+  return (
+    <span
+      role="status"
+      aria-label={`${count} הודעות שלא נקראו`}
+      className="ms-auto inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-brand-light px-1.5 text-[11px] font-bold leading-none text-white"
+    >
+      <span aria-hidden="true">{display}</span>
+    </span>
+  )
+}
+
+function NavItem({ item, unread = 0 }: { item: NavSpec; unread?: number }) {
   if (!item.enabled) {
     return (
       <span
@@ -84,12 +103,14 @@ function NavItem({ item }: { item: NavSpec }) {
     >
       <Icon name={item.icon} size={19} />
       <span>{item.label}</span>
+      <UnreadBadge count={unread} />
     </NavLink>
   )
 }
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { logout, isAdmin } = useAuth()
+  const { unreadTotal } = useUnread()
 
   // The admin-only "ניהול" link is removed entirely for non-admins (route is
   // also guarded server-side and by <AdminGate>).
@@ -112,7 +133,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
 
         {navItems.map((item) => (
-          <NavItem key={item.to} item={item} />
+          <NavItem
+            key={item.to}
+            item={item}
+            // Only the conversations tab carries the unread count.
+            unread={item.to === '/conversations' ? unreadTotal : 0}
+          />
         ))}
 
         <button

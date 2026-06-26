@@ -25,6 +25,10 @@ class LeadItem(BaseModel):
     # The full collected answers (decrypted). Owner sees everything — no hiding.
     answers: dict[str, Any] = Field(default_factory=dict)
     status: str
+    # WHY the conversation closed (decision 0021): 'completed' | 'abandoned' |
+    # 'answered' | None (not closed yet). Structural label, separate from the
+    # owner's status outcome above; the UI maps it to a Hebrew close-reason label.
+    close_reason: str | None = None
     # The owner's outcome note (decrypted), e.g. why a deal closed; None if unset.
     outcome_note: str | None = None
     last_step_index: int | None = None
@@ -97,12 +101,18 @@ class ConversationItem(BaseModel):
     last_activity_at: str | None = None
     preview: str = ""
     assigned_user_id: str | None = None
+    # WhatsApp-style unread badge (decision 0021): inbound CUSTOMER messages the
+    # owner hasn't read on THIS conversation. Reset to 0 when the owner opens it.
+    unread: int = 0
 
 
 class ConversationsResponse(BaseModel):
     """GET /api/conversations response: live conversations, newest activity first."""
 
     conversations: list[ConversationItem]
+    # Sum of `unread` across this tenant's conversations — the single number the
+    # dashboard renders as a green badge over the "שיחות" tab (decision 0021).
+    unread_total: int = 0
 
 
 # --- GET /api/conversations/{id} (+ /messages) -------------------------------

@@ -86,7 +86,7 @@ async def list_leads(
     params.append(int(limit))
     sql = (
         "SELECT id, lead_name, phone, contact_name, answers, status, "
-        "       outcome_note, last_step_index, is_test, key_version, "
+        "       close_reason, outcome_note, last_step_index, is_test, key_version, "
         "       cache_chat_ref, started_at, last_activity_at, submitted_at "
         "FROM leads "
         f"WHERE {' AND '.join(where)}{period_sql} "
@@ -115,7 +115,7 @@ async def get_lead_by_conversation(
     row = await conn.fetchrow(
         """
         SELECT id, lead_name, phone, contact_name, answers, status,
-               outcome_note, last_step_index, is_test, key_version,
+               close_reason, outcome_note, last_step_index, is_test, key_version,
                cache_chat_ref, started_at, last_activity_at, submitted_at
         FROM leads
         WHERE business_id = $1 AND cache_chat_ref = $2
@@ -126,6 +126,65 @@ async def get_lead_by_conversation(
         cache_chat_ref,
     )
     return _decrypt_lead_row(row, business_id) if row is not None else None
+
+
+async def get_active_lead_id_by_conversation(
+    conn: asyncpg.Connection,
+    business_id: str,
+    conversation_id: str,
+) -> str | None:
+    """Return the id of the NEWEST lead linked to THIS conversation, or None.
+
+    A light, PII-free lookup (no decryption) used by the runtime's silent
+    waiting/human path to find which lead's `last_activity_at` to bump on an
+    inbound message (decision 0021 clock fix). Joins via the same `cache_chat_ref`
+    that `create_lead` stamps. `business_id` is the caller's verified id and is in
+    the WHERE so RLS scopes the read to this tenant. Returns no PII.
+    """
+    cache_chat_ref = f"conv:{business_id}:{conversation_id}"
+    lead_id = await conn.fetchval(
+        """
+        SELECT id
+        FROM leads
+        WHERE business_id = $1 AND cache_chat_ref = $2
+        ORDER BY last_activity_at DESC
+        LIMIT 1
+        """,
+        business_id,
+        cache_chat_ref,
+    )
+    return str(lead_id) if lead_id is not None else None
+
+
+async def get_conversation_id_for_lead(
+    conn: asyncpg.Connection,
+    business_id: str,
+    lead_id: str,
+) -> str | None:
+    """Return the conversation id THIS lead is linked to, or None (PII-free).
+
+    Reads the lead's `cache_chat_ref` (stamped as "conv:{business_id}:{conv_id}")
+    and strips this tenant's prefix to recover the conversation id — used by the
+    owner's manual-close path (decision 0021) to find which Redis conversation to
+    inspect/close. `business_id` is the caller's verified id and is in the WHERE so
+    RLS scopes the read; the prefix is only stripped when it matches (tenant-safe).
+    Returns no PII.
+    """
+    chat_ref = await conn.fetchval(
+        """
+        SELECT cache_chat_ref
+        FROM leads
+        WHERE id = $1 AND business_id = $2
+        """,
+        lead_id,
+        business_id,
+    )
+    if not chat_ref:
+        return None
+    prefix = f"conv:{business_id}:"
+    if chat_ref.startswith(prefix):
+        return chat_ref[len(prefix):]
+    return None
 
 
 def _decrypt_lead_row(row: asyncpg.Record, business_id: str) -> dict[str, Any]:
@@ -173,6 +232,8 @@ def _decrypt_lead_row(row: asyncpg.Record, business_id: str) -> dict[str, Any]:
         "contact_name": contact_name,
         "answers": answers,
         "status": row["status"],
+        # Structural close reason (decision 0021); None until the lead closes.
+        "close_reason": row["close_reason"],
         "outcome_note": outcome_note,
         "last_step_index": row["last_step_index"],
         "is_test": row["is_test"],

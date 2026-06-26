@@ -308,7 +308,7 @@ async def run() -> int:
                     ab_lead_id, BIZ_A,
                 )
             from app.services import abandoned_sweep
-            n = await abandoned_sweep.run_sweep_once(pool)
+            n = await abandoned_sweep.run_sweep_once(pool, redis)
             swept_lead = await fetch_lead(pool, BIZ_A, ab_lead_id)
             swept_events = await fetch_events(pool, BIZ_A, ab_lead_id)
             ok = (n >= 1

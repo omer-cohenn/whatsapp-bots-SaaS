@@ -17,6 +17,7 @@ import type {
 import { fullDateTime, relativeTime } from '../../lib/formatDate'
 import { getConversation, setLeadStatus } from '../../lib/dashboardClient'
 import { toFriendlyError } from '../../lib/friendlyError'
+import { closeReasonMeta } from '../../dashboard/closeReason'
 import Badge from '../ui/Badge'
 import Icon from '../ui/Icon'
 import ChatPanel from './ChatPanel'
@@ -47,6 +48,8 @@ type Props = {
 export default function LeadCard({ lead, onStatusChange }: Props) {
   const meta = STATUS_META[lead.status]
   const answers = Object.entries(lead.answers ?? {})
+  // "Why it closed" (decision 0021), shown alongside the live status when set.
+  const closeMeta = closeReasonMeta(lead.close_reason)
 
   const [saving, setSaving] = useState<LeadStatus | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -122,7 +125,12 @@ export default function LeadCard({ lead, onStatusChange }: Props) {
             {lead.is_test ? ' · בדיקה' : ''}
           </p>
         </div>
-        <Badge tone={meta.tone}>{meta.label}</Badge>
+        <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-1.5">
+          {closeMeta ? (
+            <Badge tone={closeMeta.tone}>{closeMeta.label}</Badge>
+          ) : null}
+          <Badge tone={meta.tone}>{meta.label}</Badge>
+        </div>
       </div>
 
       {/* Every collected answer — nothing hidden. */}

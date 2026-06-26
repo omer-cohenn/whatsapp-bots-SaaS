@@ -23,6 +23,14 @@ STATUS_ABANDONED = "abandoned"
 STATUS_DEAL = "deal"      # owner marked it won — Hebrew label "בוצעה עסקה".
 STATUS_CLOSED = "closed"  # owner closed/dismissed the lead — Hebrew "ליד סגור".
 
+# close_reason values (decision 0021, migration 0023) — WHY a lead/conversation
+# closed, separate from the owner OUTCOME above. NULL = not closed yet. These are
+# plain string values stamped on the nullable leads.close_reason column (no
+# migration needed beyond the additive column; mirrors how status is free text).
+CLOSE_REASON_COMPLETED = "completed"  # all flow details collected → status 'new'.
+CLOSE_REASON_ABANDONED = "abandoned"  # 60 min silence (stamped by the SD sweep fn).
+CLOSE_REASON_ANSWERED = "answered"    # owner finished handling it after human handoff.
+
 # The statuses an owner may manually set on a lead via the dashboard.
 _SETTABLE_STATUSES = {
     STATUS_IN_PROGRESS,

@@ -28,6 +28,14 @@ export type LeadStatusFilter =
  */
 export type LeadStatus = 'new' | 'in_progress' | 'abandoned' | 'deal' | 'closed'
 
+/**
+ * Why a conversation/lead closed (decision 0021), separate from the owner's
+ * OUTCOME (deal/closed). `completed` = all flow details collected, `abandoned`
+ * = 60-min silence, `answered` = the business finished handling it manually.
+ * null while the lead is still live.
+ */
+export type CloseReason = 'completed' | 'abandoned' | 'answered' | null
+
 // --- 1) GET /api/leads -------------------------------------------------------
 
 export type Lead = {
@@ -38,6 +46,9 @@ export type Lead = {
   /** Full decrypted collected answers (owner sees everything — no hiding). */
   answers: Record<string, string>
   status: LeadStatus
+  /** Why the lead/conversation closed (decision 0021), or null while still live.
+   * Distinct from the owner OUTCOME (`status` deal/closed). */
+  close_reason: CloseReason
   /** Owner's free-text outcome note (decrypted), required when marking a lead as
    * deal/closed. null until one is saved. */
   outcome_note: string | null
@@ -81,10 +92,16 @@ export type Conversation = {
   last_activity_at: string | null
   preview: string | null
   assigned_user_id: string | null
+  /** Unread customer messages on this conversation (WhatsApp-style). Defaults to
+   * 0; reset server-side when the owner opens the conversation. */
+  unread: number
 }
 
 export type ConversationsResponse = {
   conversations: Conversation[]
+  /** Sum of every conversation's unread count for this tenant (default 0).
+   * Drives the unread badge on the "שיחות" nav tab. */
+  unread_total: number
 }
 
 // --- 3b) GET /api/conversations/{id} (+ /messages) ---------------------------

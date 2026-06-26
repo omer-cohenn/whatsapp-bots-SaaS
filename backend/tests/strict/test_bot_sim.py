@@ -224,7 +224,7 @@ async def test_abandoned_sweep_flips_idle_lead(rds, pool, cleanup_test_leads):
                 "WHERE id = $1 AND business_id = $2",
                 lead_id, BIZ_A,
             )
-        n = await abandoned_sweep.run_sweep_once(pool)
+        n = await abandoned_sweep.run_sweep_once(pool, rds)
         assert n >= 1
         lead = await _fetch_lead(pool, BIZ_A, lead_id)
         assert lead["status"] == "abandoned"

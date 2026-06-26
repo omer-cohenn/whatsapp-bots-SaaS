@@ -6,6 +6,7 @@
 
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './auth/AuthContext'
+import { UnreadProvider } from './dashboard/UnreadContext'
 import AccessibilityWidget from './components/AccessibilityWidget'
 import AuthGate from './components/AuthGate'
 import AdminGate from './components/AdminGate'
@@ -31,6 +32,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        {/* Tenant-wide unread count for the "שיחות" nav badge (decision 0021).
+            Auth-aware: it only polls once a session exists. */}
+        <UnreadProvider>
         {/* Always-available accessibility menu, shown on every page. */}
         <AccessibilityWidget />
         <Routes>
@@ -163,6 +167,7 @@ export default function App() {
           {/* Unknown paths → home (AuthGate handles login redirect). */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </UnreadProvider>
       </AuthProvider>
     </BrowserRouter>
   )

@@ -126,11 +126,34 @@ async def set_lead_status(
     it is PII and is NEVER logged. The UPDATE is RLS-scoped by the session's
     verified business id (never from the path/body); if no row matched
     (wrong/foreign lead) we return 404.
+
+    close_reason (decision 0021): when the owner closes a lead (status='closed')
+    that was being handled by a HUMAN — its live conversation is 'human' or
+    'waiting' — this is the "מענה הושלם" path, so we stamp close_reason='answered'.
+    We do NOT touch close_reason for any other status (e.g. 'deal' stays a pure
+    owner outcome). The Redis status read is tenant-scoped (business-prefixed key).
     """
+    redis = request.app.state.redis
     try:
         async with tenant_connection(request.app.state.pg_pool, business_id) as conn:
+            close_reason: str | None = None
+            if body.status == "closed":
+                # Find this lead's conversation and check whether a human was on it.
+                conv_id = await leads_service.get_conversation_id_for_lead(
+                    conn, business_id, lead_id
+                )
+                if conv_id is not None:
+                    conv_status = await conversation_state.get_status(
+                        redis, business_id, conv_id
+                    )
+                    if conv_status in (
+                        conversation_state.STATUS_HUMAN,
+                        conversation_state.STATUS_WAITING,
+                    ):
+                        close_reason = leads_service.CLOSE_REASON_ANSWERED
             updated = await leads_service.set_lead_status(
-                conn, business_id, lead_id, body.status, note=body.note
+                conn, business_id, lead_id, body.status,
+                note=body.note, close_reason=close_reason,
             )
     except ValueError:
         # Defensive: the Literal already constrains status, so this is unexpected.
@@ -178,11 +201,17 @@ async def get_conversations(
     per-business index choice). `status` optionally filters to
     bot|waiting|human|closed.
     """
+    redis = request.app.state.redis
     items = await conversation_state.list_conversations(
-        request.app.state.redis, business_id, status=status_filter
+        redis, business_id, status=status_filter
     )
+    # unread_total is summed across ALL of this tenant's conversations (decision
+    # 0021) — independent of any status filter, so the tab badge reflects the
+    # whole inbox even when the list view is narrowed.
+    total_unread = await conversation_state.unread_total(redis, business_id)
     return ConversationsResponse(
-        conversations=[ConversationItem(**item) for item in items]
+        conversations=[ConversationItem(**item) for item in items],
+        unread_total=total_unread,
     )
 
 
@@ -201,6 +230,12 @@ async def get_conversation(
     re-checked in the service). The linked lead is read RLS-scoped via
     `tenant_connection`; if a stored value can't be decrypted we fail generic 500
     exactly like `get_leads` (no str(e), no plaintext). We never log message text.
+
+    Opening a conversation = the owner READING it, so we reset its unread counter
+    to 0 here (decision 0021). This is the single, cleanest mark-read hook: the UI
+    already calls this GET to open a chat, so no extra endpoint is needed. The
+    light /messages poll endpoint deliberately does NOT mark-read (polling
+    shouldn't keep clearing the badge while the owner isn't looking).
     """
     redis = request.app.state.redis
     status_value = await conversation_state.get_status(
@@ -209,6 +244,8 @@ async def get_conversation(
     raw_messages = await conversation_state.get_messages(
         redis, business_id, conversation_id
     )
+    # The owner opened this chat → clear its unread badge (tenant-scoped).
+    await conversation_state.mark_read(redis, business_id, conversation_id)
 
     try:
         async with tenant_connection(request.app.state.pg_pool, business_id) as conn:
