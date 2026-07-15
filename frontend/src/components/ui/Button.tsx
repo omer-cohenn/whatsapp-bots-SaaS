@@ -11,8 +11,8 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 const VARIANTS: Record<Variant, string> = {
   primary: 'bg-brand text-white hover:bg-brand-dark',
-  secondary: 'bg-slate-100 text-slate-800 hover:bg-slate-200',
-  ghost: 'bg-transparent text-slate-700 hover:bg-slate-100',
+  secondary: 'bg-slate-100 text-slate-800 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600',
+  ghost: 'bg-transparent text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700',
 }
 
 export default function Button({

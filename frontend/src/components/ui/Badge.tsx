@@ -6,10 +6,10 @@ import type { ReactNode } from 'react'
 type Tone = 'neutral' | 'leaf' | 'info' | 'warning'
 
 const TONES: Record<Tone, string> = {
-  neutral: 'bg-slate-100 text-slate-600',
+  neutral: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200',
   leaf: 'bg-leaf-soft text-leaf-ink',
-  info: 'bg-blue-50 text-blue-800',
-  warning: 'bg-amber-50 text-amber-800',
+  info: 'bg-blue-50 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
+  warning: 'bg-amber-50 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
 }
 
 type BadgeProps = {

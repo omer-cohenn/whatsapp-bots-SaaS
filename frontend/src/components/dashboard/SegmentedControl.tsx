@@ -31,7 +31,7 @@ export default function SegmentedControl<T extends string>({
     <div
       role="radiogroup"
       aria-label={label}
-      className={`inline-flex flex-wrap rounded-full bg-[#f4f3ee] p-1 ${className}`}
+      className={`inline-flex flex-wrap rounded-full bg-[#f4f3ee] p-1 dark:bg-slate-800 ${className}`}
     >
       {segments.map((seg) => {
         const selected = seg.value === value
@@ -45,8 +45,8 @@ export default function SegmentedControl<T extends string>({
             onClick={() => onChange(seg.value)}
             className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
               selected
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-800'
+                ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-slate-100'
+                : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
             {seg.label}

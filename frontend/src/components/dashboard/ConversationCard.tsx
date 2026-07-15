@@ -168,23 +168,23 @@ export default function ConversationCard({
   const closeMeta = closeReasonMeta(lead?.close_reason ?? null)
 
   return (
-    <article className="overflow-hidden rounded-xl border border-black/10 bg-white">
+    <article className="overflow-hidden rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-slate-800">
       {/* Accordion header — click to expand/collapse this conversation. */}
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
         aria-controls={bodyId}
-        className="flex w-full items-center gap-3 px-4 py-3 text-right hover:bg-slate-50"
+        className="flex w-full items-center gap-3 px-4 py-3 text-right hover:bg-slate-50 dark:hover:bg-slate-700/50"
       >
         <span
           aria-hidden="true"
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500"
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300"
         >
           <Icon name="message-circle" size={18} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-slate-900" dir="ltr">
+          <span className="block truncate text-sm font-medium text-slate-900 dark:text-slate-100" dir="ltr">
             {conversation.conversation_id}
           </span>
           <span className="block truncate text-xs text-slate-500">
@@ -204,7 +204,7 @@ export default function ConversationCard({
 
       {/* Accordion body — lead details + actions + (optional) inline chat. */}
       {open ? (
-        <div id={bodyId} className="border-t border-black/10 px-4 pb-4 pt-3">
+        <div id={bodyId} className="border-t border-black/10 px-4 pb-4 pt-3 dark:border-white/10">
           {loadingDetail ? (
             <Spinner className="py-6" label="טוען פרטי שיחה…" />
           ) : detailError ? (
@@ -217,7 +217,7 @@ export default function ConversationCard({
               {lead ? (
                 <div className="flex flex-col gap-3">
                   <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-                    <p className="text-sm font-medium text-slate-900">
+                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
                       {lead.contact_name || 'ליד ללא שם'}
                     </p>
                     {lead.phone ? (
@@ -235,7 +235,7 @@ export default function ConversationCard({
                       {answers.map(([key, value]) => (
                         <div key={key} className="min-w-0">
                           <dt className="text-[11px] text-slate-400">{key}</dt>
-                          <dd className="truncate text-sm text-slate-800" title={value}>
+                          <dd className="truncate text-sm text-slate-800 dark:text-slate-200" title={value}>
                             {value || <span className="text-slate-400">טרם נענה</span>}
                           </dd>
                         </div>

@@ -76,7 +76,7 @@ export default function ActivityFeed({ leads, onMarkSeen, onMarkAllSeen }: Props
   return (
     <section aria-labelledby="activity-heading" className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h2 id="activity-heading" className="text-lg font-medium text-slate-900">
+        <h2 id="activity-heading" className="text-lg font-medium text-slate-900 dark:text-slate-100">
           התראות
         </h2>
         {visible.length > 1 ? (
@@ -95,7 +95,7 @@ export default function ActivityFeed({ leads, onMarkSeen, onMarkAllSeen }: Props
           {visible.map((n) => (
             <li
               key={n.id}
-              className="flex items-center gap-3 rounded-xl border border-black/10 bg-white px-3 py-2.5"
+              className="flex items-center gap-3 rounded-xl border border-black/10 bg-white px-3 py-2.5 dark:border-white/10 dark:bg-slate-800"
             >
               <span
                 aria-hidden="true"
@@ -103,7 +103,7 @@ export default function ActivityFeed({ leads, onMarkSeen, onMarkAllSeen }: Props
               >
                 <Icon name={n.icon} size={20} />
               </span>
-              <p className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900">
+              <p className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900 dark:text-slate-100">
                 {n.title}
               </p>
               {n.at ? (
@@ -116,7 +116,7 @@ export default function ActivityFeed({ leads, onMarkSeen, onMarkAllSeen }: Props
                 onClick={() => onMarkSeen(n.id)}
                 title="סמן כנקרא"
                 aria-label={`סמן כנקרא: ${n.title}`}
-                className="flex-shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-1"
+                className="flex-shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-1 dark:hover:bg-slate-700"
               >
                 <Icon name="x" size={14} />
               </button>
@@ -124,7 +124,7 @@ export default function ActivityFeed({ leads, onMarkSeen, onMarkAllSeen }: Props
           ))}
         </ul>
       ) : (
-        <p className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-500">
+        <p className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
           אין התראות חדשות.
         </p>
       )}

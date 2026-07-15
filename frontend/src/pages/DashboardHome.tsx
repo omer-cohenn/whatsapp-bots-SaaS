@@ -145,7 +145,7 @@ export default function DashboardHome() {
         {/* Greeting + publish toggle */}
         <section className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">
+            <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl dark:text-slate-100">
               שלום{user?.name ? `, ${user.name}` : ''} 👋
             </h1>
             {business?.name ? (
@@ -155,7 +155,7 @@ export default function DashboardHome() {
             ) : null}
           </div>
           {isPublished !== null ? (
-            <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
+            <div className="rounded-xl border border-black/10 bg-white px-4 py-3 dark:border-white/10 dark:bg-slate-800">
               <p className="mb-1 text-xs text-slate-500">מצב הבוט</p>
               <PublishToggle isPublished={isPublished} onChange={setIsPublished} />
             </div>
@@ -165,7 +165,7 @@ export default function DashboardHome() {
         {/* Funnel / KPI */}
         <section aria-labelledby="funnel-heading" className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 id="funnel-heading" className="text-lg font-medium text-slate-900">
+            <h2 id="funnel-heading" className="text-lg font-medium text-slate-900 dark:text-slate-100">
               משפך הלידים
             </h2>
             <SegmentedControl
@@ -219,7 +219,7 @@ export default function DashboardHome() {
           <section aria-labelledby="waiting-heading" className="flex flex-col gap-3">
             <h2
               id="waiting-heading"
-              className="flex items-center gap-2 text-lg font-medium text-slate-900"
+              className="flex items-center gap-2 text-lg font-medium text-slate-900 dark:text-slate-100"
             >
               <span
                 aria-hidden="true"
@@ -240,7 +240,7 @@ export default function DashboardHome() {
                     to={`/conversations?status=waiting&conversation=${encodeURIComponent(
                       conv.conversation_id,
                     )}`}
-                    className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2.5 outline-none transition-colors hover:bg-amber-50 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2"
+                    className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2.5 outline-none transition-colors hover:bg-amber-50 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 dark:border-amber-800 dark:bg-amber-900/20"
                   >
                     <span
                       aria-hidden="true"
@@ -249,7 +249,7 @@ export default function DashboardHome() {
                       <Icon name="message-circle" size={20} />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-slate-900">
+                      <span className="block truncate text-sm font-medium text-slate-900 dark:text-slate-100">
                         לקוח ממתין לנציג
                       </span>
                       <span className="block truncate text-xs text-slate-500">
@@ -277,7 +277,7 @@ export default function DashboardHome() {
           <section aria-labelledby="booking-alerts-heading" className="flex flex-col gap-3">
             <h2
               id="booking-alerts-heading"
-              className="flex items-center gap-2 text-lg font-medium text-slate-900"
+              className="flex items-center gap-2 text-lg font-medium text-slate-900 dark:text-slate-100"
             >
               <span
                 aria-hidden="true"
@@ -296,7 +296,7 @@ export default function DashboardHome() {
                 <li key={`${a.booking_id}-${a.at ?? ''}`}>
                   <Link
                     to="/appointments"
-                    className="flex items-center gap-3 rounded-xl border border-orange-200 bg-orange-50/60 px-3 py-2.5 outline-none transition-colors hover:bg-orange-50 focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2"
+                    className="flex items-center gap-3 rounded-xl border border-orange-200 bg-orange-50/60 px-3 py-2.5 outline-none transition-colors hover:bg-orange-50 focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 dark:border-orange-800 dark:bg-orange-900/20"
                   >
                     <span
                       aria-hidden="true"
@@ -305,7 +305,7 @@ export default function DashboardHome() {
                       <Icon name={a.kind === 'cancelled' ? 'x' : 'clock'} size={20} />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-slate-900">
+                      <span className="block truncate text-sm font-medium text-slate-900 dark:text-slate-100">
                         {a.kind === 'cancelled' ? 'לקוח ביטל פגישה' : 'לקוח שינה מועד פגישה'}
                         {a.client_name ? ` · ${a.client_name}` : ''}
                       </span>

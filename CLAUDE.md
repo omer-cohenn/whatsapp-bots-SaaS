@@ -47,6 +47,13 @@ One business must **NEVER** see another business's data.
 - All UI is built with **React + Tailwind CSS**. No new vanilla HTML/JS pages.
 - The React rebuild must **not break existing FastAPI backend endpoints**.
 
+### 🚫 Rule 5 — NEVER commit or push without explicit approval (NON-NEGOTIABLE)
+**NEVER run `git commit`, `git push`, `git merge`, or any destructive git operation without Omer explicitly asking.**
+- ✅ Allowed: write code, edit files, stage files (`git add`), show diffs.
+- ❌ Forbidden: `git commit`, `git push`, `git merge`, `git reset`, `git rebase` — unless Omer says "תעשה קומיט" / "תעשה פוש" / "commit" / "push" in that specific message.
+- This applies to ALL agents and sub-agents spawned from this session.
+- When work is done: show a summary of what changed and **wait for green light** before committing.
+
 ---
 
 ## 3. Where we are right now (project phase)

@@ -9,9 +9,9 @@ type AlertProps = {
 }
 
 const TONES: Record<Tone, string> = {
-  error: 'border-red-200 bg-red-50 text-bad',
-  warning: 'border-amber-200 bg-amber-50 text-amber-800',
-  info: 'border-slate-200 bg-slate-50 text-slate-700',
+  error: 'border-red-200 bg-red-50 text-bad dark:border-red-800 dark:bg-red-900/30 dark:text-red-300',
+  warning: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+  info: 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300',
 }
 
 // role="alert" so assistive tech announces the message immediately.

@@ -26,13 +26,13 @@ export default function Select({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={selectId} className="text-sm font-medium text-slate-800">
+      <label htmlFor={selectId} className="text-sm font-medium text-slate-800 dark:text-slate-200">
         {label}
       </label>
       <select
         id={selectId}
         aria-describedby={hintId}
-        className={`rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ${className}`}
+        className={`rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 ${className}`}
         {...rest}
       >
         {options.map((opt) => (
@@ -42,7 +42,7 @@ export default function Select({
         ))}
       </select>
       {hint ? (
-        <p id={hintId} className="text-xs text-slate-500">
+        <p id={hintId} className="text-xs text-slate-500 dark:text-slate-400">
           {hint}
         </p>
       ) : null}

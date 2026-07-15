@@ -14,15 +14,15 @@ type Props = {
 
 export default function StatCard({ icon, chipClassName, value, label }: Props) {
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-black/10 bg-white p-3">
+    <div className="flex flex-col gap-2 rounded-xl border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-slate-800">
       <span
         aria-hidden="true"
         className={`flex h-8 w-8 items-center justify-center rounded-lg text-white ${chipClassName}`}
       >
         <Icon name={icon} size={18} />
       </span>
-      <span className="text-2xl font-medium leading-none text-slate-900">{value}</span>
-      <span className="text-xs text-slate-500">{label}</span>
+      <span className="text-2xl font-medium leading-none text-slate-900 dark:text-slate-100">{value}</span>
+      <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
     </div>
   )
 }

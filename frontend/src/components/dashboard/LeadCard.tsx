@@ -127,7 +127,7 @@ export default function LeadCard({ lead, onStatusChange, onDelete }: Props) {
   }
 
   return (
-    <article className="rounded-xl border border-black/10 bg-white p-4">
+    <article className="rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-slate-800">
       <div className="flex items-center gap-3">
         <span
           aria-hidden="true"
@@ -136,7 +136,7 @@ export default function LeadCard({ lead, onStatusChange, onDelete }: Props) {
           {initials(lead.contact_name)}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-slate-900">
+          <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
             {lead.contact_name || 'ליד ללא שם'}
           </p>
           <p className="truncate text-xs text-slate-500">
@@ -157,11 +157,11 @@ export default function LeadCard({ lead, onStatusChange, onDelete }: Props) {
 
       {/* Every collected answer — nothing hidden. */}
       {answers.length > 0 ? (
-        <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 border-t border-black/10 pt-3 sm:grid-cols-3">
+        <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 border-t border-black/10 pt-3 sm:grid-cols-3 dark:border-white/10">
           {answers.map(([key, value]) => (
             <div key={key} className="min-w-0">
               <dt className="text-[11px] text-slate-400">{key}</dt>
-              <dd className="truncate text-sm text-slate-800" title={value}>
+              <dd className="truncate text-sm text-slate-800 dark:text-slate-200" title={value}>
                 {value || <span className="text-slate-400">טרם נענה</span>}
               </dd>
             </div>
@@ -190,16 +190,16 @@ export default function LeadCard({ lead, onStatusChange, onDelete }: Props) {
 
       {/* Saved outcome note (shown once the owner records one). */}
       {lead.outcome_note ? (
-        <div className="mt-3 border-t border-black/10 pt-3">
+        <div className="mt-3 border-t border-black/10 pt-3 dark:border-white/10">
           <p className="text-[11px] text-slate-400">סיכום הטיפול</p>
-          <p className="whitespace-pre-wrap break-words text-sm text-slate-800">
+          <p className="whitespace-pre-wrap break-words text-sm text-slate-800 dark:text-slate-200">
             {lead.outcome_note}
           </p>
         </div>
       ) : null}
 
       {/* Actions: ONE in-app chat button + manual status + delete. Shown at any status. */}
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-black/10 pt-3">
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-black/10 pt-3 dark:border-white/10">
         {lead.conversation_id ? (
           <button
             type="button"
@@ -237,7 +237,7 @@ export default function LeadCard({ lead, onStatusChange, onDelete }: Props) {
               setOutcome('closed')
             }}
             disabled={saving !== null}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 outline-none transition-colors hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 outline-none transition-colors hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
           >
             <Icon name="x" size={16} />
             {saving === 'closed' ? 'מעדכן…' : 'ליד סגור'}
@@ -282,7 +282,7 @@ export default function LeadCard({ lead, onStatusChange, onDelete }: Props) {
             type="button"
             onClick={() => setShowDeleteConfirm(false)}
             disabled={deleting}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
           >
             ביטול
           </button>
