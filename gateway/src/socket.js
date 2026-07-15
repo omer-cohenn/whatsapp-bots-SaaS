@@ -285,6 +285,9 @@ async function startSocket() {
         if (!loggedOut) {
           scheduleReconnect();
         } else {
+          // Permanent logout: surface a distinct status so the dashboard can
+          // show a clear "re-scan QR" message instead of the generic loading text.
+          state.status = 'logged_out';
           log.error('logged out — delete the ./auth dir and restart to re-link');
         }
       }

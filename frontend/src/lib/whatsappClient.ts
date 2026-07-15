@@ -18,6 +18,7 @@ export type GatewayStatus =
   | 'connected'
   | 'qr_pending'
   | 'disconnected'
+  | 'logged_out'   // permanent logout — creds dead, owner must re-scan QR
   | string // tolerate any extra gateway-supplied value without a type break
 
 /** Shape returned by GET /api/whatsapp/status and POST /api/whatsapp/link. */
