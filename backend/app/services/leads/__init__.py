@@ -63,6 +63,9 @@ from app.services.leads._common import (
 from app.services.leads.crud import (
     complete_lead,
     create_lead,
+    delete_lead,
+    mark_all_leads_feed_seen,
+    mark_lead_feed_seen,
     set_lead_status,
     touch_lead_activity,
     update_lead,
@@ -100,6 +103,9 @@ __all__ = [
     "complete_lead",
     "set_lead_status",
     "touch_lead_activity",
+    "delete_lead",
+    "mark_lead_feed_seen",
+    "mark_all_leads_feed_seen",
     # read side
     "list_leads",
     "get_lead_by_conversation",

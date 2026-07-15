@@ -25,16 +25,16 @@ import type { Lead, LeadStatusFilter } from '../dashboard/types'
 // פתוחים → in_progress; נטשו → abandoned; "בוצעה עסקה" → deal; נסגרו → closed.
 // הכול shows everything (incl. deal/closed). deal/closed work server-side now.
 const STATUS_SEGMENTS: Segment<LeadStatusFilter>[] = [
-  { value: 'all', label: 'הכול' },
   { value: 'in_progress', label: 'פתוחים' },
   { value: 'new', label: 'ליד שלם' },
   { value: 'deal', label: 'בוצעה עסקה' },
   { value: 'closed', label: 'נסגרו' },
   { value: 'abandoned', label: 'נטשו' },
+  { value: 'all', label: 'הכול' },
 ]
 
 export default function LeadsPage() {
-  const [status, setStatus] = useState<LeadStatusFilter>('all')
+  const [status, setStatus] = useState<LeadStatusFilter>('in_progress')
   const [flow, setFlow] = useState<string>('all')
 
   // Main list (respects the status + flow filters).
@@ -166,7 +166,7 @@ export default function LeadsPage() {
             <ul className="flex flex-col gap-3">
               {leads.map((lead) => (
                 <li key={lead.id}>
-                  <LeadCard lead={lead} onStatusChange={refresh} />
+                  <LeadCard lead={lead} onStatusChange={refresh} onDelete={refresh} />
                 </li>
               ))}
             </ul>
@@ -195,7 +195,7 @@ export default function LeadsPage() {
             <ul className="flex flex-col gap-3">
               {abandoned.map((lead) => (
                 <li key={lead.id}>
-                  <LeadCard lead={lead} onStatusChange={refresh} />
+                  <LeadCard lead={lead} onStatusChange={refresh} onDelete={refresh} />
                 </li>
               ))}
             </ul>

@@ -24,16 +24,16 @@ import type { Conversation, ConversationStatus } from '../dashboard/types'
 type StatusFilter = 'all' | ConversationStatus
 
 const FILTER_SEGMENTS: Segment<StatusFilter>[] = [
-  { value: 'all', label: 'הכול' },
   { value: 'waiting', label: 'המתנה לנציג' },
   { value: 'bot', label: 'בוט' },
   { value: 'human', label: 'נציג' },
   { value: 'closed', label: 'סגורות' },
+  { value: 'all', label: 'הכול' },
 ]
 
 export default function ConversationsPage() {
   const { refresh: refreshUnread } = useUnread()
-  const [filter, setFilter] = useState<StatusFilter>('all')
+  const [filter, setFilter] = useState<StatusFilter>('waiting')
   const [conversations, setConversations] = useState<Conversation[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

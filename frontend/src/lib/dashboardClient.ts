@@ -155,6 +155,32 @@ export function replyToConversation(
 }
 
 /**
+ * DELETE /api/leads/{id} — permanently delete a lead from the DB.
+ * Returns nothing (204). 404 if the lead doesn't exist or isn't ours.
+ */
+export function deleteLead(leadId: string): Promise<void> {
+  return api.delete<void>(`/api/leads/${encodeURIComponent(leadId)}`)
+}
+
+/**
+ * POST /api/leads/{id}/seen — dismiss one lead from the home feed.
+ * Stamps feed_seen_at so it no longer shows in the notifications list.
+ */
+export function markLeadSeen(leadId: string): Promise<{ lead_id: string }> {
+  return api.post<{ lead_id: string }>(
+    `/api/leads/${encodeURIComponent(leadId)}/seen`,
+  )
+}
+
+/**
+ * POST /api/leads/seen-all — dismiss ALL unseen home-feed notifications.
+ * Returns { count: N } — how many leads were stamped.
+ */
+export function markAllLeadsSeen(): Promise<{ count: number }> {
+  return api.post<{ count: number }>('/api/leads/seen-all')
+}
+
+/**
  * PUT /api/bot/publish — set the bot live (published) or back to draft.
  * Returns the new published state.
  */

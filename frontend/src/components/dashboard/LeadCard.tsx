@@ -15,11 +15,12 @@ import type {
   LeadStatus,
 } from '../../dashboard/types'
 import { fullDateTime, relativeTime } from '../../lib/formatDate'
-import { getConversation, setLeadStatus } from '../../lib/dashboardClient'
+import { deleteLead, getConversation, setLeadStatus } from '../../lib/dashboardClient'
 import { toFriendlyError } from '../../lib/friendlyError'
 import { closeReasonMeta } from '../../dashboard/closeReason'
 import Badge from '../ui/Badge'
 import Icon from '../ui/Icon'
+import Modal from '../ui/Modal'
 import ChatPanel from './ChatPanel'
 import OutcomeNoteDialog from './OutcomeNoteDialog'
 
@@ -43,9 +44,11 @@ type Props = {
   lead: Lead
   /** Called after a manual status change succeeds, so the page can refetch. */
   onStatusChange?: () => void
+  /** Called after the lead is successfully deleted from the DB. */
+  onDelete?: () => void
 }
 
-export default function LeadCard({ lead, onStatusChange }: Props) {
+export default function LeadCard({ lead, onStatusChange, onDelete }: Props) {
   const meta = STATUS_META[lead.status]
   const answers = Object.entries(lead.answers ?? {})
   // "Why it closed" (decision 0021), shown alongside the live status when set.
@@ -53,6 +56,25 @@ export default function LeadCard({ lead, onStatusChange }: Props) {
 
   const [saving, setSaving] = useState<LeadStatus | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+
+  // Delete confirmation
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  async function confirmDelete() {
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      await deleteLead(lead.id)
+      setShowDeleteConfirm(false)
+      onDelete?.()
+    } catch {
+      setDeleteError('המחיקה נכשלה. נסו שוב.')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   // Outcome-note dialog: deal/closed require a free-text note before saving.
   const [outcome, setOutcome] = useState<'deal' | 'closed' | null>(null)
@@ -176,7 +198,7 @@ export default function LeadCard({ lead, onStatusChange }: Props) {
         </div>
       ) : null}
 
-      {/* Actions: ONE in-app chat button + manual status. Shown at any status. */}
+      {/* Actions: ONE in-app chat button + manual status + delete. Shown at any status. */}
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-black/10 pt-3">
         {lead.conversation_id ? (
           <button
@@ -221,6 +243,18 @@ export default function LeadCard({ lead, onStatusChange }: Props) {
             {saving === 'closed' ? 'מעדכן…' : 'ליד סגור'}
           </button>
         ) : null}
+
+        {/* Delete button — always visible, starts a confirm flow */}
+        <button
+          type="button"
+          onClick={() => { setDeleteError(null); setShowDeleteConfirm(true) }}
+          disabled={saving !== null || deleting}
+          title="מחק ליד לצמיתות"
+          className="ms-auto inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 outline-none transition-colors hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Icon name="trash" size={15} />
+          מחק
+        </button>
       </div>
 
       {actionError ? (
@@ -228,6 +262,40 @@ export default function LeadCard({ lead, onStatusChange }: Props) {
           {actionError}
         </p>
       ) : null}
+
+      {/* Delete confirmation Modal */}
+      <Modal
+        open={showDeleteConfirm}
+        title="מחיקת ליד לצמיתות"
+        onClose={() => { if (!deleting) setShowDeleteConfirm(false) }}
+      >
+        <p className="text-sm text-slate-700">
+          האם למחוק את הליד של{' '}
+          <span className="font-semibold">{lead.contact_name || 'ליד ללא שם'}</span>{' '}
+          לצמיתות? לא ניתן לשחזר.
+        </p>
+        {deleteError ? (
+          <p role="alert" className="mt-2 text-xs text-red-600">{deleteError}</p>
+        ) : null}
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setShowDeleteConfirm(false)}
+            disabled={deleting}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+          >
+            ביטול
+          </button>
+          <button
+            type="button"
+            onClick={() => void confirmDelete()}
+            disabled={deleting}
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
+          >
+            {deleting ? 'מוחק…' : 'כן, מחק לצמיתות'}
+          </button>
+        </div>
+      </Modal>
 
       <OutcomeNoteDialog
         outcome={outcome ?? 'deal'}

@@ -179,6 +179,80 @@ async def touch_lead_activity(
     )
 
 
+async def delete_lead(
+    conn: asyncpg.Connection,
+    business_id: str,
+    lead_id: str,
+) -> bool:
+    """Hard-delete a lead row from the DB (owner action). RLS-scoped.
+
+    Returns True when the row existed and was deleted, False when not found
+    (the caller maps False → 404). Cascades: flow_events rows reference leads
+    with ON DELETE CASCADE so no orphaned rows remain. Never logs PII.
+    """
+    result = await conn.execute(
+        "DELETE FROM leads WHERE id = $1 AND business_id = $2",
+        lead_id,
+        business_id,
+    )
+    # asyncpg returns "DELETE N"; N=0 means nothing matched.
+    return result != "DELETE 0"
+
+
+async def mark_lead_feed_seen(
+    conn: asyncpg.Connection,
+    business_id: str,
+    lead_id: str,
+) -> bool:
+    """Stamp feed_seen_at = now() on one lead (decision 0022). RLS-scoped.
+
+    Returns True when the row existed, False when not found (→ 404).
+    Only updates rows where feed_seen_at IS NULL so re-marking is a no-op.
+    No PII touched or logged.
+    """
+    result = await conn.execute(
+        """
+        UPDATE leads
+        SET feed_seen_at = now()
+        WHERE id = $1 AND business_id = $2 AND feed_seen_at IS NULL
+        """,
+        lead_id,
+        business_id,
+    )
+    # "UPDATE 0" can mean either not found OR already marked; treat as found+ok.
+    # Verify existence separately when we need a true 404.
+    exists = await conn.fetchval(
+        "SELECT 1 FROM leads WHERE id = $1 AND business_id = $2",
+        lead_id,
+        business_id,
+    )
+    return exists is not None
+
+
+async def mark_all_leads_feed_seen(
+    conn: asyncpg.Connection,
+    business_id: str,
+) -> int:
+    """Stamp feed_seen_at = now() on ALL unseen leads for this tenant (decision 0022).
+
+    Returns the count of rows updated. RLS-scoped (business_id in WHERE).
+    No PII touched or logged.
+    """
+    result = await conn.execute(
+        """
+        UPDATE leads
+        SET feed_seen_at = now()
+        WHERE business_id = $1 AND feed_seen_at IS NULL AND is_test = false
+        """,
+        business_id,
+    )
+    # result is e.g. "UPDATE 5"
+    try:
+        return int(result.split()[-1])
+    except (IndexError, ValueError):
+        return 0
+
+
 async def set_lead_status(
     conn: asyncpg.Connection,
     business_id: str,

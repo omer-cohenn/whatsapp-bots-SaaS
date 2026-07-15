@@ -29,6 +29,7 @@ from __future__ import annotations
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
+from fastapi.responses import Response
 
 from app.core.crypto import DecryptionError
 from app.core.deps import current_business
@@ -46,7 +47,9 @@ from app.models.dashboard import (
     ConversationStatusResponse,
     DashboardResponse,
     LeadItem,
+    LeadSeenResponse,
     LeadsResponse,
+    LeadsSeenAllResponse,
     LeadStatusRequest,
     LeadStatusResponse,
     MessageItem,
@@ -110,6 +113,63 @@ async def get_leads(
 # A lead id is a UUID supplied in the path; bound its length so it can't be an
 # unreasonably large value (the service still scopes the UPDATE by business_id).
 _LEAD_ID_MAX = 64
+
+
+@router.post("/leads/seen-all", response_model=LeadsSeenAllResponse)
+async def mark_all_leads_seen(
+    request: Request,
+    business_id: str = Depends(current_business),
+) -> LeadsSeenAllResponse:
+    """Mark ALL unseen leads as read in the home feed (decision 0022). Tenant-scoped.
+
+    Stamps `feed_seen_at = now()` on every row where it was NULL for this tenant.
+    Returns the count of rows updated. Idempotent — safe to call multiple times.
+    """
+    async with tenant_connection(request.app.state.pg_pool, business_id) as conn:
+        count = await leads_service.mark_all_leads_feed_seen(conn, business_id)
+    return LeadsSeenAllResponse(count=count)
+
+
+@router.delete("/leads/{lead_id}")
+async def delete_lead(
+    request: Request,
+    lead_id: str = Path(..., min_length=1, max_length=_LEAD_ID_MAX),
+    business_id: str = Depends(current_business),
+) -> Response:
+    """Hard-delete a lead from the DB (owner action). Tenant-scoped.
+
+    Cascades to flow_events (ON DELETE CASCADE). Returns 204 on success; 404 when
+    the lead doesn't exist or belongs to another tenant. The business_id comes only
+    from the server session — never from the path or body.
+    """
+    async with tenant_connection(request.app.state.pg_pool, business_id) as conn:
+        deleted = await leads_service.delete_lead(conn, business_id, lead_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="lead not found"
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/leads/{lead_id}/seen", response_model=LeadSeenResponse)
+async def mark_lead_seen(
+    request: Request,
+    lead_id: str = Path(..., min_length=1, max_length=_LEAD_ID_MAX),
+    business_id: str = Depends(current_business),
+) -> LeadSeenResponse:
+    """Dismiss one lead from the home feed (decision 0022). Tenant-scoped.
+
+    Stamps `feed_seen_at = now()` on the lead so it no longer appears in the
+    home feed. Idempotent — re-marking an already-seen lead is a no-op. 404 when
+    the lead doesn't exist or belongs to another tenant.
+    """
+    async with tenant_connection(request.app.state.pg_pool, business_id) as conn:
+        found = await leads_service.mark_lead_feed_seen(conn, business_id, lead_id)
+    if not found:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="lead not found"
+        )
+    return LeadSeenResponse(lead_id=lead_id)
 
 
 @router.patch("/leads/{lead_id}/status", response_model=LeadStatusResponse)

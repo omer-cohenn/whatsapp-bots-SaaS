@@ -87,7 +87,7 @@ async def list_leads(
     sql = (
         "SELECT id, lead_name, phone, contact_name, answers, status, "
         "       close_reason, outcome_note, last_step_index, is_test, key_version, "
-        "       cache_chat_ref, started_at, last_activity_at, submitted_at "
+        "       cache_chat_ref, started_at, last_activity_at, submitted_at, feed_seen_at "
         "FROM leads "
         f"WHERE {' AND '.join(where)}{period_sql} "
         f"ORDER BY last_activity_at DESC "
@@ -116,7 +116,7 @@ async def get_lead_by_conversation(
         """
         SELECT id, lead_name, phone, contact_name, answers, status,
                close_reason, outcome_note, last_step_index, is_test, key_version,
-               cache_chat_ref, started_at, last_activity_at, submitted_at
+               cache_chat_ref, started_at, last_activity_at, submitted_at, feed_seen_at
         FROM leads
         WHERE business_id = $1 AND cache_chat_ref = $2
         ORDER BY last_activity_at DESC
@@ -241,4 +241,5 @@ def _decrypt_lead_row(row: asyncpg.Record, business_id: str) -> dict[str, Any]:
         "started_at": _iso(row["started_at"]),
         "last_activity_at": _iso(row["last_activity_at"]),
         "submitted_at": _iso(row["submitted_at"]),
+        "feed_seen_at": _iso(row["feed_seen_at"]),
     }

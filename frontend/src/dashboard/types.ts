@@ -60,6 +60,8 @@ export type Lead = {
   started_at: string | null
   last_activity_at: string | null
   submitted_at: string | null
+  /** When the owner dismissed this from the home feed (decision 0022). null = not yet dismissed. */
+  feed_seen_at: string | null
 }
 
 export type LeadsResponse = {

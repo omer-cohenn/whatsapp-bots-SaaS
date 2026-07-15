@@ -19,7 +19,7 @@ import PublishToggle from '../components/dashboard/PublishToggle'
 import Spinner from '../components/ui/Spinner'
 import Alert from '../components/ui/Alert'
 import Icon from '../components/ui/Icon'
-import { getDashboard, getLeads, getConversations } from '../lib/dashboardClient'
+import { getDashboard, getLeads, getConversations, markLeadSeen, markAllLeadsSeen } from '../lib/dashboardClient'
 import { getBookingAlerts } from '../lib/bookingClient'
 import { getSettings } from '../lib/botClient'
 import { toFriendlyError } from '../lib/friendlyError'
@@ -327,7 +327,33 @@ export default function DashboardHome() {
           </section>
         ) : null}
 
-        <ActivityFeed leads={recentLeads} />
+        <ActivityFeed
+          leads={recentLeads}
+          onMarkSeen={(id) => {
+            // Optimistic: hide immediately, then persist.
+            setRecentLeads((prev) =>
+              prev.map((l) => (l.id === id ? { ...l, feed_seen_at: new Date().toISOString() } : l)),
+            )
+            markLeadSeen(id).catch(() => {
+              // On failure, revert the optimistic update.
+              setRecentLeads((prev) =>
+                prev.map((l) => (l.id === id ? { ...l, feed_seen_at: null } : l)),
+              )
+            })
+          }}
+          onMarkAllSeen={() => {
+            const now = new Date().toISOString()
+            setRecentLeads((prev) =>
+              prev.map((l) => (l.feed_seen_at == null ? { ...l, feed_seen_at: now } : l)),
+            )
+            markAllLeadsSeen().catch(() => {
+              // On failure, reload the real state from the server.
+              getLeads({ status: 'all' })
+                .then((res) => setRecentLeads(res.leads))
+                .catch(() => {})
+            })
+          }}
+        />
       </div>
     </DashboardLayout>
   )

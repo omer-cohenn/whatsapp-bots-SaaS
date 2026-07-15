@@ -39,6 +39,8 @@ class LeadItem(BaseModel):
     started_at: str | None = None
     last_activity_at: str | None = None
     submitted_at: str | None = None
+    # When the owner dismissed this lead from the home feed (decision 0022).
+    feed_seen_at: str | None = None
 
 
 class LeadsResponse(BaseModel):
@@ -52,6 +54,20 @@ class LeadsResponse(BaseModel):
 
 # An outcome note is a short owner message; finite bound against oversized bodies.
 MAX_NOTE_CHARS = 2000
+
+
+class LeadSeenResponse(BaseModel):
+    """POST /api/leads/{id}/seen — confirms the lead was marked as seen."""
+    lead_id: str
+
+
+class LeadsSeenAllResponse(BaseModel):
+    """POST /api/leads/seen-all — how many leads were marked as seen."""
+    count: int
+
+
+class LeadDeleteResponse(BaseModel):
+    """DELETE /api/leads/{id} — always empty; status 204 is the signal."""
 
 
 class LeadStatusRequest(BaseModel):
