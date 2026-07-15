@@ -181,6 +181,15 @@ export function markAllLeadsSeen(): Promise<{ count: number }> {
 }
 
 /**
+ * DELETE /api/account — permanently delete the authenticated owner's business
+ * account (all leads, conversations, bot config, WhatsApp session). Returns
+ * nothing (204). The caller must redirect away and clear the session client-side.
+ */
+export function deleteAccount(): Promise<void> {
+  return api.delete<void>('/api/account')
+}
+
+/**
  * PUT /api/bot/publish — set the bot live (published) or back to draft.
  * Returns the new published state.
  */

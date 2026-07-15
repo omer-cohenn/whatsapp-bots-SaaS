@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from app.api.admin import router as admin_router
 from app.api.booking import router as booking_router
@@ -23,8 +23,12 @@ from app.api.google_oauth import router as google_router
 from app.api.whatsapp import router as whatsapp_router
 from app.core.config import get_settings
 from app.core.deps import current_admin, current_business, current_session, current_user
+from app.core.logging import get_logger
 from app.db.session import tenant_connection
 from app.models.auth import MeBusiness, MeConnection, MeResponse, MeUser
+from app.services.auth import SESSION_COOKIE_NAME, destroy_session
+
+log = get_logger("app.api.me")
 
 # The router-level dependency is the gate: no /api/* route is reachable without
 # a valid session.
@@ -92,3 +96,49 @@ async def me(
         connection=MeConnection(status=status_value),
         is_admin=is_admin,
     )
+
+
+@api.delete("/account")
+async def delete_account(
+    request: Request,
+    response: Response,
+    business_id: str = Depends(current_business),
+) -> dict[str, bool]:
+    """Permanently delete this business and all its data, then log the owner out.
+
+    The `business_id` comes ONLY from the verified server-side session — it is
+    NEVER accepted from the request body or path. The DELETE cascades through
+    every child table (leads, flow_events, bot_settings, whatsapp_connections,
+    whatsapp_credentials, bookings, etc.) via ON DELETE CASCADE defined in the
+    migrations — no explicit child-table cleanup is needed.
+
+    The businesses table has FORCE ROW LEVEL SECURITY (migration 0004) with the
+    policy `id = current_business_id()`. Running inside a tenant_connection means
+    `app.business_id` is set to exactly this owner's id, so even if the WHERE
+    clause were absent, RLS would prevent touching any other business's row. The
+    WHERE clause is kept as a second explicit guard.
+
+    After the delete, the session is destroyed server-side (Redis) and the cookie
+    is cleared, so the owner is logged out immediately with no further API access.
+    """
+    try:
+        async with tenant_connection(request.app.state.pg_pool, business_id) as conn:
+            await conn.execute(
+                "DELETE FROM businesses WHERE id = $1",
+                business_id,
+            )
+    except Exception:
+        # Never expose internal details (DB errors, IDs) to the client.
+        log.error("account deletion failed", extra={"reason": "db_error"})
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="account deletion failed",
+        ) from None
+
+    # Destroy the session in Redis so no further /api/* requests can succeed
+    # (exact same path as POST /auth/logout).
+    sid = request.cookies.get(SESSION_COOKIE_NAME)
+    await destroy_session(request.app.state.redis, sid)
+    response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
+
+    return {"deleted": True}

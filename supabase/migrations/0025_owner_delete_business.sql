@@ -1,0 +1,23 @@
+-- ============================================================================
+-- 0025_owner_delete_business.sql — allow an owner to hard-delete their own business
+-- ----------------------------------------------------------------------------
+-- The DELETE /api/account endpoint lets a business owner wipe their own account
+-- and all its data. The endpoint runs as app_role inside a tenant_connection
+-- (so `app.business_id` is set), which means the businesses table RLS policy
+-- (`id = current_business_id()`) is live and scopes the DELETE to EXACTLY the
+-- caller's own row — a tenant can never delete another tenant's business.
+--
+-- Why this is safe with just a GRANT (no SECURITY DEFINER function):
+--   * FORCE ROW LEVEL SECURITY on `businesses` means app_role can only see/touch
+--     the row where `id = current_business_id()`, which is the tenant's own id
+--     placed there by tenant_connection() at the start of the transaction.
+--   * The endpoint also passes `WHERE id = $1` as a second explicit guard.
+--   * The FK ON DELETE CASCADE handles all child tables automatically.
+--
+-- Idempotent: GRANT is idempotent when re-run against an already-granted role.
+-- ============================================================================
+
+-- Give app_role the ability to delete from businesses.
+-- RLS (FORCE, defined in 0004) is the real safety fence: this grant alone cannot
+-- let a tenant delete someone else's row.
+GRANT DELETE ON businesses TO app_role;

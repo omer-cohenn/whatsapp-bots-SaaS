@@ -5,6 +5,7 @@
 // sits inside <AuthProvider> so every route can read auth state.
 
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { ThemeProvider } from './lib/ThemeContext'
 import { AuthProvider } from './auth/AuthContext'
 import { UnreadProvider } from './dashboard/UnreadContext'
 import AccessibilityWidget from './components/AccessibilityWidget'
@@ -27,10 +28,12 @@ import AdminBilling from './pages/admin/AdminBilling'
 import AdminCrm from './pages/admin/AdminCrm'
 import BusinessesList from './pages/admin/BusinessesList'
 import BusinessDetail from './pages/admin/BusinessDetail'
+import SettingsPage from './pages/SettingsPage'
 
 export default function App() {
   return (
     <BrowserRouter>
+      <ThemeProvider>
       <AuthProvider>
         {/* Tenant-wide unread count for the "שיחות" nav badge (decision 0021).
             Auth-aware: it only polls once a session exists. */}
@@ -164,11 +167,21 @@ export default function App() {
             }
           />
 
+          <Route
+            path="/settings"
+            element={
+              <AuthGate>
+                <SettingsPage />
+              </AuthGate>
+            }
+          />
+
           {/* Unknown paths → home (AuthGate handles login redirect). */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </UnreadProvider>
       </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   )
 }

@@ -39,7 +39,7 @@ const NAV_ITEMS: NavSpec[] = [
   { to: '/admin', label: 'ניהול', icon: 'shield', enabled: true, adminOnly: true, accent: 'blue' },
   { to: '/admin/crm', label: 'צינור מכירות', icon: 'layout-columns', enabled: true, adminOnly: true, accent: 'blue' },
   { to: '/admin/billing', label: 'שימוש וחיוב', icon: 'chart-bar', enabled: true, adminOnly: true, accent: 'blue' },
-  { to: '/settings', label: 'הגדרות', icon: 'settings', enabled: false },
+  { to: '/settings', label: 'הגדרות', icon: 'settings', enabled: true },
 ]
 
 // WhatsApp-style unread pill: a white count on bright WhatsApp-green
@@ -117,7 +117,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const navItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin)
 
   return (
-    <div className="flex min-h-screen bg-[#ece9e1]">
+    <div className="flex min-h-screen bg-[#ece9e1] dark:bg-slate-900">
       <a href="#main" className="skip-link">
         דלגו לתוכן
       </a>
@@ -152,7 +152,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       </nav>
 
       {/* Content column: the shared header + the routed page. */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col dark:bg-slate-900">
         <OwnerHeader />
         <main id="main" className="min-w-0 flex-1">
           {children}
