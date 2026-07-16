@@ -32,13 +32,16 @@ export default function ConnectView({
         />
       ) : qr?.status === 'logged_out' ? (
         <div
-          className="flex h-56 w-56 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-orange-300 bg-orange-50 px-4 text-sm text-orange-700"
-          role="alert"
+          className="flex h-56 w-56 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 text-sm text-slate-500"
+          role="status"
         >
-          <span className="text-2xl">⚠️</span>
-          <p className="font-medium">החשבון התנתק</p>
-          <p className="text-center text-xs text-orange-600">
-            לחצו "רענון" למעלה כדי לקבל QR חדש לסריקה.
+          <span
+            aria-hidden="true"
+            className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-leaf"
+          />
+          <p className="font-medium text-slate-600">מרעננים את החיבור…</p>
+          <p className="text-center text-xs text-slate-500">
+            קוד QR חדש יופיע כאן בעוד רגע.
           </p>
         </div>
       ) : (

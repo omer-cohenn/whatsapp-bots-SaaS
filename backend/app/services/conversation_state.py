@@ -212,6 +212,15 @@ async def get_status(
     return await redis.hget(key, "status")
 
 
+async def get_last_activity_at(
+    redis: aioredis.Redis, business_id: str, conversation_id: str
+) -> str | None:
+    """Return the ISO-8601 timestamp of the last activity on this conversation, or None."""
+    key = _key(business_id, conversation_id)
+    _assert_owns(business_id, key)
+    return await redis.hget(key, "last_activity_at")
+
+
 async def set_status(
     redis: aioredis.Redis,
     business_id: str,

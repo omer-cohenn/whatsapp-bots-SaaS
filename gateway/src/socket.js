@@ -2,6 +2,7 @@
 
 // סוקט Baileys: חיבור/חיבור-מחדש, זיהוי צ'אט-עצמי, טיפול בהודעות נכנסות, מניעת לולאה.
 
+const fs = require('fs');
 const path = require('path');
 const {
   default: makeWASocket,
@@ -9,6 +10,7 @@ const {
   fetchLatestBaileysVersion,
   DisconnectReason,
   jidNormalizedUser,
+  WAMessageStubType,
 } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 const qrcode = require('qrcode');
@@ -23,6 +25,10 @@ const { forwardToBackend, sendReplies } = require('./webhook');
 
 const config = loadConfig();
 const log = createLogger(config.logLevel);
+
+// Absolute path to the Baileys auth dir. Used both to start the socket and to
+// clear a single contact's stale Signal session on decrypt failure (see below).
+const AUTH_PATH = path.resolve(config.authDir);
 
 // ── Live connection state (in-RAM; spike only) ──────────────────────────────
 // Real design: state machine persisted + QR streamed over authed channel (M6).
@@ -104,6 +110,25 @@ function rememberSentId(id) {
     // Evict the oldest (first-inserted) id.
     const oldest = sentMessageIds.values().next().value;
     sentMessageIds.delete(oldest);
+  }
+}
+
+// SEND RELIABILITY (getMessage): when a recipient can't decrypt a message WE
+// sent, WhatsApp asks us to resend it — Baileys calls getMessage(key) to look up
+// the original content and re-encrypt it. Without this the message is lost. We
+// keep the last few OUTGOING message bodies (proto.IMessage) keyed by message id.
+// Bounded; content only (no phone / jid). Populated by rememberSentMessage below.
+const SENT_MSG_CAP = 500;
+const sentMessages = new Map(); // message id -> proto.IMessage we sent
+function rememberSentMessage(id, message) {
+  // Always record the id for loop-prevention (self-chat echo guard).
+  rememberSentId(id);
+  if (!id || !message) return;
+  sentMessages.set(id, message);
+  if (sentMessages.size > SENT_MSG_CAP) {
+    // Evict the oldest (first-inserted) entry.
+    const oldest = sentMessages.keys().next().value;
+    sentMessages.delete(oldest);
   }
 }
 
@@ -193,14 +218,100 @@ async function handleInbound(msg) {
   }
 }
 
+// ── Bad-MAC / stale-session recovery ─────────────────────────────────────────
+// After a re-link (fresh QR), contacts who messaged us before still hold the OLD
+// Signal session. Their next message is encrypted with it and fails to decrypt
+// ("Bad MAC") — Baileys surfaces this as a message with messageStubType=CIPHERTEXT
+// and NO content, so the bot never sees it. Baileys auto-asks the sender to
+// resend, but a truly stale session keeps failing (we saw ~99 dead retries).
+//
+// The cure: DELETE our session for that one contact. With no session on our side,
+// their next message triggers a clean PreKey handshake and a fresh session — and
+// the bot starts receiving again. We clear ONLY the failing contact (never the
+// whole auth), through Baileys' own key store (mutex-safe), after a couple of
+// failures, with a cooldown so we don't thrash.
+const _DECRYPT_CLEAR_THRESHOLD = 2; // clear on the 2nd failure from a contact
+const _DECRYPT_CLEAR_COOLDOWN_MS = 60_000; // then wait 60s before clearing again
+const _DECRYPT_FAIL_CAP = 500; // bound the tracking map
+const decryptFailures = new Map(); // user id -> { count, clearedAt }
+
+// Pull the bare numeric "user" out of any jid form: "9725...@s.whatsapp.net",
+// "142958...@lid", "9725...:12@s.whatsapp.net" -> the digits before @ / : / device.
+function jidUser(jid) {
+  if (!jid) return null;
+  const user = String(jid).split('@')[0].split(':')[0].split('.')[0].replace(/[^0-9]/g, '');
+  return user || null;
+}
+
+// Delete every stored Signal session belonging to the given user id(s). Session
+// files are named "session-<user>.<device>.json"; we match by user so ALL of the
+// contact's devices are cleared. Uses authState.keys.set({session:{id:null}}),
+// which routes through Baileys' own locked writes (same as normal session saves).
+async function clearSessionsForUsers(authState, userIds) {
+  let files = [];
+  try {
+    files = await fs.promises.readdir(AUTH_PATH);
+  } catch {
+    return; // auth dir unreadable — nothing we can safely do
+  }
+  const sessionUpdate = {};
+  for (const file of files) {
+    if (!file.startsWith('session-') || !file.endsWith('.json')) continue;
+    const id = file.slice('session-'.length, -'.json'.length); // "<user>.<device>"
+    const user = id.split('.')[0].split(':')[0];
+    if (userIds.has(user)) sessionUpdate[id] = null; // null => delete via the store
+  }
+  const count = Object.keys(sessionUpdate).length;
+  if (count === 0) return;
+  await authState.keys.set({ session: sessionUpdate });
+  // SAFE log: how many sessions were cleared. Never the user/phone/jid (PII).
+  log.warn({ cleared: count }, 'cleared stale Signal session(s) after decrypt failure');
+}
+
+// One decrypt failure (CIPHERTEXT stub). Count it per contact and, once a contact
+// crosses the threshold (and isn't in cooldown), clear its session(s). Never
+// throws into the Baileys event loop; logs are SAFE (no PII).
+async function handleDecryptFailure(authState, msg) {
+  try {
+    const users = new Set();
+    for (const jid of [msg.key?.remoteJid, msg.key?.senderPn, msg.key?.participant]) {
+      const u = jidUser(jid);
+      if (u) users.add(u);
+    }
+    if (users.size === 0) return;
+
+    const now = Date.now();
+    let shouldClear = false;
+    for (const user of users) {
+      const rec = decryptFailures.get(user) || { count: 0, clearedAt: 0 };
+      rec.count += 1;
+      if (rec.count >= _DECRYPT_CLEAR_THRESHOLD && now - rec.clearedAt > _DECRYPT_CLEAR_COOLDOWN_MS) {
+        shouldClear = true;
+        rec.clearedAt = now;
+        rec.count = 0; // reset the streak once we act
+      }
+      decryptFailures.set(user, rec);
+    }
+
+    // Keep the tracking map bounded (evict oldest insertion).
+    if (decryptFailures.size > _DECRYPT_FAIL_CAP) {
+      const oldest = decryptFailures.keys().next().value;
+      decryptFailures.delete(oldest);
+    }
+
+    if (shouldClear) await clearSessionsForUsers(authState, users);
+  } catch (err) {
+    log.error({ err: err.message }, 'failed to handle decrypt failure');
+  }
+}
+
 // ── Start / maintain the Baileys socket ──────────────────────────────────────
 async function startSocket() {
   // Upstream Baileys is flaky — wrap startup in try/catch (B22).
   try {
     // Persist creds in a gitignored ./auth dir for the spike.
     // Real design encrypts these in the DB (crown jewel, M6).
-    const authPath = path.resolve(config.authDir);
-    const { state: authState, saveCreds } = await useMultiFileAuthState(authPath);
+    const { state: authState, saveCreds } = await useMultiFileAuthState(AUTH_PATH);
 
     // fetchLatestBaileysVersion can fail at boot; tolerate it and let Baileys
     // fall back to its bundled version.
@@ -221,6 +332,14 @@ async function startSocket() {
       printQRInTerminal: false, // never render the QR to logs/terminal
       browser: ['Bizz_up Gateway (spike)', 'Chrome', '1.0'],
       markOnlineOnConnect: false,
+      // SEND RELIABILITY: when a recipient couldn't decrypt a message we sent,
+      // WhatsApp asks us to resend and Baileys calls this to fetch the original
+      // content and re-encrypt it. We serve it from our small outgoing-message
+      // cache (rememberSentMessage). Returning undefined (cache miss / old
+      // message) is safe — Baileys just can't resend that particular one.
+      getMessage: async (key) => sentMessages.get(key?.id) || undefined,
+      // Don't sync full history on connect — we only want live notifications.
+      syncFullHistory: false,
     });
 
     sock.ev.on('creds.update', () => {
@@ -285,19 +404,34 @@ async function startSocket() {
         if (!loggedOut) {
           scheduleReconnect();
         } else {
-          // Permanent logout: surface a distinct status so the dashboard can
-          // show a clear "re-scan QR" message instead of the generic loading text.
+          // Permanent logout (401): the creds are DEAD — WhatsApp unlinked this
+          // device. Parking here forever forces a manual `rm -rf auth`, and the
+          // owner/customer just sees a broken "disconnected" page. Instead we WIPE
+          // the dead auth and restart the socket, so Baileys immediately issues a
+          // FRESH QR to re-link. The dashboard (which polls) then shows that QR
+          // automatically — no dead-end, no manual step.
           state.status = 'logged_out';
-          log.error('logged out — delete the ./auth dir and restart to re-link');
+          log.warn('logged out — wiping dead auth and restarting to surface a fresh QR');
+          wipeAuthAndReconnect();
         }
       }
     });
 
     // Forward inbound messages to the backend, and (M6a) reply into self-chat.
     sock.ev.on('messages.upsert', ({ messages, type }) => {
-      // Only act on live notifications; skip history-sync / append noise.
-      if (type !== 'notify') return;
+      // Log every upsert event so we can diagnose missing messages in dev.
+      log.info({ type, count: (messages || []).length }, 'messages.upsert event');
       for (const msg of messages || []) {
+        // DECRYPT FAILURE (Bad MAC): Baileys delivers the envelope with
+        // messageStubType=CIPHERTEXT and no content. The contact's Signal session
+        // is stale (usually after a re-link). Clear it so their next message
+        // negotiates a fresh session, then skip — there's nothing to run.
+        if (msg.messageStubType === WAMessageStubType.CIPHERTEXT) {
+          handleDecryptFailure(authState, msg);
+          continue;
+        }
+        // Only act on live notifications; skip history-sync / append noise.
+        if (type !== 'notify') continue;
         // Each message is handled independently and async so one error / one
         // slow webhook can't block the others. handleInbound never throws.
         handleInbound(msg);
@@ -320,6 +454,32 @@ function scheduleReconnect() {
   }, 3000);
 }
 
+// On a permanent logout (401) the creds are dead — delete EVERY auth file (dead
+// creds + all stale sessions) and restart the socket so Baileys issues a fresh
+// QR to re-link. We also drop our cached identity, because a re-link may be to a
+// DIFFERENT account (unlike a transient reconnect, where the ids are stable and
+// we deliberately keep them). Guarded by `reconnecting` so it can't overlap a
+// scheduled reconnect. Never throws — a wipe failure still tries to restart.
+async function wipeAuthAndReconnect() {
+  if (reconnecting) return;
+  reconnecting = true;
+  try {
+    const files = await fs.promises.readdir(AUTH_PATH).catch(() => []);
+    await Promise.all(
+      files.map((f) => fs.promises.unlink(path.join(AUTH_PATH, f)).catch(() => {}))
+    );
+    // New account possible on re-link → forget the old identity.
+    ownJid = null;
+    ownLid = null;
+    log.info({ removed: files.length }, 'wiped dead auth; restarting for a fresh QR');
+  } catch (err) {
+    log.error({ err: err.message }, 'failed to wipe dead auth');
+  } finally {
+    reconnecting = false;
+    startSocket();
+  }
+}
+
 // Mutate the EXISTING exports object instead of reassigning it. webhook.js does
 // `const socketModule = require('./socket')` at load time — during the
 // socket<->webhook require cycle it captures THIS object before we get here, so
@@ -330,6 +490,7 @@ Object.assign(module.exports, {
   state,
   recentMessages,
   rememberSentId,
+  rememberSentMessage,
   getSock,
   startSocket,
   scheduleReconnect,

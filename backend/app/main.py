@@ -30,6 +30,7 @@ from app.core.logging import configure_logging, get_logger
 from app.services import google_calendar
 from app.services.abandoned_sweep import sweep_loop
 from app.services.booking_reminders import sweep_loop as booking_reminders_loop
+from app.services.stale_handoff_sweep import sweep_loop as stale_handoff_loop
 
 
 @asynccontextmanager
@@ -62,6 +63,13 @@ async def lifespan(app: FastAPI):
         booking_reminders_loop(app.state.pg_pool, app.state.redis)
     )
 
+    # Background: the proactive stale-handoff close. Same single-runner pattern —
+    # closes waiting/human chats gone silent past the threshold and sends the
+    # customer a closing message, without waiting for them to message again.
+    stale_handoff_task = asyncio.create_task(
+        stale_handoff_loop(app.state.pg_pool, app.state.redis)
+    )
+
     log.info("backend started", extra={"app_env": settings.app_env})
 
     try:
@@ -71,7 +79,8 @@ async def lifespan(app: FastAPI):
         # then dispose the infra clients. Never log connection details.
         sweep_task.cancel()
         booking_reminders_task.cancel()
-        for task in (sweep_task, booking_reminders_task):
+        stale_handoff_task.cancel()
+        for task in (sweep_task, booking_reminders_task, stale_handoff_task):
             try:
                 await task
             except asyncio.CancelledError:

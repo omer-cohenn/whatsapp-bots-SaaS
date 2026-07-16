@@ -81,8 +81,9 @@ async function sendReplies(remoteJid, replies) {
     if (!text.trim()) continue; // skip empty/blank replies
     try {
       const sent = await sock.sendMessage(remoteJid, { text });
-      // Record the id of OUR outgoing message so its fromMe echo is ignored.
-      socketModule.rememberSentId(sent?.key?.id);
+      // Record OUR outgoing message: the id for the self-chat echo guard, and the
+      // content so getMessage can re-encrypt it if the recipient asks us to resend.
+      socketModule.rememberSentMessage(sent?.key?.id, sent?.message);
       log.info({ textLen: text.length }, 'sent bot reply into self-chat');
     } catch (err) {
       // Never log the reply text or the jid (PII) — message only.

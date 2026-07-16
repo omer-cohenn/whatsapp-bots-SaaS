@@ -128,9 +128,10 @@ function registerRoutes(app) {
     try {
       const sent = await sock.sendMessage(String(to), { text: String(text) });
       const messageId = sent?.key?.id || null;
-      // LOOP PREVENTION: remember OUR sent id so its fromMe echo is skipped at the
-      // top of handleInbound (matches sendReplies' behaviour for auto-replies).
-      socketModule.rememberSentId(messageId);
+      // LOOP PREVENTION + SEND RELIABILITY: remember OUR sent id (so its fromMe
+      // echo is skipped at the top of handleInbound) AND its content (so getMessage
+      // can re-encrypt it if the recipient requests a resend).
+      socketModule.rememberSentMessage(messageId, sent?.message);
       // SAFE log: length + whether we got an id back. Never the jid/text/token.
       log.info({ textLen: text.length, hasMessageId: Boolean(messageId) }, 'sent owner reply via /send-bot');
       return res.status(200).json({ ok: true, message_id: messageId });
