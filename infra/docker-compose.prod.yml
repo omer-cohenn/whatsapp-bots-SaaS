@@ -58,9 +58,12 @@ services:
       # Turns OFF /docs, /redoc, /openapi.json (see create_app in app/main.py).
       APP_ENV: prod
 
-  # ---- gateway: internal only ----------------------------------------------
+  # ---- gateway: internal only, run the baked image (not a source mount) ----
   gateway:
     ports: !override []
+    # Drop the dev source bind-mount so the container uses the node_modules baked
+    # into its image (otherwise the mount shadows them → "Cannot find module").
+    volumes: !override []
 
   # ---- frontend: pre-built STATIC image, internal only ---------------------
   frontend:
