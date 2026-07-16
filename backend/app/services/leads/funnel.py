@@ -107,10 +107,24 @@ async def funnel_stats(
         *or_params,
     )
 
+    # Meetings = bookings CREATED in the window that weren't cancelled (M11 data,
+    # surfaced on the home funnel as "פגישות"). Same is_test discipline; keyed off
+    # created_at so it reads "meetings booked this period", like the other cards.
+    mt_params: list[Any] = [business_id]
+    mt_where = ["business_id = $1", "status <> 'cancelled'"]
+    if not include_test:
+        mt_where.append("is_test = false")
+    mt_period = _period_clause(period, mt_params, "created_at")
+    meetings = await conn.fetchval(
+        f"SELECT count(*)::int FROM bookings WHERE {' AND '.join(mt_where)}{mt_period}",
+        *mt_params,
+    )
+
     return {
         "started": int(by_event.get(EVENT_STARTED, 0)),
         "completed": int(by_event.get(EVENT_COMPLETED, 0)),
         "abandoned": int(by_event.get(EVENT_ABANDONED, 0)),
         "total_leads": int(total_leads or 0),
         "orders": int(orders or 0),
+        "meetings": int(meetings or 0),
     }

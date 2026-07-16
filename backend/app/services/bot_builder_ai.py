@@ -137,32 +137,34 @@ def build_system_prompt(current_config: dict[str, Any]) -> str:
 - פרופיל הבוט:
   {{"bot_profile": {{"name": "...", "system_prompt": "...", "tone": "...", "language": "he",
   "greeting": "הקדמה קצרה בלבד — ללא רשימת אפשרויות וללא מספרים", "escalation_message": "...", "auto_close_minutes": 60, "menu_keywords": ["תפריט"]}}}}
-- מסלולים (מפתח = שם המסלול באנגלית/snake_case, ייחודי):
-  • איסוף מידע (lead): {{"lead_steps": {{"quote": {{"label": "הצעת מחיר", "flow_type": "lead",
-    "steps": [{{"key": "full_name", "question": "מה השם המלא?", "type": "text", "required": true}}]}}}}}}
+- מסלולים (מפתח = שם המסלול בעברית, קצר וייחודי — זה השם שבעל העסק רואה בדשבורד):
+  • איסוף מידע (lead): {{"lead_steps": {{"הצעת מחיר": {{"label": "הצעת מחיר", "flow_type": "lead",
+    "steps": [{{"key": "שם מלא", "question": "מה השם המלא?", "type": "text", "required": true}}]}}}}}}
   • סוגי שדה אפשריים ל-type: "text" | "phone" | "email" | "choice".
     לשדה מסוג "choice" חובה להוסיף "options": ["א", "ב"] (2 עד 12 פריטים).
-  • מעבר לנציג (human_handoff): {{"lead_steps": {{"talk_to_human": {{"label": "דברו עם נציג",
+  • מעבר לנציג (human_handoff): {{"lead_steps": {{"מעבר לנציג": {{"label": "דברו עם נציג",
     "flow_type": "human_handoff", "steps": []}}}}}}  ← למסלול כזה steps חייב להיות ריק.
-  • קביעת תור (booking, שמור לשלב הבא): {{"lead_steps": {{"book": {{"label": "קביעת תור",
+  • קביעת תור (booking, שמור לשלב הבא): {{"lead_steps": {{"קביעת תור": {{"label": "קביעת תור",
     "flow_type": "booking", "service_name": "תספורת", "steps": []}}}}}}
-- מחיקת מסלולים לפי שם: {{"deleteFlows": ["quote", "book"]}}
+- מחיקת מסלולים לפי שם: {{"deleteFlows": ["הצעת מחיר", "קביעת תור"]}}
 - מילות מעבר לנציג: {{"handoff_keywords": ["נציג", "אדם"]}}
 - בנייה מהירה / מחדש מאפס (לבניית בוט שלם בבת אחת) — "replaceAll": true עם bot_profile מלא (חובה name + system_prompt) וכל המסלולים ב-lead_steps. דוגמה מקוצרת:
   {{"replaceAll": true,
     "bot_profile": {{"name": "סוכנות הביטוח של דנה", "system_prompt": "...", "greeting": "שלום! הגעתם לסוכנות הביטוח של דנה, אני כאן לעזור — איך אפשר לסייע?", "escalation_message": "...", "menu_keywords": ["תפריט"]}},
     "lead_steps": {{
-      "life_insurance": {{"label": "ביטוח חיים", "flow_type": "lead", "steps": [
-        {{"key": "full_name", "question": "מה השם המלא?", "type": "text", "required": true}},
-        {{"key": "phone", "question": "מה מספר הטלפון?", "type": "phone", "required": true}},
-        {{"key": "age", "question": "מה הגיל?", "type": "text", "required": true}}
+      "ביטוח חיים": {{"label": "ביטוח חיים", "flow_type": "lead", "steps": [
+        {{"key": "שם מלא", "question": "מה השם המלא?", "type": "text", "required": true}},
+        {{"key": "טלפון", "question": "מה מספר הטלפון?", "type": "phone", "required": true}},
+        {{"key": "גיל", "question": "מה הגיל?", "type": "text", "required": true}}
       ]}},
-      "talk_to_human": {{"label": "מעבר לנציג", "flow_type": "human_handoff", "steps": []}},
-      "book_meeting": {{"label": "קביעת פגישה", "flow_type": "booking", "service_name": "פגישת ייעוץ", "steps": []}}
+      "מעבר לנציג": {{"label": "מעבר לנציג", "flow_type": "human_handoff", "steps": []}},
+      "קביעת פגישה": {{"label": "קביעת פגישה", "flow_type": "booking", "service_name": "פגישת ייעוץ", "steps": []}}
     }}}}
 
 כללים ל-JSON:
-- מפתח מסלול: אותיות קטנות באנגלית/מספרים/קו תחתון בלבד (^[a-z0-9_]{{1,40}}$).
+- שמות מסלולים (המפתחות ב-lead_steps) ומפתחות שדות ("key") — תמיד בעברית פשוטה וקצרה,
+  כי הם מוצגים לבעל העסק בדשבורד (למשל "הצעת מחיר", "שם מלא"). מותר: אותיות עברית/אנגלית
+  קטנות, ספרות, רווח וקו תחתון, עד 40 תווים. אל תשתמש באנגלית אלא אם בעל העסק ביקש.
 - אל תכלול לעולם business_id או מפתחות סודיים.
 - אל תכלול מפתח "knowledge" — הוא שמור לשלב מאוחר יותר ולא נתמך כעת.
 - אם אין שינוי בהודעה הזו — אל תכלול גוש JSON כלל."""

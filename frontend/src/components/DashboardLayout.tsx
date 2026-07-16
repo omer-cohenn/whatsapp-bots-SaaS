@@ -117,7 +117,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const navItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin)
 
   return (
-    <div className="flex min-h-screen bg-[#ece9e1] dark:bg-slate-900">
+    // Warm cream page background — the landing hero's #f6f3eb.
+    <div className="flex min-h-screen bg-[#f6f3eb] dark:bg-slate-900">
       <a href="#main" className="skip-link">
         דלגו לתוכן
       </a>

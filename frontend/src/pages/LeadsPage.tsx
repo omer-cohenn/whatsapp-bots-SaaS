@@ -9,6 +9,7 @@
 // independently of the chosen status filter. The tenant is server-side only.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import DashboardLayout from '../components/DashboardLayout'
 import LeadCard from '../components/dashboard/LeadCard'
 import StatCard from '../components/dashboard/StatCard'
@@ -34,7 +35,13 @@ const STATUS_SEGMENTS: Segment<LeadStatusFilter>[] = [
 ]
 
 export default function LeadsPage() {
-  const [status, setStatus] = useState<LeadStatusFilter>('in_progress')
+  // Deep link from the home feed: /leads?highlight=<lead id> opens the page on
+  // the "הכול" filter (so the lead is guaranteed to be in the list), scrolls to
+  // its card and flashes it briefly.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const highlightId = searchParams.get('highlight')
+
+  const [status, setStatus] = useState<LeadStatusFilter>(highlightId ? 'all' : 'in_progress')
   const [flow, setFlow] = useState<string>('all')
 
   // Main list (respects the status + flow filters).
@@ -72,6 +79,21 @@ export default function LeadsPage() {
   }, [])
 
   useEffect(() => load(status, flowParam), [load, status, flowParam])
+
+  // Once the list is on screen, scroll to the deep-linked lead and flash it,
+  // then drop the query param so a refresh doesn't re-flash.
+  useEffect(() => {
+    if (!highlightId || loading || !leads) return
+    const el = document.getElementById(`lead-${highlightId}`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.add('ring-2', 'ring-leaf', 'rounded-xl')
+    const timer = window.setTimeout(() => {
+      el.classList.remove('ring-2', 'ring-leaf', 'rounded-xl')
+      setSearchParams({}, { replace: true })
+    }, 2500)
+    return () => window.clearTimeout(timer)
+  }, [highlightId, loading, leads, setSearchParams])
 
   // After a manual status change on a card, refetch the current view.
   const refresh = useCallback(() => {
@@ -165,7 +187,7 @@ export default function LeadsPage() {
           ) : leads && leads.length > 0 ? (
             <ul className="flex flex-col gap-3">
               {leads.map((lead) => (
-                <li key={lead.id}>
+                <li key={lead.id} id={`lead-${lead.id}`}>
                   <LeadCard lead={lead} onStatusChange={refresh} onDelete={refresh} />
                 </li>
               ))}
@@ -194,7 +216,7 @@ export default function LeadsPage() {
             </div>
             <ul className="flex flex-col gap-3">
               {abandoned.map((lead) => (
-                <li key={lead.id}>
+                <li key={lead.id} id={`lead-${lead.id}`}>
                   <LeadCard lead={lead} onStatusChange={refresh} onDelete={refresh} />
                 </li>
               ))}

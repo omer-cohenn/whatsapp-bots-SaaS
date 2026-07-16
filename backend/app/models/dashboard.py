@@ -104,6 +104,8 @@ class DashboardResponse(BaseModel):
     total_leads: int
     # Orders = leads the owner marked as a won deal (status='deal') in the window.
     orders: int
+    # Meetings = non-cancelled bookings created in the window (the home "פגישות" card).
+    meetings: int
 
 
 # --- GET /api/conversations --------------------------------------------------

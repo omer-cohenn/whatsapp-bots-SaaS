@@ -78,6 +78,8 @@ export type DashboardStats = {
   total_leads: number
   /** Count of leads the owner manually marked as a closed deal (status="deal"). */
   orders: number
+  /** Non-cancelled bookings created in the window (the home "פגישות" card). */
+  meetings: number
 }
 
 // --- 3) GET /api/conversations -----------------------------------------------

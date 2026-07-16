@@ -27,10 +27,11 @@ import { relativeTime, fullDateTime } from '../lib/formatDate'
 import type { Conversation, DashboardStats, Lead, Period } from '../dashboard/types'
 import type { BookingAlert } from '../dashboard/appointmentTypes'
 
+// RTL: the first item renders on the visual right — הכל / החודש / השבוע.
 const PERIOD_SEGMENTS: Segment<Period>[] = [
-  { value: 'week', label: 'השבוע' },
+  { value: 'all', label: 'הכל' },
   { value: 'month', label: 'החודש' },
-  { value: 'all', label: 'הכול' },
+  { value: 'week', label: 'השבוע' },
 ]
 
 export default function DashboardHome() {
@@ -141,33 +142,31 @@ export default function DashboardHome() {
 
   return (
     <DashboardLayout>
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 py-10">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-10">
         {/* Greeting + publish toggle */}
         <section className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl dark:text-slate-100">
-              שלום{user?.name ? `, ${user.name}` : ''} 👋
+            <h1 className="text-3xl font-bold text-slate-900 sm:text-4xl dark:text-slate-100">
+              שלום{user?.name ? `, ${user.name.split(' ')[0]}` : ''} 👋
             </h1>
             {business?.name ? (
-              <p className="mt-2 text-base text-slate-600">
+              <p className="mt-2 text-base text-slate-600 dark:text-slate-400">
                 ניהול בוט הוואטסאפ של <span className="font-medium">{business.name}</span>
               </p>
             ) : null}
           </div>
           {isPublished !== null ? (
-            <div className="rounded-xl border border-black/10 bg-white px-4 py-3 dark:border-white/10 dark:bg-slate-800">
-              <p className="mb-1 text-xs text-slate-500">מצב הבוט</p>
+            <div className="flex items-center gap-4 rounded-2xl bg-white px-5 py-4 shadow-[0_10px_26px_rgba(70,60,35,0.07)] dark:border dark:border-white/10 dark:bg-slate-800 dark:shadow-none">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">מצב הבוט</p>
               <PublishToggle isPublished={isPublished} onChange={setIsPublished} />
             </div>
           ) : null}
         </section>
 
-        {/* Funnel / KPI */}
-        <section aria-labelledby="funnel-heading" className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 id="funnel-heading" className="text-lg font-medium text-slate-900 dark:text-slate-100">
-              משפך הלידים
-            </h2>
+        {/* Funnel / KPI (no visible heading by design; the section is still
+            named for screen readers). */}
+        <section aria-label="משפך הלידים" className="flex flex-col gap-5">
+          <div className="flex flex-wrap items-center justify-end gap-3">
             <SegmentedControl
               label="טווח זמן"
               segments={PERIOD_SEGMENTS}
@@ -182,32 +181,33 @@ export default function DashboardHome() {
             <Alert tone="error">{error}</Alert>
           ) : stats ? (
             <div
-              className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+              className="grid grid-cols-2 gap-4 sm:grid-cols-4"
               aria-label="סיכום משפך הלידים"
             >
+              {/* RTL: first card renders on the visual right. */}
               <StatCard
-                icon="user-plus"
-                chipClassName="bg-[#639922]"
+                icon="send"
+                chipClassName="bg-leaf"
                 value={stats.started}
                 label="התחילו"
               />
               <StatCard
-                icon="checks"
-                chipClassName="bg-[#1D9E75]"
-                value={stats.completed}
-                label="הושלמו"
-              />
-              <StatCard
-                icon="user-off"
+                icon="x"
                 chipClassName="bg-[#D85A30]"
                 value={stats.abandoned}
                 label="ננטשו"
               />
               <StatCard
-                icon="checks"
+                icon="check"
+                chipClassName="bg-[#1D9E75]"
+                value={stats.completed}
+                label="הושלמו"
+              />
+              <StatCard
+                icon="calendar-event"
                 chipClassName="bg-[#378ADD]"
-                value={stats.orders}
-                label="הזמנות"
+                value={stats.meetings}
+                label="פגישות"
               />
             </div>
           ) : null}
@@ -240,7 +240,7 @@ export default function DashboardHome() {
                     to={`/conversations?status=waiting&conversation=${encodeURIComponent(
                       conv.conversation_id,
                     )}`}
-                    className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2.5 outline-none transition-colors hover:bg-amber-50 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 dark:border-amber-800 dark:bg-amber-900/20"
+                    className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/60 px-4 py-3 shadow-sm outline-none transition-colors hover:bg-amber-50 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 dark:border-amber-800 dark:bg-amber-900/20"
                   >
                     <span
                       aria-hidden="true"
@@ -296,7 +296,7 @@ export default function DashboardHome() {
                 <li key={`${a.booking_id}-${a.at ?? ''}`}>
                   <Link
                     to="/appointments"
-                    className="flex items-center gap-3 rounded-xl border border-orange-200 bg-orange-50/60 px-3 py-2.5 outline-none transition-colors hover:bg-orange-50 focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 dark:border-orange-800 dark:bg-orange-900/20"
+                    className="flex items-center gap-3 rounded-2xl border border-orange-200 bg-orange-50/60 px-4 py-3 shadow-sm outline-none transition-colors hover:bg-orange-50 focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 dark:border-orange-800 dark:bg-orange-900/20"
                   >
                     <span
                       aria-hidden="true"
