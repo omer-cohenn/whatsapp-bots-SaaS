@@ -32,6 +32,10 @@ class WhatsAppStatusResponse(BaseModel):
     connected: bool = Field(..., description="The gateway session is currently active")
     phone: str | None = Field(default=None, description="Linked own number (owner only)")
     gateway_status: str = Field(..., description="Raw status reported by the gateway")
+    # M6b (0027): machine-readable reason a link was refused, e.g.
+    # 'phone_conflict' — the scanned number is already linked to ANOTHER
+    # business. Null when there is nothing to explain.
+    error: str | None = Field(default=None, description="Why the link failed, if it did")
 
 
 # The link response echoes the same shape (the status AFTER recording the

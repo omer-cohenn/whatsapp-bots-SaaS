@@ -44,7 +44,7 @@ bizz_up/
   Fernet PII key; WhatsApp creds + Google refresh token use envelope encryption (KEK). Decryption is
   fail-loud. Logs are allow-listed (no secrets/tokens/PII/message bodies).
 - **Deny-by-default auth** — the whole `/api/*` group is gated by an opaque Redis-backed session cookie.
-- **Secrets in env only** (`infra/.env.local`, git-ignored); the app fails closed if a required one is missing.
+- **Secrets in env only** (`infra/.env`, git-ignored); the app fails closed if a required one is missing.
 - **The originals are read-only** — `last_bo/` and `qr_wa_scanner/` are never modified (also enforced in `.claude/settings.json`).
 
 ---
@@ -205,9 +205,9 @@ Node.js + Baileys WhatsApp gateway — **single-session**, now driving the LIVE 
 ### Infra (`infra/`)
 - `docker-compose.yml` — health-gated stack (no blind sleeps):
   - `postgres:16-alpine` (volume `pg_data`, `pg_isready` healthcheck) · `redis:7-alpine` (password, ephemeral cache) · `migrate` (one-shot: applies `supabase/migrations/*.sql`, creates roles) · `backend:8000` (gunicorn, depends on pg+redis+migrate healthy) · `gateway:3000` (depends on backend) · `frontend:5173` (vite, anon `node_modules` volume).
-- `.env.local.example` — secret-name template, grouped: gateway↔backend (`GATEWAY_API_TOKEN`, `BACKEND_WEBHOOK_URL`), Postgres (`POSTGRES_USER/PASSWORD/DB`), Redis (`REDIS_PASSWORD`), DB roles (`APP_DB_PASSWORD`, `GATEWAY_DB_PASSWORD`), encryption (`PII_DATA_KEY`, `WA_CRED_KEK`, `PHONE_HMAC_KEY`), auth (`SESSION_SECRET`, `GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI`, `GOOGLE_CALENDAR_REDIRECT_URI`), AI (`GEMINI_API_KEY`).
+- `.env.example` — secret-name template, grouped: gateway↔backend (`GATEWAY_API_TOKEN`, `BACKEND_WEBHOOK_URL`), Postgres (`POSTGRES_USER/PASSWORD/DB`), Redis (`REDIS_PASSWORD`), DB roles (`APP_DB_PASSWORD`, `GATEWAY_DB_PASSWORD`), encryption (`PII_DATA_KEY`, `WA_CRED_KEK`, `PHONE_HMAC_KEY`), auth (`SESSION_SECRET`, `GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI`, `GOOGLE_CALENDAR_REDIRECT_URI`), AI (`GEMINI_API_KEY`).
 - `Makefile` — `make dev/down/logs/ps/build/migrate/seed/isolation/test/demo-isolation/demo-break`.
-- `run.bat` / `stop.bat` — Windows start/stop (auto-generates `.env.local` if missing); URLs: frontend :5173, gateway QR :3000/qr, backend :8000.
+- `run.bat` / `stop.bat` — Windows start/stop (auto-generates `.env` if missing); URLs: frontend :5173, gateway QR :3000/qr, backend :8000.
 
 ### Database (`supabase/`)
 PostgreSQL with RLS + role isolation. Migrations (applied in order by `migrate`):

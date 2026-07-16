@@ -41,7 +41,7 @@ BIZ_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"  # Avi Insurance (PUBLISHED in se
 BIZ_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"  # Bella Barber  (DRAFT in seed)
 UNKNOWN_BIZ = "cccccccc-cccc-cccc-cccc-cccccccccccc"  # matches no business
 
-# The admin identity. ADMIN_EMAILS in infra/.env.local includes oyc3333@gmail.com.
+# The admin identity. ADMIN_EMAILS in infra/.env includes oyc3333@gmail.com.
 # CRM writers stamp admin_audit.admin_user_id + crm_notes.admin_user_id, which
 # REFERENCE users(id). users.email is UNIQUE, so the admin_user fixture resolves
 # the REAL users(id) for this email (creating one only if absent) so the FKs are

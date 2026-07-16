@@ -24,7 +24,7 @@ export default function Footer() {
       <footer className="bx-footer">
         <div className="bx-footer-inner">
           <div className="bx-footer-brand">
-            <img src="/logo.png" alt="בוטיק" className="bx-logo-img" />
+            <img src="/botik-logo.png" alt="Botik" className="bx-logo-img" />
           </div>
           <nav className="bx-footer-links">
             <Link to="/terms">מדיניות ותנאי שימוש</Link>

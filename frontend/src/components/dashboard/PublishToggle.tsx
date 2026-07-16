@@ -23,13 +23,17 @@ export default function PublishToggle({ isPublished, onChange }: Props) {
 
   async function toggle() {
     if (saving) return
-    const next = !isPublished
+    const prev = isPublished
+    const next = !prev
+    // Optimistic: flip immediately, roll back on failure (like other toggles).
+    onChange(next)
     setSaving(true)
     setError(null)
     try {
       const res = await setPublished(next)
       onChange(res.is_published)
     } catch (err) {
+      onChange(prev)
       setError(toFriendlyError(err, 'עדכון מצב הפרסום נכשל. נסו שוב.'))
     } finally {
       setSaving(false)
@@ -39,22 +43,26 @@ export default function PublishToggle({ isPublished, onChange }: Props) {
   return (
     <div className="flex flex-col items-end gap-1">
       <div className="flex items-center gap-3">
-        <span className="flex items-center gap-1.5 text-sm font-medium text-slate-800">
+        <span
+          className={`flex items-center gap-1.5 text-sm font-medium ${
+            isPublished ? 'text-slate-800 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500'
+          }`}
+        >
           <span
             aria-hidden="true"
-            className={`h-2 w-2 rounded-full ${isPublished ? 'bg-leaf' : 'bg-slate-300'}`}
+            className={`h-2 w-2 rounded-full ${isPublished ? 'bg-leaf' : 'bg-slate-300 dark:bg-slate-600'}`}
           />
-          {isPublished ? 'פורסם' : 'טיוטה'}
+          {isPublished ? 'פורסם' : 'כבוי'}
         </span>
         <button
           type="button"
           role="switch"
           aria-checked={isPublished}
-          aria-label={isPublished ? 'הבוט מפורסם — לחצו כדי להחזיר לטיוטה' : 'הבוט בטיוטה — לחצו כדי לפרסם'}
+          aria-label={isPublished ? 'הבוט מפורסם — לחצו כדי לכבות' : 'הבוט כבוי — לחצו כדי לפרסם'}
           disabled={saving}
           onClick={() => void toggle()}
-          className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full p-0.5 transition disabled:opacity-60 ${
-            isPublished ? 'bg-leaf' : 'bg-slate-300'
+          className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full p-0.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 disabled:opacity-60 dark:focus-visible:ring-offset-slate-800 ${
+            isPublished ? 'bg-leaf' : 'bg-slate-300 dark:bg-slate-600'
           }`}
         >
           <span

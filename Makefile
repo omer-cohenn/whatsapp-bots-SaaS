@@ -13,10 +13,10 @@
 # ============================================================================
 
 # Single source of truth for the compose invocation.
-# --env-file makes infra/.env.local the source for BOTH in-container env AND the
+# --env-file makes infra/.env the source for BOTH in-container env AND the
 # ${VAR} interpolation in the compose file (e.g. building DATABASE_URL). Without
 # it, compose only looks for a .env in the project dir and the URLs come out blank.
-COMPOSE := docker compose --env-file infra/.env.local -f infra/docker-compose.yml
+COMPOSE := docker compose --env-file infra/.env -f infra/docker-compose.yml
 
 .PHONY: help dev down logs ps build test lint isolation migrate seed demo-isolation demo-break
 
@@ -35,7 +35,7 @@ help:
 	@echo "  make demo-isolation - WATCH the wall hold (plain-language story)       [M2]"
 	@echo "  make demo-break - prove the gate catches a regression, then restore    [M2]"
 	@echo ""
-	@echo "First run: copy infra/.env.local.example -> infra/.env.local and fill it in."
+	@echo "First run: copy infra/.env.example -> infra/.env and fill it in."
 
 # --- M0: the real, working verbs ------------------------------------------
 # `up --build` builds images if needed, then starts in dependency/health order.

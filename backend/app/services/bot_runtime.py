@@ -30,6 +30,7 @@ business-prefixed and re-checked. We NEVER log message text, replies, or any PII
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 import asyncpg
@@ -53,6 +54,21 @@ log = get_logger("app.services.bot_runtime")
 # known fields), so this is purely a runtime bookkeeping field that rides along
 # in Redis between turns. None ⇒ no lead row open yet for this conversation.
 _LEAD_ID_FIELD = "lead_id"
+
+# If a human-handoff chat has had no activity for this long it is considered
+# stale. Used in TWO places (shared, so they can never drift apart):
+#   * proactively — `stale_handoff_sweep` closes the chat + sends the closing
+#     message once this long passes, WITHOUT waiting for the customer, and
+#   * reactively — here in run_turn, if the customer DOES message again after
+#     going stale, we reset to a brand-new conversation (greet again).
+STALE_HANDOFF_SECONDS = 3600  # 1 hour
+
+# Closing message sent to the customer when a stale handoff is closed (by either
+# the proactive sweeper or the reactive reset below).
+STALE_CLOSING_MSG = (
+    "עקב חוסר מענה הפניה נסגרה. המשך יום טוב! "
+    "לפניות נוספות שלח הודעה חוזרת."
+)
 
 
 async def run_turn(
@@ -83,6 +99,8 @@ async def run_turn(
           "silent":  bool,         # True ⇒ a human is handling; bot said nothing
         }
     """
+    stale_reset = False  # set True when we auto-close a stale handoff this turn
+
     # 1) Load the chat status. A chat that's 'waiting' (customer asked for a human,
     #    not yet picked up) or 'human' (an owner took over) means the bot stays
     #    completely silent and we don't run the engine. We STILL append the inbound
@@ -90,27 +108,51 @@ async def run_turn(
     #    in while they handle the chat.
     status = await conversation_state.get_status(redis, business_id, conversation_id)
     if status in (conversation_state.STATUS_WAITING, conversation_state.STATUS_HUMAN):
-        await conversation_state.append_message(
-            redis, business_id, conversation_id, "customer", message
+        # Stale-handoff check: if the last activity on this chat was > 1 hour ago,
+        # the human never came back. Reset the conversation so the next inbound is
+        # treated as a brand-new customer (greeting + menu). The old lead row in
+        # Postgres is left intact; only the Redis state is wiped.
+        last_activity_str = await conversation_state.get_last_activity_at(
+            redis, business_id, conversation_id
         )
-        # Unread badge (decision 0021): every inbound CUSTOMER message bumps the
-        # owner's unread counter — even on this silent human/waiting path, since
-        # "unread" means the owner hasn't opened the chat, not "the bot answered".
-        await conversation_state.incr_unread(redis, business_id, conversation_id)
-        # Clock fix (decision 0021): the bot never runs here, so nothing would
-        # bump the lead's last_activity_at — a customer chatting with a HUMAN for
-        # >60 min would be wrongly swept to 'abandoned'. Reset the clock on the
-        # active lead for this conversation (no-op if there is none). Tenant-scoped
-        # via tenant_connection + a business_id-filtered UPDATE; touches no PII.
-        async with tenant_connection(pool, business_id) as conn:
-            active_lead_id = await leads_service.get_active_lead_id_by_conversation(
-                conn, business_id, conversation_id
+        is_stale = False
+        if last_activity_str:
+            try:
+                last_dt = datetime.fromisoformat(last_activity_str)
+                elapsed = (datetime.now(timezone.utc) - last_dt).total_seconds()
+                is_stale = elapsed > STALE_HANDOFF_SECONDS
+            except (ValueError, TypeError):
+                pass
+
+        if is_stale:
+            # Wipe the stale handoff — fall through to fresh-start processing below.
+            # The closing message is prepended to the bot's greeting replies later.
+            await conversation_state.reset_conversation(redis, business_id, conversation_id)
+            status = None
+            stale_reset = True
+        else:
+            # Human is actively handling — bot stays silent.
+            await conversation_state.append_message(
+                redis, business_id, conversation_id, "customer", message
             )
-            if active_lead_id is not None:
-                await leads_service.touch_lead_activity(
-                    conn, business_id, active_lead_id
+            # Unread badge (decision 0021): every inbound CUSTOMER message bumps the
+            # owner's unread counter — even on this silent human/waiting path, since
+            # "unread" means the owner hasn't opened the chat, not "the bot answered".
+            await conversation_state.incr_unread(redis, business_id, conversation_id)
+            # Clock fix (decision 0021): the bot never runs here, so nothing would
+            # bump the lead's last_activity_at — a customer chatting with a HUMAN for
+            # >60 min would be wrongly swept to 'abandoned'. Reset the clock on the
+            # active lead for this conversation (no-op if there is none). Tenant-scoped
+            # via tenant_connection + a business_id-filtered UPDATE; touches no PII.
+            async with tenant_connection(pool, business_id) as conn:
+                active_lead_id = await leads_service.get_active_lead_id_by_conversation(
+                    conn, business_id, conversation_id
                 )
-        return {"replies": [], "event": None, "lead_id": None, "silent": True}
+                if active_lead_id is not None:
+                    await leads_service.touch_lead_activity(
+                        conn, business_id, active_lead_id
+                    )
+            return {"replies": [], "event": None, "lead_id": None, "silent": True}
 
     # 1a) A CLOSED chat that gets a new inbound starts over fresh. We wipe this
     #     conversation's Redis state, transcript, and status hash, then FALL
@@ -256,6 +298,10 @@ async def run_turn(
     #     customer receives a working link. If the slug couldn't be resolved we
     #     leave the demo text rather than send a broken URL.
     replies = list(result["replies"])
+    # Prepend the closing notice before the bot's greeting when a stale handoff
+    # was just auto-reset so the customer understands why the conversation restarted.
+    if stale_reset:
+        replies = [STALE_CLOSING_MSG] + replies
     if real_booking_link:
         replies = [
             r.replace(bot_engine.DEMO_BOOKING_LINK, real_booking_link) for r in replies

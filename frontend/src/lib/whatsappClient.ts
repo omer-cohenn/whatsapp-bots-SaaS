@@ -31,6 +31,12 @@ export type WhatsAppStatus = {
   phone: string | null
   /** Raw gateway status string (connected | qr_pending | disconnected | …). */
   gateway_status: GatewayStatus
+  /**
+   * Why the last link attempt was refused, if it was. 'phone_conflict' means
+   * the scanned number is already linked to ANOTHER business (M6b: one
+   * WhatsApp number = one business). Null/undefined when all is well.
+   */
+  error?: string | null
 }
 
 /** Shape returned by GET /api/whatsapp/qr. */

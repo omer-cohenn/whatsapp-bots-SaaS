@@ -9,7 +9,7 @@ so the dashboard shows real, consistent data:
   * 1 conversation "closed"  (טופל)          → a finished chat
 
 Run inside the backend container:
-  docker compose --env-file infra/.env.local -f infra/docker-compose.yml \
+  docker compose --env-file infra/.env -f infra/docker-compose.yml \
     run --rm backend sh -c "cd /app && PYTHONPATH=/app python scripts/seed_m8_demo.py"
 
 Re-running is safe: it first clears these demo conversations + their demo leads

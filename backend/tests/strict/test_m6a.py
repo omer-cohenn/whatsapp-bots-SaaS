@@ -390,7 +390,8 @@ async def test_admin_status_shape_and_tenant_scope(http, rds, mapped):
         body = (await http.get("/api/whatsapp/status")).json()
     finally:
         await _logout(rds, http, sid)
-    assert set(body.keys()) == {"linked", "connected", "phone", "gateway_status"}
+    # M6b added an `error` field (e.g. 'phone_conflict') to the status contract.
+    assert set(body.keys()) == {"linked", "connected", "phone", "gateway_status", "error"}
     assert body["linked"] is True  # Avi has a mapping (ACC_A)
 
 
@@ -410,6 +411,7 @@ async def test_admin_status_isolated_between_tenants(http, rds, pool):
         body_b = (await http.get("/api/whatsapp/status")).json()
     finally:
         await _logout(rds, http, sid_b)
-    assert set(body_b.keys()) == {"linked", "connected", "phone", "gateway_status"}
+    # M6b added an `error` field to the status contract.
+    assert set(body_b.keys()) == {"linked", "connected", "phone", "gateway_status", "error"}
     # B's linked is a boolean derived only from B's own row — never A's.
     assert isinstance(body_b["linked"], bool)

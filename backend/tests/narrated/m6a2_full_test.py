@@ -26,7 +26,8 @@ WHAT IS THIS FILE, IN PLAIN WORDS?
         - a missing 'to' or 'text'  → 400 (nothing to send)
         - connected + valid + body  → 200 with a real message id (it sent!)
 
-   • The backend's NEW helper — send_outbound(to, text):
+   • The backend's helper — send_outbound(business_id, to, text) (M6b: the
+     gateway runs ONE socket per business, so the sender must be named):
         - when the gateway says "ok: true"   → returns True  ("delivered")
         - when ANYTHING goes wrong (gateway down, timeout, error, weird answer)
                                               → returns False, NEVER crashes
@@ -93,8 +94,9 @@ async def main() -> int:  # noqa: C901 — a flat, readable list of checks on pu
     redis_url = os.environ["REDIS_URL"]
     rds = aioredis.from_url(redis_url, decode_responses=True)
 
-    reachable, connected, own_phone = await _gateway_status()
-    print(f"\n  (gateway: reachable={reachable}, whatsapp_connected={connected})")
+    reachable, connected_biz, own_phone = await _gateway_status()
+    print(f"\n  (gateway: reachable={reachable}, "
+          f"whatsapp_connected={bool(connected_biz)})")
 
     # We patch the dashboard's send_outbound symbol for the route checks so no
     # real WhatsApp message is sent there; restored at the end.
@@ -118,21 +120,24 @@ async def main() -> int:  # noqa: C901 — a flat, readable list of checks on pu
                 "client for a fake that answers 200 with {\"ok\": true}.",
                 "this is the SUCCESS path: when the gateway confirms it sent the "
                 "message, the owner's reply is 'delivered'. send_outbound must "
-                "return True AND post to /send-bot with the token header + the jid "
-                "and text in the body.")
+                "return True AND post to /send-bot with the token header + the "
+                "sending business_id (M6b: one socket per business!), the jid "
+                "and the text in the body.")
             whatsapp_service.httpx.AsyncClient = _StubClient(200, {"ok": True})  # type: ignore[assignment]
-            ok_true = await whatsapp_service.send_outbound("x@s.whatsapp.net", "hi")
+            ok_true = await whatsapp_service.send_outbound(
+                BIZ_A, "x@s.whatsapp.net", "hi")
             cap = _StubClient.captured
             ok1 = (
                 ok_true is True
                 and cap["url"].endswith("/send-bot")
                 and cap["headers"].get("X-Gateway-Token") == GATEWAY_TOKEN
-                and cap["json"] == {"to": "x@s.whatsapp.net", "text": "hi"}
+                and cap["json"] == {"business_id": BIZ_A,
+                                    "to": "x@s.whatsapp.net", "text": "hi"}
             )
             result(
                 ok1,
                 f"returned {ok_true}; posted to …/send-bot with the X-Gateway-Token "
-                f"header and a {{to,text}} body (token value not shown)")
+                f"header and a {{business_id,to,text}} body (token value not shown)")
 
             # ── TEST 2 ───────────────────────────────────────────────────────
             banner("2", "send_outbound: ANY failure → returns False, never crashes")
@@ -143,18 +148,22 @@ async def main() -> int:  # noqa: C901 — a flat, readable list of checks on pu
                 "On any problem it must return False (so we can say 'queued but not "
                 "delivered') and must NEVER raise and error the owner's request.")
             whatsapp_service.httpx.AsyncClient = _StubClient(200, {"ok": False})  # type: ignore[assignment]
-            f_okfalse = await whatsapp_service.send_outbound("x@s.whatsapp.net", "hi")
+            f_okfalse = await whatsapp_service.send_outbound(
+                BIZ_A, "x@s.whatsapp.net", "hi")
             whatsapp_service.httpx.AsyncClient = _StubClient(503, {"ok": False})  # type: ignore[assignment]
-            f_503 = await whatsapp_service.send_outbound("x@s.whatsapp.net", "hi")
+            f_503 = await whatsapp_service.send_outbound(
+                BIZ_A, "x@s.whatsapp.net", "hi")
             whatsapp_service.httpx.AsyncClient = _StubClient(200, ValueError("x"))  # type: ignore[assignment]
-            f_badjson = await whatsapp_service.send_outbound("x@s.whatsapp.net", "hi")
+            f_badjson = await whatsapp_service.send_outbound(
+                BIZ_A, "x@s.whatsapp.net", "hi")
             # Dead URL: restore the REAL client, point settings at a closed port.
             whatsapp_service.httpx.AsyncClient = real_async_client
             s = get_settings()
             saved_base = s.gateway_base_url
             s.gateway_base_url = "http://127.0.0.1:1"  # nothing listens here
             try:
-                f_dead = await whatsapp_service.send_outbound("x@s.whatsapp.net", "hi")
+                f_dead = await whatsapp_service.send_outbound(
+                    BIZ_A, "x@s.whatsapp.net", "hi")
             finally:
                 s.gateway_base_url = saved_base
             ok2 = not any([f_okfalse, f_503, f_badjson, f_dead])
@@ -185,7 +194,7 @@ async def main() -> int:  # noqa: C901 — a flat, readable list of checks on pu
             root.setLevel(logging.DEBUG)
             try:
                 whatsapp_service.httpx.AsyncClient = _StubClient(503, {"ok": False})  # type: ignore[assignment]
-                await whatsapp_service.send_outbound(secret_jid, secret_text)
+                await whatsapp_service.send_outbound(BIZ_A, secret_jid, secret_text)
             finally:
                 root.removeHandler(handler)
                 root.setLevel(prev_level)
@@ -217,10 +226,12 @@ async def main() -> int:  # noqa: C901 — a flat, readable list of checks on pu
                     bad = await c.post(
                         f"{GATEWAY_BASE}/send-bot",
                         headers={"X-Gateway-Token": "totally-wrong"},
-                        json={"to": "x@s.whatsapp.net", "text": "hi"})
+                        json={"business_id": BIZ_A,
+                              "to": "x@s.whatsapp.net", "text": "hi"})
                     missing = await c.post(
                         f"{GATEWAY_BASE}/send-bot",
-                        json={"to": "x@s.whatsapp.net", "text": "hi"})
+                        json={"business_id": BIZ_A,
+                              "to": "x@s.whatsapp.net", "text": "hi"})
                 ok4 = bad.status_code == 401 and missing.status_code == 401
                 result(
                     ok4,
@@ -240,11 +251,14 @@ async def main() -> int:  # noqa: C901 — a flat, readable list of checks on pu
                 hdr = {"X-Gateway-Token": GATEWAY_TOKEN}
                 async with httpx.AsyncClient(timeout=5.0) as c:
                     no_text = await c.post(f"{GATEWAY_BASE}/send-bot", headers=hdr,
-                                           json={"to": "x@s.whatsapp.net"})
+                                           json={"business_id": BIZ_A,
+                                                 "to": "x@s.whatsapp.net"})
                     blank = await c.post(f"{GATEWAY_BASE}/send-bot", headers=hdr,
-                                         json={"to": "x@s.whatsapp.net", "text": "   "})
+                                         json={"business_id": BIZ_A,
+                                               "to": "x@s.whatsapp.net",
+                                               "text": "   "})
                     no_to = await c.post(f"{GATEWAY_BASE}/send-bot", headers=hdr,
-                                         json={"text": "hi"})
+                                         json={"business_id": BIZ_A, "text": "hi"})
                 ok5 = (no_text.status_code == 400 and blank.status_code == 400
                        and no_to.status_code == 400)
                 result(
@@ -261,17 +275,19 @@ async def main() -> int:  # noqa: C901 — a flat, readable list of checks on pu
                 "this proves the whole send actually reaches WhatsApp: a 200 with a "
                 "real message_id means Baileys accepted and sent it. We target the "
                 "owner's own number so no stranger is ever messaged.")
-            if not connected:
-                skipped("WhatsApp not linked — scan the QR at :3000/qr to enable. "
-                        "This is the one MANUAL step.")
+            if not connected_biz:
+                skipped("no business has a connected WhatsApp — link one from the "
+                        "dashboard's Connect tab first. This is the one MANUAL step.")
             elif not own_phone:
-                skipped("gateway connected but did not report its own number")
+                skipped("a business is connected but its own number is unknown")
             else:
-                async with httpx.AsyncClient(timeout=8.0) as c:
+                async with httpx.AsyncClient(timeout=10.0) as c:
                     r6 = await c.post(
                         f"{GATEWAY_BASE}/send-bot",
                         headers={"X-Gateway-Token": GATEWAY_TOKEN},
-                        json={"to": f"{own_phone}@s.whatsapp.net", "text": REPLY_TEXT})
+                        json={"business_id": connected_biz,
+                              "to": f"{own_phone}@s.whatsapp.net",
+                              "text": REPLY_TEXT})
                 b6 = r6.json()
                 ok6 = r6.status_code == 200 and b6.get("ok") is True and bool(
                     b6.get("message_id"))
@@ -288,15 +304,16 @@ async def main() -> int:  # noqa: C901 — a flat, readable list of checks on pu
                 "send_outbound for a fake that returns True (so no real send), then "
                 "check: the outbox got the reply, the transcript got an 'owner' "
                 "line, the response says delivered:true, and send_outbound was "
-                "called with the conversation id as the address.",
+                "called with the tenant's business_id + the conversation id as "
+                "the address.",
                 "M6a.2 must keep the OLD promise (the reply is queued and never "
                 "lost) and ADD the new one (try to deliver it, report the result). "
                 "And it must use the conversation id as the WhatsApp 'to'.")
             conv = f"m6a2:{secrets.token_hex(6)}"
-            calls: list[tuple[str, str]] = []
+            calls: list[tuple[str, str, str]] = []
 
-            async def fake_send_true(to: str, text: str) -> bool:
-                calls.append((to, text))
+            async def fake_send_true(business_id: str, to: str, text: str) -> bool:
+                calls.append((business_id, to, text))
                 return True
 
             dash.whatsapp_service.send_outbound = fake_send_true  # type: ignore[assignment]
@@ -317,13 +334,14 @@ async def main() -> int:  # noqa: C901 — a flat, readable list of checks on pu
                     and b7.get("queued") is True
                     and b7.get("delivered") is True
                     and b7.get("conversation_id") == conv
-                    and calls == [(conv, REPLY_TEXT)]
+                    and calls == [(BIZ_A, conv, REPLY_TEXT)]
                     and in_outbox and in_transcript
                 )
                 result(
                     ok7,
                     f"queued={b7.get('queued')}, delivered={b7.get('delivered')}, "
-                    f"send_outbound called with the conv id={calls == [(conv, REPLY_TEXT)]}, "
+                    f"send_outbound called with (business, conv id)="
+                    f"{calls == [(BIZ_A, conv, REPLY_TEXT)]}, "
                     f"reply in outbox={in_outbox}, in transcript={in_transcript}")
             finally:
                 await rds.delete(f"conv:{BIZ_A}:{conv}", f"conv:{BIZ_A}:{conv}:outbox",
@@ -341,7 +359,7 @@ async def main() -> int:  # noqa: C901 — a flat, readable list of checks on pu
                 "response must honestly say delivered:false.")
             conv2 = f"m6a2:{secrets.token_hex(6)}"
 
-            async def fake_send_false(to: str, text: str) -> bool:
+            async def fake_send_false(business_id: str, to: str, text: str) -> bool:
                 return False
 
             dash.whatsapp_service.send_outbound = fake_send_false  # type: ignore[assignment]
@@ -411,7 +429,7 @@ async def main() -> int:  # noqa: C901 — a flat, readable list of checks on pu
     print("=" * 74)
     print()
     print("  📱 MANUAL STEP FOR OMER (a script cannot do this part):")
-    print("     1) Make sure WhatsApp is linked (scan the QR at :3000/qr).")
+    print("     1) Make sure WhatsApp is linked (dashboard → Connect tab → scan QR).")
     print("     2) From a phone, message your linked WhatsApp so a chat appears in")
     print("        the dashboard; set it to 'human' and type a reply.")
     print("     3) That reply should ARRIVE on the customer's WhatsApp. (Test 6")
@@ -423,7 +441,7 @@ async def main() -> int:  # noqa: C901 — a flat, readable list of checks on pu
 # ── HOW TO RUN ───────────────────────────────────────────────────────────────
 #   Easiest : double-click  tests/test_m6a2.bat   (it sets everything up for you).
 #   By hand : from the project root, with the stack running (run.bat):
-#     docker compose --env-file infra/.env.local -f infra/docker-compose.yml \
+#     docker compose --env-file infra/.env -f infra/docker-compose.yml \
 #       run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/narrated/m6a2_full_test.py"
 # ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":

@@ -21,15 +21,18 @@ from fastapi import FastAPI
 
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
+from app.api.internal_wa import router as internal_wa_router
 from app.api.me import api as api_router
 from app.api.public_booking import router as public_booking_router
 from app.api.webhook import router as webhook_router
-from app.core.clients import create_pg_pool, create_redis
+from app.core.clients import create_gateway_pool, create_pg_pool, create_redis
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
+from app.core.request_log import install_request_logging
 from app.services import google_calendar
 from app.services.abandoned_sweep import sweep_loop
 from app.services.booking_reminders import sweep_loop as booking_reminders_loop
+from app.services.stale_handoff_sweep import sweep_loop as stale_handoff_loop
 
 
 @asynccontextmanager
@@ -39,6 +42,10 @@ async def lifespan(app: FastAPI):
     log = get_logger("app.lifespan")
 
     app.state.pg_pool = await create_pg_pool(settings)
+    # M6b: the gateway_role pool — the ONLY route to the crown-jewel
+    # whatsapp_credentials table (app_role has zero grant). Used exclusively by
+    # the internal WA API to read/write each business's encrypted auth_state.
+    app.state.gw_pool = await create_gateway_pool(settings)
     app.state.redis = create_redis(settings)
 
     # M11: register the Google Calendar sync hook with the booking core. The hook
@@ -62,6 +69,13 @@ async def lifespan(app: FastAPI):
         booking_reminders_loop(app.state.pg_pool, app.state.redis)
     )
 
+    # Background: the proactive stale-handoff close. Same single-runner pattern —
+    # closes waiting/human chats gone silent past the threshold and sends the
+    # customer a closing message, without waiting for them to message again.
+    stale_handoff_task = asyncio.create_task(
+        stale_handoff_loop(app.state.pg_pool, app.state.redis)
+    )
+
     log.info("backend started", extra={"app_env": settings.app_env})
 
     try:
@@ -71,12 +85,14 @@ async def lifespan(app: FastAPI):
         # then dispose the infra clients. Never log connection details.
         sweep_task.cancel()
         booking_reminders_task.cancel()
-        for task in (sweep_task, booking_reminders_task):
+        stale_handoff_task.cancel()
+        for task in (sweep_task, booking_reminders_task, stale_handoff_task):
             try:
                 await task
             except asyncio.CancelledError:
                 pass
         await app.state.pg_pool.close()
+        await app.state.gw_pool.close()
         await app.state.redis.aclose()
         log.info("backend stopped")
 
@@ -87,13 +103,27 @@ def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level)
 
+    # SECURITY: the interactive API docs (/docs, /redoc) + the OpenAPI schema
+    # (/openapi.json) enumerate every route and shape — useful in dev, but an
+    # unnecessary information leak in production. Serve them ONLY in dev; in any
+    # non-dev environment they 404.
+    docs_enabled = settings.app_env == "dev"
+
     app = FastAPI(
         title="Bizz_up backend",
         version="0.0.1",
         summary="M0+M1 minimal: boots, health-checks PG+Redis, WhatsApp webhook landing pad.",
         lifespan=lifespan,
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
     )
     app.state.settings = settings
+
+    # One redacted access-log line per request (method + path w/o query + status +
+    # duration). Replaces uvicorn.access, which leaked OAuth code/state + booking
+    # tokens via the raw request line. See app/core/request_log.py.
+    install_request_logging(app)
 
     # Public routes: /healthz, /webhook/*, /auth/*, and the M11 public booking
     # page (/api/book/*). The /api/* group below is gated (deny-by-default) by a
@@ -103,6 +133,11 @@ def create_app() -> FastAPI:
     # tenant from the verified slug + RLS (see app/api/public_booking.py).
     app.include_router(health_router)
     app.include_router(webhook_router)
+    # M6b: the internal WA API the gateway calls (session list + encrypted creds +
+    # status). PUBLIC-path like /webhook/*, but protected by the SAME
+    # X-Gateway-Token header check — NOT the owner session gate. Mounted on the
+    # app root (outside the gated /api group) because the gateway has no session.
+    app.include_router(internal_wa_router)
     app.include_router(auth_router)
     app.include_router(public_booking_router)
     app.include_router(api_router)

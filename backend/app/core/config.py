@@ -1,7 +1,7 @@
 """Fail-closed settings loader (M0+M1 minimal surface).
 
 Loads the *only* secrets this minimal build needs from the environment
-(a git-ignored `.env.local` in dev). The app **refuses to boot** if any
+(a git-ignored `.env` in dev). The app **refuses to boot** if any
 required value is missing or blank — there are NO constant / "change-me"
 defaults. This keeps the seam right for the later secret-manager swap
 (roadmap 0.2) without ever shipping a usable default.
@@ -29,10 +29,10 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        # In dev, values come from a git-ignored .env.local. In prod they are
+        # In dev, values come from a git-ignored .env. In prod they are
         # injected as real env vars (and later a secret manager). We point at
-        # .env.local but never commit it.
-        env_file=".env.local",
+        # .env but never commit it.
+        env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -173,4 +173,4 @@ def get_settings() -> Settings:
     the app fail to boot when a required secret is missing.
     """
 
-    return Settings()  # type: ignore[call-arg]  # values come from env/.env.local
+    return Settings()  # type: ignore[call-arg]  # values come from env/.env

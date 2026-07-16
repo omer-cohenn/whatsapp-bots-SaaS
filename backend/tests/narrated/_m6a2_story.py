@@ -124,21 +124,58 @@ async def _logout(rds, http, sid: str) -> None:
     http.cookies.clear()
 
 
-async def _gateway_status() -> tuple[bool, bool, str | None]:
-    """Return (reachable, connected, own_phone). own_phone is digits or None."""
+async def _gateway_status() -> tuple[bool, str | None, str | None]:
+    """Return (reachable, connected_business_id, own_phone).
+
+    M6b: the gateway is multi-socket and its old /info route is gone, so the
+    "is anything connected, and what is its own number?" question is answered
+    from the DB — wa_list_sessions() (app_role) lists the candidate businesses,
+    then each one's whatsapp_connections row (gateway_role, tenant-scoped) gives
+    the status + the decrypted own number. Only a SAFE self-chat target comes out.
+    """
+    import os
+
+    import asyncpg
+
+    from app.core.crypto import decrypt_pii
+    from app.db.session import tenant_connection
+
     try:
         async with httpx.AsyncClient(timeout=3.0) as c:
             h = await c.get(f"{GATEWAY_BASE}/healthz")
             if h.status_code != 200:
-                return (False, False, None)
-            connected = h.json().get("status") == "connected"
-            phone = None
-            if connected:
-                info = (await c.get(f"{GATEWAY_BASE}/info")).json()
-                phone = info.get("phone")
-            return (True, connected, phone)
+                return (False, None, None)
     except Exception:  # noqa: BLE001
-        return (False, False, None)
+        return (False, None, None)
+
+    try:
+        app_pool = await asyncpg.create_pool(
+            dsn=os.environ["DATABASE_URL"], min_size=1, max_size=1
+        )
+        gw_pool = await asyncpg.create_pool(
+            dsn=os.environ["GATEWAY_DATABASE_URL"], min_size=1, max_size=1
+        )
+    except Exception:  # noqa: BLE001
+        return (True, None, None)
+    try:
+        async with app_pool.acquire() as conn:
+            rows = await conn.fetch("SELECT wa_list_sessions() AS business_id")
+        for row in rows:
+            biz = str(row["business_id"])
+            async with tenant_connection(gw_pool, biz) as conn:
+                wa = await conn.fetchrow(
+                    "SELECT status, phone_number FROM whatsapp_connections "
+                    "WHERE business_id = $1",
+                    biz,
+                )
+            if wa and wa["status"] == "connected" and wa["phone_number"]:
+                return (True, biz, decrypt_pii(wa["phone_number"]))
+        return (True, None, None)
+    except Exception:  # noqa: BLE001
+        return (True, None, None)
+    finally:
+        await app_pool.close()
+        await gw_pool.close()
 
 def _check_loop_guard() -> tuple[bool, str]:
     """Re-implement + verify the gateway's loop-guard (gateway/src/index.js).

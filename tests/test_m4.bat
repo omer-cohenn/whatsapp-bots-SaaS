@@ -22,7 +22,7 @@ chcp 65001 >nul
 REM Go to the project root (this file lives in tests\, root is one up).
 cd /d "%~dp0.."
 
-set COMPOSE=docker compose --env-file infra/.env.local -f infra/docker-compose.yml
+set COMPOSE=docker compose --env-file infra/.env -f infra/docker-compose.yml
 
 echo.
 echo ==========================================================================
@@ -80,7 +80,7 @@ echo     - step 5: M2 RESULT 12/12 locks held + isolation pytest "passed"
 echo               (M4 did NOT weaken the tenant wall)
 echo.
 echo   NOTE: the AI helper here uses a PRETEND Gemini. To see the REAL AI in a
-echo   browser, put a real GEMINI_API_KEY in infra\.env.local, restart the stack,
+echo   browser, put a real GEMINI_API_KEY in infra\.env, restart the stack,
 echo   open http://localhost:5173, go to the bot builder, click the "AI assistant"
 echo   button and chat. With no key the AI panel shows "unavailable" (by design).
 echo ==========================================================================
@@ -94,7 +94,7 @@ echo **************************************************************************
 echo   SOMETHING FAILED above. Is Docker Desktop running?
 echo   Tip: start the app first with run.bat, then run this again.
 echo   (If the backend would not boot, a GOOGLE_* or SESSION_SECRET value in
-echo    infra\.env.local may still be blank - fill it and try again. A missing
+echo    infra\.env may still be blank - fill it and try again. A missing
 echo    GEMINI_API_KEY is FINE - these tests do not need it.)
 echo **************************************************************************
 echo.

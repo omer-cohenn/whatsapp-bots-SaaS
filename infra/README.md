@@ -8,8 +8,8 @@
 infra/
 ├── docker-compose.yml    # הסטאק המקומי (health-gated)
 ├── .env.example          # שמות כל הסודות (בלי ערכים) — חוזה
-├── .env.local.example    # תבנית למילוי + גנרטורים → להעתיק ל-.env.local
-└── .env.local            # הקובץ האמיתי (git-ignored, נוצר אוטומטית ע"י run.bat)
+├── .env.example    # תבנית למילוי + גנרטורים → להעתיק ל-.env
+└── .env            # הקובץ האמיתי (git-ignored, נוצר אוטומטית ע"י run.bat)
 ```
 
 ה-compose מרים שישה שירותים, מסונכרנים לפי בריאות:
@@ -25,16 +25,16 @@ infra/
 
 ## איך מריצים
 - **הרצה:** דאבל-קליק על `run.bat` (Docker Desktop חייב לרוץ). שקול-משווה: `make dev`.
-  הוא מעביר אוטומטית `--env-file infra/.env.local`, ואם הקובץ חסר — מייצר אותו עם ערכים אקראיים.
+  הוא מעביר אוטומטית `--env-file infra/.env`, ואם הקובץ חסר — מייצר אותו עם ערכים אקראיים.
 - **עצירה:** `stop.bat` (או `make down`).
 - **מילוי מפתחות אמיתיים** (Gemini / Google) → [`../ENV_SETUP.md`](../ENV_SETUP.md).
 
 הפקודה הגולמית שמאחורי `run.bat`:
 ```bash
-docker compose --env-file infra/.env.local -f infra/docker-compose.yml up --build
+docker compose --env-file infra/.env -f infra/docker-compose.yml up --build
 ```
 
 ## חוקים
 - **fail-closed:** ערך חובה חסר/ריק → האפליקציה מסרבת לעלות.
-- אין ערכי "change-me" קבועים; הסודות האמיתיים רק ב-`.env.local` (git-ignored).
+- אין ערכי "change-me" קבועים; הסודות האמיתיים רק ב-`.env` (git-ignored).
 - בפרודקשן הסודות מגיעים מ-AWS Secrets Manager / KMS.

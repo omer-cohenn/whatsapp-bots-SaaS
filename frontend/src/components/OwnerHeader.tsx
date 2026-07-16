@@ -51,10 +51,8 @@ export default function OwnerHeader() {
   const { user, connection, logout } = useAuth()
 
   return (
-    <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-6 py-3">
-        <img src="/logo.png" alt="בוטיק" className="h-11 w-auto" />
-
+    <header className="border-b border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-end gap-3 px-6 py-3">
         <div className="flex items-center gap-4">
           <ConnectionPill status={connection?.status} />
           {user ? <UserChip name={user.name} picture={user.picture} /> : null}

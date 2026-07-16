@@ -35,7 +35,7 @@ chcp 65001 >nul
 REM Go to the project root (this file lives in tests\, root is one up).
 cd /d "%~dp0.."
 
-set COMPOSE=docker compose --env-file infra/.env.local -f infra/docker-compose.yml
+set COMPOSE=docker compose --env-file infra/.env -f infra/docker-compose.yml
 
 echo.
 echo ==========================================================================

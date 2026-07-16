@@ -232,7 +232,7 @@ async def main() -> int:
 # ── HOW TO RUN ───────────────────────────────────────────────────────────────
 #   Easiest : double-click  tests/test_m3.bat   (it sets everything up for you).
 #   By hand : from the project root, with the stack running (run.bat):
-#     docker compose --env-file infra/.env.local -f infra/docker-compose.yml \
+#     docker compose --env-file infra/.env -f infra/docker-compose.yml \
 #       run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m3_full_test.py"
 # ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":

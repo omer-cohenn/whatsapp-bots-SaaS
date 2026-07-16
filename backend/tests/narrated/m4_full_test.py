@@ -411,7 +411,7 @@ async def main() -> int:
 # ── HOW TO RUN ───────────────────────────────────────────────────────────────
 #   Easiest : double-click  tests/test_m4.bat   (it sets everything up for you).
 #   By hand : from the project root, with the stack running (run.bat):
-#     docker compose --env-file infra/.env.local -f infra/docker-compose.yml \
+#     docker compose --env-file infra/.env -f infra/docker-compose.yml \
 #       run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m4_full_test.py"
 #
 #   The AI is tested with a PRETEND Gemini (no key, no internet) via the seam

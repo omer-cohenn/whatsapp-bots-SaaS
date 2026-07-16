@@ -1,9 +1,9 @@
 # --- Secrets (NEVER commit) ---
+# The real infra/.env (and any .env / .env.*) stays ignored; only the secret-free
+# template .env.example is tracked (copy it -> infra/.env and fill it in).
 .env
 .env.*
 !.env.example
-# secret-free template (copy -> .env.local); the real .env.local stays ignored
-!.env.local.example
 *.key
 *.pem
 
@@ -32,3 +32,7 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# --- Claude working files (local tooling — not part of the shipped app) ---
+.claude/
+CLAUDE.md

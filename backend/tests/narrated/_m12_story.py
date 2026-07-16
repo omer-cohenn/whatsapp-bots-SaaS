@@ -26,7 +26,7 @@ from app.services.auth import SESSION_COOKIE_NAME, _SESSION_KEY_PREFIX
 BIZ_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"  # Avi Insurance (PUBLISHED)
 BIZ_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"  # Bella Barber  (DRAFT)
 
-# The mall owner (admin). ADMIN_EMAILS in infra/.env.local includes this email.
+# The mall owner (admin). ADMIN_EMAILS in infra/.env includes this email.
 ADMIN_EMAIL = "oyc3333@gmail.com"
 # A normal shop owner — NOT on the admin allow-list.
 AVI_USER = "google-sub-avi"

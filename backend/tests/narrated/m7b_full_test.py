@@ -314,7 +314,7 @@ async def run() -> int:
 # ── HOW TO RUN ───────────────────────────────────────────────────────────────
 #   Easiest : double-click  tests/test_m7b.bat
 #   By hand : from the project root, with the stack running (run.bat):
-#     docker compose --env-file infra/.env.local -f infra/docker-compose.yml \
+#     docker compose --env-file infra/.env -f infra/docker-compose.yml \
 #       run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m7b_full_test.py"
 # ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":

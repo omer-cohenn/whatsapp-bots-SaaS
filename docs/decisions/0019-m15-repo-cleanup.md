@@ -21,7 +21,7 @@
 ## תוכנית הסדר
 1. `STRUCTURE.md` בשורש — מפת הריפו + 5 התחומים + "מאיפה מתחילים".
 2. README בכל תחום: `backend/`, `gateway/`, `frontend/`, `infra/`, `supabase/`, `docs/`.
-3. רענון `infra/.env.example` + `.env.local.example` (כולל `GEMINI_API_KEY`, `ADMIN_EMAILS`) + מסמך "מה למלא ל‑API אמיתי".
+3. רענון `infra/.env.example` + `.env.example` (כולל `GEMINI_API_KEY`, `ADMIN_EMAILS`) + מסמך "מה למלא ל‑API אמיתי".
 4. פיצול הקבצים הארוכים לתת‑מודולים מתועדים (re-export יציב, imports לא נשברים):
    `backend/app/services/booking.py` (1147) · `frontend/src/pages/LandingPage.tsx` (860) · `backend/app/api/admin.py` (776) · `gateway/src/index.js` (646) · `backend/app/services/leads.py` (573) · `frontend/src/pages/WhatsAppPage.tsx` (554).
 5. סידור `backend/tests` לתת‑תיקיות ברורות (strict / narrated / isolation) — העברה בלבד.

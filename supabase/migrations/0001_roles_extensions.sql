@@ -18,7 +18,7 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- app_role: tenant-scoped, subject to RLS. Created once, then its password is
--- (re)set from the injected variable every run so it always matches .env.local.
+-- (re)set from the injected variable every run so it always matches .env.
 SELECT 'CREATE ROLE app_role LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE'
  WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_role')
 \gexec

@@ -43,7 +43,7 @@ config, not a long-running container):
 | `frontend` | node build → static (nginx/vite preview) | 5173 | React+Tailwind owner app | static 200 |
 | `redis` | redis:7-alpine | 6379 (internal) | live-chat cache (last ~10 msgs + status) | `redis-cli PING` |
 | `supabase` | Supabase CLI local stack | 54321/54322 | Postgres + RLS (+ pgvector reserved) | `pg_isready` |
-| *secrets* | (not a container) | — | env injected from a manager / `.env.local` git-ignored | startup assertion |
+| *secrets* | (not a container) | — | env injected from a manager / `.env` git-ignored | startup assertion |
 
 ---
 
@@ -117,7 +117,7 @@ config, not a long-running container):
 ### P0-4 — **Secrets out of `.env` into a manager**, fail-on-missing, no `change-me` defaults (C1/M3)
 - **What:** a single **config-loader module** (backend) + the gateway equivalent that reads **all**
   secrets from the environment, injected from a manager — **not** a committed `.env`. Local: a
-  git-ignored `.env.local` (developer-held, never committed) loaded by compose; an
+  git-ignored `.env` (developer-held, never committed) loaded by compose; an
   **`.env.example` listing names only** (no values). Prod: AWS Secrets Manager / SSM (the
   `devops_aws` agent wires the actual source; the loader interface is identical). **Three hard rules,
   enforced in code + CI:**
@@ -367,7 +367,7 @@ config, not a long-running container):
 ### P2-4 — **Hand-off to `devops_aws`:** local-mirrors-prod parity checklist
 - **What:** a documented parity contract so the cloud migration is mechanical, not a rewrite:
   the same `/healthz` probes (→ ALB/ECS health checks), the same config-loader interface (local
-  `.env.local` → Secrets Manager/SSM, **KEK → KMS**), the same migrations (local Supabase →
+  `.env` → Secrets Manager/SSM, **KEK → KMS**), the same migrations (local Supabase →
   managed Postgres), the same Redis interface (local container → ElastiCache), the same
   `vite build` static (→ CloudFront/S3), and the **isolation harness runnable against a staging
   environment**. Flag the **biggest cloud blocker** for them: Baileys creds are **stateful

@@ -55,11 +55,11 @@ From the project root, with the stack running:
 
 ```bash
 # the full explained test
-docker compose --env-file infra/.env.local -f infra/docker-compose.yml \
+docker compose --env-file infra/.env -f infra/docker-compose.yml \
   run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m2_full_test.py"
 
 # the strict pytest gate
-docker compose --env-file infra/.env.local -f infra/docker-compose.yml \
+docker compose --env-file infra/.env -f infra/docker-compose.yml \
   run --rm backend sh -c "cd /app && pip install -q pytest pytest-asyncio && \
   PYTHONPATH=/app python -m pytest tests/isolation tests/test_secret_guard.py -q"
 ```
@@ -124,18 +124,18 @@ real browser, which a script can't drive. **Test that part by hand once:**
 3. Click **Log out** — you should be bounced back to the login page.
 
 (Requires the `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI`
-/ `SESSION_SECRET` values to be filled in `infra/.env.local`; the backend
+/ `SESSION_SECRET` values to be filled in `infra/.env`; the backend
 refuses to boot without them.)
 
 ## Running by hand (no .bat)
 
 ```bash
 # the full explained M3 test
-docker compose --env-file infra/.env.local -f infra/docker-compose.yml \
+docker compose --env-file infra/.env -f infra/docker-compose.yml \
   run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m3_full_test.py"
 
 # the strict M3 pytest gate
-docker compose --env-file infra/.env.local -f infra/docker-compose.yml \
+docker compose --env-file infra/.env -f infra/docker-compose.yml \
   run --rm backend sh -c "cd /app && pip install -q pytest pytest-asyncio && \
   PYTHONPATH=/app python -m pytest tests/test_auth_gate.py -q"
 ```
@@ -223,11 +223,11 @@ that the reserved `knowledge` key for Phase-3 RAG is stripped, never written).
 
 ```bash
 # the full explained M4 test (uses the PRETEND Gemini; no key needed)
-docker compose --env-file infra/.env.local -f infra/docker-compose.yml \
+docker compose --env-file infra/.env -f infra/docker-compose.yml \
   run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m4_full_test.py"
 
 # the strict M4 pytest gate (Gemini mocked via monkeypatch; one case = no key → 503)
-docker compose --env-file infra/.env.local -f infra/docker-compose.yml \
+docker compose --env-file infra/.env -f infra/docker-compose.yml \
   run --rm backend sh -c "cd /app && pip install -q pytest pytest-asyncio && \
   PYTHONPATH=/app python -m pytest tests/test_bot_builder.py -q"
 ```
@@ -237,7 +237,7 @@ docker compose --env-file infra/.env.local -f infra/docker-compose.yml \
 The automated tests fake the AI and drive the API directly. To see the **real**
 AI helper and the **builder screen** in a browser, do this by hand once:
 
-1. Put a real `GEMINI_API_KEY` in `infra/.env.local`, then restart the stack
+1. Put a real `GEMINI_API_KEY` in `infra/.env`, then restart the stack
    (`stop.bat` then `run.bat`). *(Without a key, the AI panel correctly shows
    "unavailable" — that is the 503 path, by design.)*
 2. Open **http://localhost:5173**, sign in, and open **בונה הבוט** (the bot builder).

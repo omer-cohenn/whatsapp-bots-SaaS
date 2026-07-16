@@ -46,7 +46,7 @@ const log = createLogger(config.logLevel);
 // the clean console.error message (these modules call loadConfig too, but it is
 // idempotent — env-only, already validated here).
 const { registerRoutes } = require('./routes');
-const { startSocket } = require('./socket');
+const { startManager } = require('./manager');
 
 // ── HTTP server ──────────────────────────────────────────────────────────────
 const app = express();
@@ -62,9 +62,10 @@ app.listen(config.port, () => {
     { port: config.port, backendWebhookUrl: config.backendWebhookUrl },
     'gateway HTTP server listening'
   );
-  // Kick off the WhatsApp connection after the server is up so /healthz and /qr
-  // respond immediately.
-  startSocket();
+  // Kick off the per-business session manager after the server is up so /healthz
+  // responds immediately. The manager polls the backend for which businesses to
+  // connect and opens one WhatsApp socket per business.
+  startManager();
 });
 
 // Never crash silently on an unhandled rejection (Baileys can throw async).

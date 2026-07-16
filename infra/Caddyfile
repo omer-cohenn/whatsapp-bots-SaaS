@@ -1,0 +1,38 @@
+# Bizz_up — production reverse proxy (the ONLY public entry point).
+# ============================================================================
+# Used only by infra/docker-compose.prod.yml. Everything else (postgres, redis,
+# gateway, backend, the static frontend) stays on the internal Docker network and
+# is NEVER published to the host — this proxy is the single door to the outside.
+#
+# Public surface (what the internet can reach):
+#   /            -> the static frontend SPA           (service: frontend:80)
+#   /api/*       -> the FastAPI backend (incl /api/book/*)  (service: backend:8000)
+#   /auth/*      -> the FastAPI backend (Google OAuth)      (service: backend:8000)
+# Deliberately NOT routed here (stay internal-only): /webhook/*, /internal/*,
+# /docs, /openapi.json, and the gateway's QR/dev routes.
+#
+# HTTPS: set PUBLIC_DOMAIN to your real domain (e.g. app.example.com) and Caddy
+# gets a certificate automatically on :443. Left unset, it serves plain :80 —
+# fine when TLS is terminated upstream (an ALB / CloudFront), which is the
+# expected AWS posture.
+# ============================================================================
+
+{
+	# No admin API exposed in production.
+	admin off
+}
+
+{$PUBLIC_DOMAIN::80} {
+	encode gzip
+
+	# API + auth (this covers /api/book/* too) -> the backend, internal only.
+	@backend path /api/* /auth/*
+	handle @backend {
+		reverse_proxy backend:8000
+	}
+
+	# Everything else -> the static frontend SPA.
+	handle {
+		reverse_proxy frontend:80
+	}
+}
