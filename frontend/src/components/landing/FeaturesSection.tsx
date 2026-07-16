@@ -9,7 +9,7 @@ export default function FeaturesSection() {
     <section className="bx-feats">
       <Reveal dir="up" className="bx-feats-head">
         <h2 className="bx-feats-title">כל מה שהעסק צריך — <span className="bx-accent">בבוט אחד</span></h2>
-        <p className="bx-feats-sub">יכולות שעובדות בשבילכם, בלי להרים אצבע.</p>
+        
       </Reveal>
 
       <div className="bx-feats-grid">

@@ -130,7 +130,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       >
         <div className="pb-4 pt-1">
           {/* white wordmark variant — the sidebar is deep-green (dark) */}
-          <img src="/logo-on-dark.png" alt="בוטיק" className="h-14 w-auto" />
+          <img src="/botik-logo.png" alt="Botik" className="h-14 w-auto" />
         </div>
 
         {navItems.map((item) => (

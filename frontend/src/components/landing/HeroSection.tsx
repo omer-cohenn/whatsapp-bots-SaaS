@@ -51,7 +51,7 @@ export default function HeroSection() {
       <div className="bx-blob" />
       <header className="bx-brand">
         <div className="bx-logo">
-          <img src="/logo.png" alt="בוטיק" className="bx-logo-img" />
+          <img src="/botik-logo.png" alt="Botik" className="bx-logo-img" />
         </div>
         <a className="bx-nav-cta" href="/auth/google">התחברות</a>
       </header>
@@ -60,7 +60,7 @@ export default function HeroSection() {
         <div className="bx-col-text">
           <span className="bx-eyebrow">העוזר החכם לעסק שלך</span>
           <h1 className="bx-headline">
-            הבוט שעונה ללקוחות, אוסף לידים וקובע פגישות
+            הבוט שעונה ללקוחות, אוסף פרטים וקובע פגישות
             <span className="bx-accent"> — אוטומטית בוואטסאפ.</span>
           </h1>
           <p className="bx-lead-text">
