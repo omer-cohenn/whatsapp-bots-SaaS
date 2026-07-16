@@ -3,15 +3,17 @@
 Per the FROZEN M6a.2 contract. The narrated story lives in m6a2_full_test.py;
 THIS is the strict gate CI runs. It exercises the three seams the milestone adds:
 
-  * the backend `send_outbound(to, text) -> bool` helper (the httpx call to the
-    gateway's internal /send-bot), proving True only on a 2xx + {"ok":true} and a
-    GRACEFUL False on any failure (bad URL / non-2xx / bad shape / timeout);
+  * the backend `send_outbound(business_id, to, text) -> bool` helper (the httpx
+    call to the gateway's internal /send-bot; M6b names the sending business so
+    the multi-socket gateway picks the right session), proving True only on a
+    2xx + {"ok":true} and a GRACEFUL False on any failure (bad URL / non-2xx /
+    bad shape / timeout);
   * the gateway POST /send-bot route over the REAL live gateway on the Docker
     network — auth (401), validation (400), and (when connected) a real 200 with
     a message_id sent to the OWNER'S OWN number (the safe self-chat target);
   * the dashboard POST /api/conversations/{id}/reply route, proving it STILL
     queues the reply in the Redis outbox (append_reply unchanged), now returns
-    `delivered: bool`, and calls send_outbound with the conversation_id.
+    `delivered: bool`, and calls send_outbound(business_id, conversation_id, text).
 
 Nothing prints/asserts a secret, a token, or PII text. The send_outbound True/
 False unit checks are deterministic (a stub transport / a bad URL). The live
@@ -99,14 +101,46 @@ async def _gateway_up() -> bool:
         return False
 
 
-async def _gateway_connected() -> bool:
-    """True if the live gateway reports a connected WhatsApp session."""
+async def _find_connected_business() -> tuple[str, str] | None:
+    """(business_id, own_phone) of a CONNECTED WhatsApp session, or None.
+
+    M6b: the gateway is multi-socket and its old /info route is gone, so we
+    resolve a connected session from the DB instead — wa_list_sessions() on the
+    app_role pool gives the candidate businesses, then each one's own
+    whatsapp_connections row (gateway_role, tenant-scoped) tells us the status
+    and the (decrypted) own number. Used only to pick a SAFE self-chat target.
+    """
+    from app.core.crypto import decrypt_pii
+    from app.db.session import tenant_connection
+
     try:
-        async with httpx.AsyncClient(timeout=3.0) as c:
-            r = await c.get(f"{GATEWAY_BASE}/healthz")
-            return r.status_code == 200 and r.json().get("status") == "connected"
+        app_pool = await asyncpg.create_pool(
+            dsn=os.environ["DATABASE_URL"], min_size=1, max_size=1
+        )
+        gw_pool = await asyncpg.create_pool(
+            dsn=os.environ["GATEWAY_DATABASE_URL"], min_size=1, max_size=1
+        )
     except Exception:  # noqa: BLE001
-        return False
+        return None
+    try:
+        async with app_pool.acquire() as conn:
+            rows = await conn.fetch("SELECT wa_list_sessions() AS business_id")
+        for row in rows:
+            biz = str(row["business_id"])
+            async with tenant_connection(gw_pool, biz) as conn:
+                wa = await conn.fetchrow(
+                    "SELECT status, phone_number FROM whatsapp_connections "
+                    "WHERE business_id = $1",
+                    biz,
+                )
+            if wa and wa["status"] == "connected" and wa["phone_number"]:
+                return biz, decrypt_pii(wa["phone_number"])
+        return None
+    except Exception:  # noqa: BLE001
+        return None
+    finally:
+        await app_pool.close()
+        await gw_pool.close()
 
 
 # ============================================================================
@@ -161,12 +195,13 @@ async def test_send_outbound_true_on_2xx_ok(monkeypatch):
     monkeypatch.setattr(
         whatsapp_service.httpx, "AsyncClient", _StubClient(200, {"ok": True})
     )
-    assert await whatsapp_service.send_outbound("x@s.whatsapp.net", "hi") is True
-    # It posts to /send-bot, carries the token header, and the jid+text in the body.
+    assert await whatsapp_service.send_outbound(BIZ_A, "x@s.whatsapp.net", "hi") is True
+    # It posts to /send-bot, carries the token header, and names the sending
+    # business (M6b multi-socket) + the jid + text in the body.
     cap = _StubClient.captured
     assert cap["url"].endswith("/send-bot")
     assert cap["headers"].get("X-Gateway-Token") == GATEWAY_TOKEN
-    assert cap["json"] == {"to": "x@s.whatsapp.net", "text": "hi"}
+    assert cap["json"] == {"business_id": BIZ_A, "to": "x@s.whatsapp.net", "text": "hi"}
 
 
 @pytest.mark.asyncio
@@ -175,7 +210,7 @@ async def test_send_outbound_false_on_ok_false(monkeypatch):
     monkeypatch.setattr(
         whatsapp_service.httpx, "AsyncClient", _StubClient(200, {"ok": False})
     )
-    assert await whatsapp_service.send_outbound("x@s.whatsapp.net", "hi") is False
+    assert await whatsapp_service.send_outbound(BIZ_A, "x@s.whatsapp.net", "hi") is False
 
 
 @pytest.mark.asyncio
@@ -185,7 +220,7 @@ async def test_send_outbound_false_on_non_2xx(monkeypatch):
         whatsapp_service.httpx, "AsyncClient",
         _StubClient(503, {"ok": False, "error": "not connected"}),
     )
-    assert await whatsapp_service.send_outbound("x@s.whatsapp.net", "hi") is False
+    assert await whatsapp_service.send_outbound(BIZ_A, "x@s.whatsapp.net", "hi") is False
 
 
 @pytest.mark.asyncio
@@ -195,7 +230,7 @@ async def test_send_outbound_false_on_bad_json(monkeypatch):
         whatsapp_service.httpx, "AsyncClient",
         _StubClient(200, ValueError("not json")),
     )
-    assert await whatsapp_service.send_outbound("x@s.whatsapp.net", "hi") is False
+    assert await whatsapp_service.send_outbound(BIZ_A, "x@s.whatsapp.net", "hi") is False
 
 
 @pytest.mark.asyncio
@@ -204,7 +239,7 @@ async def test_send_outbound_false_on_unreachable_gateway(monkeypatch):
     s = get_settings()
     # Point the (cached) settings at a port nothing listens on.
     monkeypatch.setattr(s, "gateway_base_url", "http://127.0.0.1:1", raising=False)
-    assert await whatsapp_service.send_outbound("x@s.whatsapp.net", "hi") is False
+    assert await whatsapp_service.send_outbound(BIZ_A, "x@s.whatsapp.net", "hi") is False
 
 
 @pytest.mark.asyncio
@@ -219,7 +254,7 @@ async def test_send_outbound_never_logs_pii(monkeypatch, caplog):
         _StubClient(503, {"ok": False}),
     )
     with caplog.at_level(logging.WARNING):
-        await whatsapp_service.send_outbound(secret_jid, secret_text)
+        await whatsapp_service.send_outbound(BIZ_A, secret_jid, secret_text)
     blob = " ".join(r.getMessage() for r in caplog.records)
     assert secret_jid not in blob
     assert secret_text not in blob
@@ -240,32 +275,40 @@ async def test_gateway_send_bot_bad_and_missing_token():
         bad = await c.post(
             f"{GATEWAY_BASE}/send-bot",
             headers={"X-Gateway-Token": "totally-wrong"},
-            json={"to": "x@s.whatsapp.net", "text": "hi"},
+            json={"business_id": BIZ_A, "to": "x@s.whatsapp.net", "text": "hi"},
         )
         missing = await c.post(
             f"{GATEWAY_BASE}/send-bot",
-            json={"to": "x@s.whatsapp.net", "text": "hi"},
+            json={"business_id": BIZ_A, "to": "x@s.whatsapp.net", "text": "hi"},
         )
     assert bad.status_code == 401
     assert missing.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_gateway_send_bot_missing_to_or_text():
-    """Valid token but missing/blank to or text → 400 (live gateway)."""
+async def test_gateway_send_bot_missing_fields():
+    """Valid token but missing/blank business_id, to or text → 400 (live gateway).
+
+    M6b: /send-bot must name the sending business (multi-socket), so a missing
+    business_id is a 400 just like a missing to/text.
+    """
     if not await _gateway_up():
         pytest.skip("gateway not reachable")
     hdr = {"X-Gateway-Token": GATEWAY_TOKEN}
     async with httpx.AsyncClient(timeout=5.0) as c:
         no_text = await c.post(f"{GATEWAY_BASE}/send-bot", headers=hdr,
-                               json={"to": "x@s.whatsapp.net"})
+                               json={"business_id": BIZ_A, "to": "x@s.whatsapp.net"})
         blank_text = await c.post(f"{GATEWAY_BASE}/send-bot", headers=hdr,
-                                  json={"to": "x@s.whatsapp.net", "text": "   "})
+                                  json={"business_id": BIZ_A,
+                                        "to": "x@s.whatsapp.net", "text": "   "})
         no_to = await c.post(f"{GATEWAY_BASE}/send-bot", headers=hdr,
-                             json={"text": "hi"})
+                             json={"business_id": BIZ_A, "text": "hi"})
+        no_biz = await c.post(f"{GATEWAY_BASE}/send-bot", headers=hdr,
+                              json={"to": "x@s.whatsapp.net", "text": "hi"})
     assert no_text.status_code == 400
     assert blank_text.status_code == 400
     assert no_to.status_code == 400
+    assert no_biz.status_code == 400
 
 
 @pytest.mark.asyncio
@@ -275,17 +318,18 @@ async def test_gateway_send_bot_live_200_to_owner_self():
     SAFE target: the owner's OWN number (the self-chat). The message lands in
     the owner's "Message Yourself" chat, never a stranger.
     """
-    if not await _gateway_connected():
-        pytest.skip("WhatsApp not connected — live send is a manual step")
-    # Resolve the owner's own number from the gateway /info (digits, no '+').
-    async with httpx.AsyncClient(timeout=5.0) as c:
-        info = (await c.get(f"{GATEWAY_BASE}/info")).json()
-        own = info.get("phone")
-        assert own, "connected gateway must report its own number"
+    if not await _gateway_up():
+        pytest.skip("gateway not reachable")
+    found = await _find_connected_business()
+    if not found:
+        pytest.skip("no business has a connected WhatsApp — live send is manual")
+    biz, own = found
+    async with httpx.AsyncClient(timeout=10.0) as c:
         r = await c.post(
             f"{GATEWAY_BASE}/send-bot",
             headers={"X-Gateway-Token": GATEWAY_TOKEN},
-            json={"to": f"{own}@s.whatsapp.net", "text": REPLY_TEXT},
+            json={"business_id": biz,
+                  "to": f"{own}@s.whatsapp.net", "text": REPLY_TEXT},
         )
     assert r.status_code == 200, r.text
     body = r.json()
@@ -295,7 +339,7 @@ async def test_gateway_send_bot_live_200_to_owner_self():
 
 # ============================================================================
 #  GOAL 5 — /api/conversations/{id}/reply: queues outbox + returns delivered +
-#           calls send_outbound(conversation_id, text)
+#           calls send_outbound(business_id, conversation_id, text)
 # ============================================================================
 
 @pytest.mark.asyncio
@@ -303,14 +347,15 @@ async def test_reply_queues_outbox_and_returns_delivered(http, rds, monkeypatch)
     """POST reply still queues the outbox; returns delivered; calls send_outbound.
 
     We stub send_outbound so the route's delivery result is controllable and no
-    real WhatsApp message is sent. We assert it was called with the conversation
-    id as `to` and the reply text, and that the outbox got the reply.
+    real WhatsApp message is sent. We assert it was called with the session's
+    business_id, the conversation id as `to`, and the reply text, and that the
+    outbox got the reply.
     """
     conv = f"m6a2:{secrets.token_hex(6)}"
-    calls: list[tuple[str, str]] = []
+    calls: list[tuple[str, str, str]] = []
 
-    async def fake_send(to: str, text: str) -> bool:
-        calls.append((to, text))
+    async def fake_send(business_id: str, to: str, text: str) -> bool:
+        calls.append((business_id, to, text))
         return True
 
     # Patch the symbol the dashboard router actually calls.
@@ -328,8 +373,8 @@ async def test_reply_queues_outbox_and_returns_delivered(http, rds, monkeypatch)
         assert body["queued"] is True
         assert body["delivered"] is True  # our stub returned True
 
-        # send_outbound called exactly once with the conv id + text.
-        assert calls == [(conv, REPLY_TEXT)]
+        # send_outbound called exactly once with the tenant + conv id + text.
+        assert calls == [(BIZ_A, conv, REPLY_TEXT)]
 
         # The reply is STILL queued in the Redis outbox (append_reply unchanged).
         outbox_key = f"conv:{BIZ_A}:{conv}:outbox"
@@ -352,7 +397,7 @@ async def test_reply_delivered_false_when_send_fails(http, rds, monkeypatch):
     only delivered=False — the owner's request never errors."""
     conv = f"m6a2:{secrets.token_hex(6)}"
 
-    async def fake_send(to: str, text: str) -> bool:
+    async def fake_send(business_id: str, to: str, text: str) -> bool:
         return False
 
     import app.api.dashboard as dash

@@ -1,4 +1,4 @@
-"""Owner-facing WhatsApp admin API (M6a, decision 0014).
+"""Owner-facing WhatsApp admin API (M6a → M6b per-business, decision 0014).
 
 Mounted under the gated /api group (app/api/me.py), so every route here inherits
 the deny-by-default session gate. The tenant is ALWAYS the verified session
@@ -12,27 +12,23 @@ Routes (frozen contract):
   GET  /api/whatsapp/test-numbers -> { numbers: [{ phone, label }] }
   PUT  /api/whatsapp/test-numbers -> { numbers: [{ phone, label }] }
 
-`status` + `qr` proxy the Node gateway over the internal Docker network
-(GATEWAY_BASE_URL); `link` reads the gateway's account id + own number from
-/info, then records the business_id ↔ account mapping via the whatsapp service
-(phone encrypted at rest). `test-numbers` manages the owner's external test
-allow-list (up to 5 numbers, each encrypted at rest). The owner's own phone and
-the test numbers/labels are the only PII and are NEVER logged. Gateway failures
-degrade gracefully to a "disconnected"/"unknown" view rather than 500ing the
-owner's dashboard.
+M6b makes this fully PER-BUSINESS: there is no longer a single global gateway
+session to proxy. `status` reads THIS tenant's own `whatsapp_connections` row
+(RLS-scoped); `qr` reads the transient QR the gateway stashed in Redis for this
+business (`wa:qr:{business_id}`); `link` means "start/ensure a session for MY
+business" — it guarantees a connection row exists so `wa_list_sessions()`
+includes this tenant and the gateway opens a socket + produces a QR.
+`test-numbers` manages the owner's external test allow-list (up to 5 numbers,
+each encrypted at rest). The owner's own phone and the test numbers/labels are
+the only PII and are NEVER logged.
 """
 
 from __future__ import annotations
 
-from typing import Any
-
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status as http_status
 
-from app.core.config import get_settings
 from app.core.deps import current_business
 from app.core.logging import get_logger
-from app.db.session import tenant_connection
 from app.models.whatsapp import (
     TestNumber,
     TestNumbersRequest,
@@ -47,49 +43,39 @@ from app.services import whatsapp_test_numbers as test_numbers_service
 router = APIRouter(prefix="/whatsapp", tags=["whatsapp"])
 log = get_logger("app.whatsapp")
 
-# Internal gateway calls should be fast (same Docker network); fail rather than
-# hang the owner's dashboard. Matches the google_oauth timeout convention.
-_HTTP_TIMEOUT = 5.0
 
+def _qr_key(business_id: str) -> str:
+    """Redis key where the gateway stashes THIS business's transient QR.
 
-async def _gateway_info() -> dict[str, Any]:
-    """GET {GATEWAY_BASE_URL}/info → {account_id, status, phone} (best-effort).
-
-    Returns the gateway's view of the single session. On ANY failure (gateway
-    down, timeout, bad shape) we degrade to a safe "unknown/disconnected" view so
-    the dashboard still renders. Never logs the phone or any response body.
+    Mirrors app/api/internal_wa.py::_qr_key — the gateway writes it via the
+    internal status endpoint, the owner reads it here.
     """
-    base = get_settings().gateway_base_url.rstrip("/")
-    try:
-        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-            resp = await client.get(f"{base}/info")
-            resp.raise_for_status()
-            data = resp.json()
-    except Exception:  # noqa: BLE001 — degrade gracefully; never leak details.
-        log.warning("gateway /info unreachable")
-        return {"account_id": None, "status": "unknown", "phone": None}
-
-    return {
-        "account_id": data.get("account_id"),
-        "status": data.get("status") or "unknown",
-        # phone = the gateway's view of the linked own number (PII — never logged).
-        "phone": data.get("phone"),
-    }
+    return f"wa:qr:{business_id}"
 
 
-def _is_connected(gateway_status: str) -> bool:
-    """The session is live only when the gateway explicitly says 'connected'."""
-    return gateway_status == "connected"
+def _status_shape(
+    state: dict[str, str | None] | None,
+) -> WhatsAppStatusResponse:
+    """Build the frozen status response from this tenant's connection row.
 
-
-async def _linked(request: Request, business_id: str) -> bool:
-    """Does this tenant have a connection mapping yet? RLS-scoped read."""
-    async with tenant_connection(request.app.state.pg_pool, business_id) as conn:
-        exists = await conn.fetchval(
-            "SELECT 1 FROM whatsapp_connections WHERE business_id = $1",
-            business_id,
+      * linked         — a whatsapp_connections row exists for this business.
+      * connected      — that row's status is 'connected'.
+      * phone          — the decrypted own number (owner-only; null if unknown).
+      * gateway_status — the raw connection status ('disconnected' if unlinked).
+    """
+    if state is None:
+        return WhatsAppStatusResponse(
+            linked=False, connected=False, phone=None, gateway_status="disconnected"
         )
-    return exists is not None
+    gateway_status = state["status"] or "disconnected"
+    return WhatsAppStatusResponse(
+        linked=True,
+        connected=gateway_status == "connected",
+        phone=state["phone"],
+        gateway_status=gateway_status,
+        # e.g. 'phone_conflict' → the UI explains the refused link (0027).
+        error=state.get("last_error"),
+    )
 
 
 @router.get("/status", response_model=WhatsAppStatusResponse)
@@ -97,15 +83,11 @@ async def whatsapp_status(
     request: Request,
     business_id: str = Depends(current_business),
 ) -> WhatsAppStatusResponse:
-    """Return whether this tenant has linked WhatsApp + the live gateway state."""
-    info = await _gateway_info()
-    gateway_status = info["status"]
-    return WhatsAppStatusResponse(
-        linked=await _linked(request, business_id),
-        connected=_is_connected(gateway_status),
-        phone=info["phone"],
-        gateway_status=gateway_status,
+    """Return this tenant's own WhatsApp link state (RLS-scoped, per-business)."""
+    state = await whatsapp_service.get_connection_state(
+        request.app.state.pg_pool, business_id
     )
+    return _status_shape(state)
 
 
 @router.post("/link", response_model=WhatsAppLinkResponse)
@@ -113,66 +95,38 @@ async def whatsapp_link(
     request: Request,
     business_id: str = Depends(current_business),
 ) -> WhatsAppLinkResponse:
-    """Record the business_id ↔ gateway-account mapping for THIS tenant.
+    """Start/ensure a WhatsApp session for THIS business (M6b).
 
-    Pulls the gateway's account id + own number from /info, then upserts the
-    mapping under the verified session tenant (phone encrypted at rest). Returns
-    the resulting status shape so the frontend can refresh in one call.
+    Guarantees a `whatsapp_connections` row exists for this tenant (marked
+    'connecting' unless already connected). That row is what makes
+    `wa_list_sessions()` include this business, so the gateway opens a socket and
+    produces a QR the owner can scan. Returns the resulting status shape so the
+    frontend can refresh in one call.
     """
-    info = await _gateway_info()
-    gateway_status = info["status"]
-    account_id = info["account_id"]
-    phone = info["phone"]
-
-    # Only record a mapping when the gateway actually reported an account id.
-    # Without it there is nothing to bridge inbound messages to.
-    if account_id:
-        await whatsapp_service.upsert_connection(
-            request.app.state.pg_pool,
-            business_id,
-            gateway_account_id=account_id,
-            phone=phone,
-            status=gateway_status,
-        )
-        linked = True
-    else:
-        # Gateway not reachable / no account yet — nothing recorded.
-        linked = await _linked(request, business_id)
-
-    return WhatsAppLinkResponse(
-        linked=linked,
-        connected=_is_connected(gateway_status),
-        phone=phone,
-        gateway_status=gateway_status,
+    await whatsapp_service.ensure_session(request.app.state.pg_pool, business_id)
+    state = await whatsapp_service.get_connection_state(
+        request.app.state.pg_pool, business_id
     )
+    return _status_shape(state)
 
 
 @router.get("/qr", response_model=WhatsAppQrResponse)
 async def whatsapp_qr(
+    request: Request,
     business_id: str = Depends(current_business),
 ) -> WhatsAppQrResponse:
-    """Proxy the gateway's current QR (for linking) to the owner.
+    """Return THIS business's current QR (from Redis) for linking.
 
-    The QR itself carries no tenant data; the gate ensures only an authenticated
-    owner can fetch it. Degrades to {status:'unknown', qr_data_url:null} if the
-    gateway is unreachable. Never logs the response.
+    `qr_data_url` comes from the transient Redis key the gateway writes via the
+    internal status endpoint (null when there is no pending code); `status` is
+    this tenant's connection status. The QR is never logged.
     """
-    base = get_settings().gateway_base_url.rstrip("/")
-    try:
-        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-            # /qr.json returns JSON {status, qr_data_url}; the plain /qr route is
-            # an HTML dev page (not parseable here).
-            resp = await client.get(f"{base}/qr.json")
-            resp.raise_for_status()
-            data = resp.json()
-    except Exception:  # noqa: BLE001 — degrade gracefully; never leak details.
-        log.warning("gateway /qr unreachable")
-        return WhatsAppQrResponse(status="unknown", qr_data_url=None)
-
-    return WhatsAppQrResponse(
-        status=data.get("status") or "unknown",
-        qr_data_url=data.get("qr_data_url"),
+    state = await whatsapp_service.get_connection_state(
+        request.app.state.pg_pool, business_id
     )
+    status_str = (state["status"] if state else None) or "disconnected"
+    qr_data_url = await request.app.state.redis.get(_qr_key(business_id))
+    return WhatsAppQrResponse(status=status_str, qr_data_url=qr_data_url)
 
 
 # --- M6a.1: owner's external test allow-list -------------------------------- --

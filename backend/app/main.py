@@ -21,10 +21,11 @@ from fastapi import FastAPI
 
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
+from app.api.internal_wa import router as internal_wa_router
 from app.api.me import api as api_router
 from app.api.public_booking import router as public_booking_router
 from app.api.webhook import router as webhook_router
-from app.core.clients import create_pg_pool, create_redis
+from app.core.clients import create_gateway_pool, create_pg_pool, create_redis
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 from app.services import google_calendar
@@ -40,6 +41,10 @@ async def lifespan(app: FastAPI):
     log = get_logger("app.lifespan")
 
     app.state.pg_pool = await create_pg_pool(settings)
+    # M6b: the gateway_role pool — the ONLY route to the crown-jewel
+    # whatsapp_credentials table (app_role has zero grant). Used exclusively by
+    # the internal WA API to read/write each business's encrypted auth_state.
+    app.state.gw_pool = await create_gateway_pool(settings)
     app.state.redis = create_redis(settings)
 
     # M11: register the Google Calendar sync hook with the booking core. The hook
@@ -86,6 +91,7 @@ async def lifespan(app: FastAPI):
             except asyncio.CancelledError:
                 pass
         await app.state.pg_pool.close()
+        await app.state.gw_pool.close()
         await app.state.redis.aclose()
         log.info("backend stopped")
 
@@ -112,6 +118,11 @@ def create_app() -> FastAPI:
     # tenant from the verified slug + RLS (see app/api/public_booking.py).
     app.include_router(health_router)
     app.include_router(webhook_router)
+    # M6b: the internal WA API the gateway calls (session list + encrypted creds +
+    # status). PUBLIC-path like /webhook/*, but protected by the SAME
+    # X-Gateway-Token header check — NOT the owner session gate. Mounted on the
+    # app root (outside the gated /api group) because the gateway has no session.
+    app.include_router(internal_wa_router)
     app.include_router(auth_router)
     app.include_router(public_booking_router)
     app.include_router(api_router)

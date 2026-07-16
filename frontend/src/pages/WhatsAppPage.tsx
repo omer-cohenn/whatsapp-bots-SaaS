@@ -114,9 +114,10 @@ export default function WhatsAppPage() {
   }
 
   const connected = status?.connected ?? false
-  // The gateway socket is up but we haven't recorded the mapping yet → let the
-  // owner press "חבר" to persist it. Disabled until the socket is actually up.
-  const canLink = connected && !status?.linked
+  // M6b: `linked` = this business has a connection row (a session is being
+  // brought up by the gateway). The "התחבר" button CREATES that row — it's
+  // pressed BEFORE the QR exists, not after scanning.
+  const linked = status?.linked ?? false
 
   return (
     <DashboardLayout>
@@ -141,6 +142,16 @@ export default function WhatsAppPage() {
           ללקוחות שלכם.
         </p>
 
+        {/* One number = one business (M6b): the scanned number already belongs
+            to another business, so the link was refused and the device was
+            unlinked. Explain it clearly — a fresh QR is already on its way. */}
+        {status?.error === 'phone_conflict' ? (
+          <Alert tone="error">
+            המספר שסרקתם כבר מחובר לעסק אחר במערכת, ולכן החיבור נדחה. כל מספר
+            וואטסאפ יכול להיות מחובר לעסק אחד בלבד — סרקו את הקוד עם מספר אחר.
+          </Alert>
+        ) : null}
+
         {/* Connection status / QR card. */}
         <Card>
           <section aria-labelledby="wa-status-heading" aria-busy={loading}>
@@ -158,9 +169,9 @@ export default function WhatsAppPage() {
               ) : (
                 <ConnectView
                   qr={qr}
-                  canLink={canLink}
-                  linking={linking}
-                  onLink={() => void handleLink()}
+                  linked={linked}
+                  starting={linking}
+                  onStart={() => void handleLink()}
                 />
               )}
             </div>

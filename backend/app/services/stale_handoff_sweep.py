@@ -119,8 +119,11 @@ async def run_sweep_once(pool: asyncpg.Pool, redis: aioredis.Redis) -> int:
             conversation_id = conv["conversation_id"]
             try:
                 # 1) Send the closing message to the customer. conversation_id IS
-                #    the customer's WhatsApp jid (best-effort; never raises).
-                await whatsapp_service.send_outbound(conversation_id, STALE_CLOSING_MSG)
+                #    the customer's WhatsApp jid (best-effort; never raises). M6b:
+                #    name the business so the gateway uses its socket.
+                await whatsapp_service.send_outbound(
+                    business_id, conversation_id, STALE_CLOSING_MSG
+                )
                 # 2) Mirror it onto the transcript so the owner sees what was sent.
                 await conversation_state.append_message(
                     redis, business_id, conversation_id, "bot", STALE_CLOSING_MSG

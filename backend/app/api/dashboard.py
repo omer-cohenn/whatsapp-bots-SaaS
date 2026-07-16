@@ -399,7 +399,9 @@ async def reply_to_conversation(
     )
     # Best-effort delivery on top of the queue: the conversation id is the
     # customer's WhatsApp jid, so it doubles as the send target. Never logs text.
-    delivered = await whatsapp_service.send_outbound(conversation_id, body.text)
+    delivered = await whatsapp_service.send_outbound(
+        business_id, conversation_id, body.text
+    )
     return ConversationReplyResponse(
         conversation_id=conversation_id, queued=True, delivered=delivered
     )
