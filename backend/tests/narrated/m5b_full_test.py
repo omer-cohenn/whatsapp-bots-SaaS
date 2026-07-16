@@ -407,7 +407,7 @@ async def run() -> int:
 # ── HOW TO RUN ───────────────────────────────────────────────────────────────
 #   Easiest : double-click  tests/test_m5b.bat   (it sets everything up).
 #   By hand : from the project root, with the stack running (run.bat):
-#     docker compose --env-file infra/.env.local -f infra/docker-compose.yml \
+#     docker compose --env-file infra/.env -f infra/docker-compose.yml \
 #       run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/m5b_full_test.py"
 #
 #   Needs the DB + Redis (the stack). No GEMINI key is needed — the runtime path

@@ -52,12 +52,27 @@ def configure_logging(level: str = "INFO") -> None:
     root.addHandler(handler)
     root.setLevel(level.upper())
 
-    # Uvicorn/gunicorn access+error logs flow through these; let them propagate
-    # to the root JSON handler instead of their own plain formatters.
-    for name in ("uvicorn", "uvicorn.error", "uvicorn.access", "gunicorn.error"):
+    # Uvicorn/gunicorn ERROR logs flow through these; let them propagate to the
+    # root JSON handler instead of their own plain formatters. These carry no
+    # request line, so they cannot leak a query string / path token.
+    for name in ("uvicorn", "uvicorn.error", "gunicorn.error"):
         lg = logging.getLogger(name)
         lg.handlers.clear()
         lg.propagate = True
+
+    # SECURITY: the access loggers emit the raw request line INCLUDING the query
+    # string (e.g. /auth/callback?code=...&state=...) and any token in the path
+    # (booking cancel/reschedule). That leaks OAuth code+state and cancel_tokens
+    # into the logs. We SILENCE them entirely and replace them with the redacting
+    # request-log middleware in app/main.py, which logs method + path (no query,
+    # token segments masked) + status + duration only. gunicorn.access is silenced
+    # too for the prod image (gunicorn --access-logfile -), even though the current
+    # worker routes access lines through uvicorn.access.
+    for name in ("uvicorn.access", "gunicorn.access"):
+        access = logging.getLogger(name)
+        access.handlers.clear()
+        access.propagate = False
+        access.disabled = True
 
 
 def get_logger(name: str) -> logging.Logger:

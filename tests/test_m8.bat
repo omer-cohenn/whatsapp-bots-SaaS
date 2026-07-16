@@ -20,7 +20,7 @@ chcp 65001 >nul
 REM Go to the project root (this file lives in tests\, root is one up).
 cd /d "%~dp0.."
 
-set COMPOSE=docker compose --env-file infra/.env.local -f infra/docker-compose.yml
+set COMPOSE=docker compose --env-file infra/.env -f infra/docker-compose.yml
 
 echo.
 echo ==========================================================================
@@ -85,7 +85,7 @@ echo **************************************************************************
 echo   SOMETHING FAILED above. Is Docker Desktop running?
 echo   Tip: start the app first with run.bat, then run this again.
 echo   (If the backend would not boot, a GOOGLE_* or SESSION_SECRET value in
-echo    infra\.env.local may still be blank - fill it and try again.)
+echo    infra\.env may still be blank - fill it and try again.)
 echo **************************************************************************
 echo.
 pause

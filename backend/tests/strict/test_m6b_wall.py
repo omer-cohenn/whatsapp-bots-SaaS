@@ -348,7 +348,10 @@ async def test_qr_reported_for_a_never_lands_in_b_or_real_business(
             json={"status": "qr_pending", "qr_data_url": fake_qr},
         )
         assert r.status_code == 200, r.text
-        assert r.json() == {"ok": True}
+        # M6b's one-number guard added a `conflict` flag to the status response;
+        # a qr_pending report is never a conflict, so ok=True and conflict is False.
+        assert r.json()["ok"] is True
+        assert r.json().get("conflict") in (False, None)
 
         # A's QR slot carries the code we just reported…
         assert await redis_client.get(f"wa:qr:{BIZ_A}") == fake_qr

@@ -32,6 +32,6 @@ You are **Bizz_up's backend BUILDER** — clean, readable FastAPI for a beginner
 
 ## Verify before you finish
 - At least import-check your modules inside the backend image, e.g.
-  `docker compose --env-file infra/.env.local -f infra/docker-compose.yml run --rm --no-deps backend sh -c "cd /app && python -c 'import app.main'"`.
+  `docker compose --env-file infra/.env -f infra/docker-compose.yml run --rm --no-deps backend sh -c "cd /app && python -c 'import app.main'"`.
 - Do NOT do a full multi-service stack boot or run migrations — that's the test-runner's job. Report the
   files you changed, the endpoints added, and the checks you actually ran.

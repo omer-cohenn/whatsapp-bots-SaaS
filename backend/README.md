@@ -36,16 +36,16 @@ backend/tests/   # 🧪 הבדיקות — strict / narrated / isolation
 ידנית מהשורש, כשהסטאק רץ:
 ```bash
 # הסיפור המוסבר (narrated)
-docker compose --env-file infra/.env.local -f infra/docker-compose.yml \
+docker compose --env-file infra/.env -f infra/docker-compose.yml \
   run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/narrated/m12_full_test.py"
 
 # שער ה-pytest הקשיח (strict)
-docker compose --env-file infra/.env.local -f infra/docker-compose.yml \
+docker compose --env-file infra/.env -f infra/docker-compose.yml \
   run --rm backend sh -c "cd /app && pip install -q pytest pytest-asyncio && \
   PYTHONPATH=/app python -m pytest tests/strict -q"
 
 # חומת הטננטים (isolation)
-docker compose --env-file infra/.env.local -f infra/docker-compose.yml \
+docker compose --env-file infra/.env -f infra/docker-compose.yml \
   run --rm backend sh -c "cd /app && pip install -q pytest pytest-asyncio && \
   PYTHONPATH=/app python -m pytest tests/isolation -q"
 ```
@@ -54,7 +54,7 @@ docker compose --env-file infra/.env.local -f infra/docker-compose.yml \
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --no-deps -r requirements.lock
-# צריך infra/.env.local מלא (ראה ../ENV_SETUP.md)
+# צריך infra/.env מלא (ראה ../ENV_SETUP.md)
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 ב-compose ה-backend מגיע לשכנים דרך שם השירות (`postgres`, `redis`, `gateway`).

@@ -28,6 +28,7 @@ from app.api.webhook import router as webhook_router
 from app.core.clients import create_gateway_pool, create_pg_pool, create_redis
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
+from app.core.request_log import install_request_logging
 from app.services import google_calendar
 from app.services.abandoned_sweep import sweep_loop
 from app.services.booking_reminders import sweep_loop as booking_reminders_loop
@@ -102,13 +103,27 @@ def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level)
 
+    # SECURITY: the interactive API docs (/docs, /redoc) + the OpenAPI schema
+    # (/openapi.json) enumerate every route and shape — useful in dev, but an
+    # unnecessary information leak in production. Serve them ONLY in dev; in any
+    # non-dev environment they 404.
+    docs_enabled = settings.app_env == "dev"
+
     app = FastAPI(
         title="Bizz_up backend",
         version="0.0.1",
         summary="M0+M1 minimal: boots, health-checks PG+Redis, WhatsApp webhook landing pad.",
         lifespan=lifespan,
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
     )
     app.state.settings = settings
+
+    # One redacted access-log line per request (method + path w/o query + status +
+    # duration). Replaces uvicorn.access, which leaked OAuth code/state + booking
+    # tokens via the raw request line. See app/core/request_log.py.
+    install_request_logging(app)
 
     # Public routes: /healthz, /webhook/*, /auth/*, and the M11 public booking
     # page (/api/book/*). The /api/* group below is gated (deny-by-default) by a

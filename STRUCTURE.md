@@ -171,8 +171,8 @@ frontend/src/
 infra/
 ├── docker-compose.yml    # הסטאק המקומי: postgres + redis + migrate + backend + gateway + frontend (health-gated)
 ├── .env.example          # שמות כל הסודות (בלי ערכים) — חוזה
-├── .env.local.example    # תבנית למילוי + גנרטורים → להעתיק ל-.env.local (git-ignored)
-└── .env.local            # הקובץ האמיתי (git-ignored, נוצר אוטומטית ע"י run.bat)
+├── .env.example    # תבנית למילוי + גנרטורים → להעתיק ל-.env (git-ignored)
+└── .env            # הקובץ האמיתי (git-ignored, נוצר אוטומטית ע"י run.bat)
 ```
 
 * פורטים: backend `:8000` · gateway `:3000` · frontend `:5173`. Postgres/Redis **לא** חשופים החוצה (פנימי לרשת Docker).

@@ -27,7 +27,7 @@ You are **Bizz_up's database BUILDER** — you write and verify real Postgres mi
 
 ## Verify before you finish
 - Apply against the running stack and read the output for errors:
-  `docker compose --env-file infra/.env.local -f infra/docker-compose.yml run --rm migrate`
+  `docker compose --env-file infra/.env -f infra/docker-compose.yml run --rm migrate`
   (or run a single file via `... run --rm --entrypoint sh migrate -c "psql -v ON_ERROR_STOP=1 -f /supabase/migrations/NNNN_x.sql"`).
 - Prove the new objects exist and behave (e.g. `\df`, calling a function as `app_role`). Report exact SQL +
   the verification output. Never claim success you didn't run.

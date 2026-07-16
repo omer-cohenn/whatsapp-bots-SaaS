@@ -31,7 +31,7 @@ BIZ_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"  # Avi Insurance (PUBLISHED)
 BIZ_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"  # Bella Barber  (DRAFT)
 UNKNOWN_BIZ = "cccccccc-cccc-cccc-cccc-cccccccccccc"  # עסק שלא קיים
 
-# בעל הקניון (admin). ADMIN_EMAILS ב‑infra/.env.local כולל את האימייל הזה.
+# בעל הקניון (admin). ADMIN_EMAILS ב‑infra/.env כולל את האימייל הזה.
 ADMIN_EMAIL = "oyc3333@gmail.com"
 ADMIN_USER_ID_FALLBACK = "google-sub-m13-admin"
 # בעל עסק רגיל — לא ברשימת ה‑admin.

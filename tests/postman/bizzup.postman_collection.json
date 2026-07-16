@@ -1,0 +1,386 @@
+{
+  "info": {
+    "name": "Bizz_up — CI/CD pre-deploy smoke",
+    "_postman_id": "b1zzup00-0000-4000-8000-000000000001",
+    "description": "Pre-production smoke suite for the Bizz_up backend, grouped by AUTH GROUP exactly like the route inventory. Run with newman in CI before every deploy. NO SECRET is hardcoded here — the gateway token and the session cookie come from environment variables ({{gatewayToken}}, {{sessionCookie}}) that CI injects. Folders:\n\n  1. Public (no auth)        — /healthz is reachable by anyone.\n  2. Token — Gateway         — /webhook/whatsapp + /internal/wa/sessions: 401 without the right X-Gateway-Token, handled/200 with it.\n  3. Public Booking (by slug)— the customer flow: services -> slots -> create (capture cancel_token) -> cancel; a WRONG cancel_token is rejected.\n  4. Session-gated /api/*     — smoke; documented to need a {{sessionCookie}} (401 when absent, 200 when present).\n  5. Prod hardening (optional)— asserts /openapi.json is 404 against a PROD backend (docs disabled). Enable by setting {{expectProdHardening}}=true.\n\nAll assertions are pm.test; a failing assertion makes newman exit non-zero.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "capturedServiceId", "value": "" },
+    { "key": "capturedSlot", "value": "" },
+    { "key": "bookDate", "value": "" },
+    { "key": "capturedCancelToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Public (no auth)",
+      "item": [
+        {
+          "name": "GET /healthz",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('healthz is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('healthz body reports ok/status', function () {",
+                  "  var body = pm.response.text();",
+                  "  pm.expect(body.length).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/healthz", "host": ["{{baseUrl}}"], "path": ["healthz"] } }
+        }
+      ]
+    },
+    {
+      "name": "2. Token — Gateway",
+      "item": [
+        {
+          "name": "POST /webhook/whatsapp — NO token (expect 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('webhook without token is 401', function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\"gateway_account_id\":\"ci-acct-nobody\",\"from\":\"+972500000001\",\"push_name\":\"CI\",\"message_id\":\"ci-nohdr\",\"timestamp\":1700000000,\"type\":\"text\",\"text\":\"hi\",\"raw\":{},\"self_test\":true,\"conversation_id\":\"self:ci\"}" },
+            "url": { "raw": "{{baseUrl}}/webhook/whatsapp", "host": ["{{baseUrl}}"], "path": ["webhook", "whatsapp"] }
+          }
+        },
+        {
+          "name": "POST /webhook/whatsapp — WRONG token (expect 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('webhook with wrong token is 401', function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "X-Gateway-Token", "value": "totally-wrong-not-a-real-token" } ],
+            "body": { "mode": "raw", "raw": "{\"gateway_account_id\":\"ci-acct-nobody\",\"from\":\"+972500000001\",\"push_name\":\"CI\",\"message_id\":\"ci-badhdr\",\"timestamp\":1700000000,\"type\":\"text\",\"text\":\"hi\",\"raw\":{},\"self_test\":true,\"conversation_id\":\"self:ci\"}" },
+            "url": { "raw": "{{baseUrl}}/webhook/whatsapp", "host": ["{{baseUrl}}"], "path": ["webhook", "whatsapp"] }
+          }
+        },
+        {
+          "name": "POST /webhook/whatsapp — RIGHT token (expect 200 handled)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get('gatewayToken') && !pm.collectionVariables.get('gatewayToken')) {",
+                  "  console.log('gatewayToken not set — this positive-token request will 401; set it in the environment.');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var hasToken = !!pm.environment.get('gatewayToken');",
+                  "if (!hasToken) {",
+                  "  pm.test('SKIPPED positive-token webhook (no gatewayToken set)', function () { pm.expect(true).to.be.true; });",
+                  "} else {",
+                  "  pm.test('webhook with right token is 200', function () { pm.response.to.have.status(200); });",
+                  "  pm.test('unmapped account is handled (no business)', function () {",
+                  "    pm.expect(pm.response.json()).to.have.property('status');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "X-Gateway-Token", "value": "{{gatewayToken}}" } ],
+            "body": { "mode": "raw", "raw": "{\"gateway_account_id\":\"ci-acct-nobody\",\"from\":\"+972500000001\",\"push_name\":\"CI\",\"message_id\":\"ci-goodhdr\",\"timestamp\":1700000000,\"type\":\"text\",\"text\":\"hi\",\"raw\":{},\"self_test\":true,\"conversation_id\":\"self:ci\"}" },
+            "url": { "raw": "{{baseUrl}}/webhook/whatsapp", "host": ["{{baseUrl}}"], "path": ["webhook", "whatsapp"] }
+          }
+        },
+        {
+          "name": "GET /internal/wa/sessions — NO token (expect 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('internal sessions without token is 401', function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/internal/wa/sessions", "host": ["{{baseUrl}}"], "path": ["internal", "wa", "sessions"] } }
+        },
+        {
+          "name": "GET /internal/wa/sessions — RIGHT token (expect 200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var hasToken = !!pm.environment.get('gatewayToken');",
+                  "if (!hasToken) {",
+                  "  pm.test('SKIPPED positive-token sessions (no gatewayToken set)', function () { pm.expect(true).to.be.true; });",
+                  "} else {",
+                  "  pm.test('internal sessions with right token is 200', function () { pm.response.to.have.status(200); });",
+                  "  pm.test('body has a sessions array', function () {",
+                  "    pm.expect(pm.response.json()).to.have.property('sessions');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "X-Gateway-Token", "value": "{{gatewayToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/internal/wa/sessions", "host": ["{{baseUrl}}"], "path": ["internal", "wa", "sessions"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Public Booking (by slug)",
+      "item": [
+        {
+          "name": "GET /api/book/{slug}/services",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var d = new Date();",
+                  "d.setDate(d.getDate() + 10);",
+                  "while (d.getDay() !== 3) { d.setDate(d.getDate() + 1); }",
+                  "pm.collectionVariables.set('bookDate', d.toISOString().slice(0,10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var slug = pm.environment.get('bookingSlug');",
+                  "if (!slug) {",
+                  "  pm.test('SKIPPED booking flow (no bookingSlug set)', function () { pm.expect(true).to.be.true; });",
+                  "} else {",
+                  "  pm.test('services page resolves the slug (200)', function () { pm.response.to.have.status(200); });",
+                  "  var body = pm.response.json();",
+                  "  pm.test('services shape', function () { pm.expect(body).to.have.property('services'); });",
+                  "  if (body.services && body.services.length) {",
+                  "    pm.collectionVariables.set('capturedServiceId', body.services[0].id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/api/book/{{bookingSlug}}/services", "host": ["{{baseUrl}}"], "path": ["api", "book", "{{bookingSlug}}", "services"] } }
+        },
+        {
+          "name": "GET /api/book/{slug}/slots",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var slug = pm.environment.get('bookingSlug');",
+                  "var svc = pm.collectionVariables.get('capturedServiceId');",
+                  "if (!slug || !svc) {",
+                  "  pm.test('SKIPPED slots (no slug/service)', function () { pm.expect(true).to.be.true; });",
+                  "} else {",
+                  "  pm.test('slots is 200', function () { pm.response.to.have.status(200); });",
+                  "  var body = pm.response.json();",
+                  "  pm.test('slots shape', function () { pm.expect(body).to.have.property('slots'); });",
+                  "  if (body.slots && body.slots.length) {",
+                  "    pm.collectionVariables.set('capturedSlot', body.slots[0]);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/api/book/{{bookingSlug}}/slots?service_id={{capturedServiceId}}&date={{bookDate}}", "host": ["{{baseUrl}}"], "path": ["api", "book", "{{bookingSlug}}", "slots"], "query": [ { "key": "service_id", "value": "{{capturedServiceId}}" }, { "key": "date", "value": "{{bookDate}}" } ] } }
+        },
+        {
+          "name": "POST /api/book/{slug} — create booking (capture cancel_token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var slug = pm.environment.get('bookingSlug');",
+                  "var slot = pm.collectionVariables.get('capturedSlot');",
+                  "if (!slug || !slot) {",
+                  "  pm.test('SKIPPED create (no bookable slot)', function () { pm.expect(true).to.be.true; });",
+                  "} else {",
+                  "  pm.test('create is 201/409/422 (endpoint reachable, slug resolved)', function () {",
+                  "    pm.expect([201,409,422]).to.include(pm.response.code);",
+                  "  });",
+                  "  if (pm.response.code === 201) {",
+                  "    var body = pm.response.json();",
+                  "    pm.test('create returns a cancel_token', function () { pm.expect(body).to.have.property('cancel_token'); });",
+                  "    pm.collectionVariables.set('capturedCancelToken', body.cancel_token);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\"service_id\":\"{{capturedServiceId}}\",\"date\":\"{{bookDate}}\",\"time\":\"{{capturedSlot}}\",\"name\":\"CI Smoke\",\"phone\":\"+972500000009\"}" },
+            "url": { "raw": "{{baseUrl}}/api/book/{{bookingSlug}}", "host": ["{{baseUrl}}"], "path": ["api", "book", "{{bookingSlug}}"] }
+          }
+        },
+        {
+          "name": "POST /api/book/{slug}/cancel/{WRONG token} — expect 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var slug = pm.environment.get('bookingSlug');",
+                  "if (!slug) {",
+                  "  pm.test('SKIPPED wrong-token cancel (no bookingSlug set)', function () { pm.expect(true).to.be.true; });",
+                  "} else {",
+                  "  pm.test('a WRONG cancel_token is rejected (404)', function () { pm.response.to.have.status(404); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/api/book/{{bookingSlug}}/cancel/ci-not-the-real-token-xyz", "host": ["{{baseUrl}}"], "path": ["api", "book", "{{bookingSlug}}", "cancel", "ci-not-the-real-token-xyz"] } }
+        },
+        {
+          "name": "POST /api/book/{slug}/cancel/{cancel_token} — expect 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var tok = pm.collectionVariables.get('capturedCancelToken');",
+                  "if (!tok) {",
+                  "  pm.test('SKIPPED real cancel (no booking was created)', function () { pm.expect(true).to.be.true; });",
+                  "} else {",
+                  "  pm.test('the RIGHT cancel_token cancels (200)', function () { pm.response.to.have.status(200); });",
+                  "  pm.test('status is cancelled', function () { pm.expect(pm.response.json().status).to.eql('cancelled'); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/api/book/{{bookingSlug}}/cancel/{{capturedCancelToken}}", "host": ["{{baseUrl}}"], "path": ["api", "book", "{{bookingSlug}}", "cancel", "{{capturedCancelToken}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "4. Session-gated /api/* (smoke — needs {{sessionCookie}})",
+      "item": [
+        {
+          "name": "GET /api/me",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var hasCookie = !!pm.environment.get('sessionCookie');",
+                  "if (hasCookie) {",
+                  "  pm.test('with a session, /api/me is 200', function () { pm.response.to.have.status(200); });",
+                  "} else {",
+                  "  pm.test('without a session, /api/me is 401 (deny-by-default)', function () { pm.response.to.have.status(401); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Cookie", "value": "{{sessionCookie}}", "description": "CI injects the full 'bizzup_session=<sid>' cookie via the sessionCookie env var." } ],
+            "url": { "raw": "{{baseUrl}}/api/me", "host": ["{{baseUrl}}"], "path": ["api", "me"] }
+          }
+        },
+        {
+          "name": "GET /api/dashboard",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var hasCookie = !!pm.environment.get('sessionCookie');",
+                  "if (hasCookie) {",
+                  "  pm.test('with a session, /api/dashboard is 200', function () { pm.response.to.have.status(200); });",
+                  "} else {",
+                  "  pm.test('without a session, /api/dashboard is 401', function () { pm.response.to.have.status(401); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Cookie", "value": "{{sessionCookie}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/dashboard", "host": ["{{baseUrl}}"], "path": ["api", "dashboard"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Prod hardening (optional — set {{expectProdHardening}}=true)",
+      "item": [
+        {
+          "name": "GET /openapi.json — 404 in prod (docs disabled)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var expectProd = String(pm.environment.get('expectProdHardening')) === 'true';",
+                  "if (!expectProd) {",
+                  "  pm.test('SKIPPED prod openapi guard (expectProdHardening != true)', function () { pm.expect(true).to.be.true; });",
+                  "} else {",
+                  "  pm.test('/openapi.json is not served in prod (404)', function () { pm.response.to.have.status(404); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/openapi.json", "host": ["{{baseUrl}}"], "path": ["openapi.json"] } }
+        }
+      ]
+    }
+  ]
+}

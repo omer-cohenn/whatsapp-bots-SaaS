@@ -1,0 +1,32 @@
+# Bizz_up frontend — PRODUCTION static build.
+# Multi-stage: build the SPA with Vite, then serve the static dist/ with a tiny
+# Caddy file-server. NO Vite dev server, NO source bind-mount, NO host port —
+# the reverse-proxy (see infra/docker-compose.prod.yml) is the only public entry.
+# ============================================================================
+
+# --- build stage: produce the static dist/ ---------------------------------
+FROM node:20-slim AS build
+WORKDIR /app
+
+# Install deps first for layer caching. Use `npm install` (not `npm ci`) so the
+# correct LINUX platform optional deps (e.g. @rollup/rollup-linux-x64-gnu) are
+# resolved even when the lockfile was generated on Windows — same reason as the
+# dev image.
+COPY package.json package-lock.json ./
+RUN npm install --no-audit --no-fund
+
+# App source + configs, then build. The browser talks SAME-ORIGIN through the
+# proxy, so no backend URL/secret is baked into the bundle.
+COPY index.html ./
+COPY vite.config.js postcss.config.js tailwind.config.js tsconfig*.json ./
+COPY src ./src
+RUN npm run build
+
+# --- serve stage: static files only, internal :80 --------------------------
+FROM caddy:2-alpine
+COPY --from=build /app/dist /srv
+# Minimal SPA config: serve /srv on :80 (internal), fall back to index.html for
+# client-side routes, gzip on. This service is NEVER published to the host.
+RUN printf ':80 {\n\troot * /srv\n\ttry_files {path} /index.html\n\tfile_server\n\tencode gzip\n}\n' \
+    > /etc/caddy/Caddyfile
+EXPOSE 80

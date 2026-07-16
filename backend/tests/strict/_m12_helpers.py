@@ -40,7 +40,7 @@ from app.services.auth import SESSION_COOKIE_NAME, _SESSION_KEY_PREFIX
 BIZ_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"  # Avi Insurance (PUBLISHED in seed)
 BIZ_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"  # Bella Barber  (DRAFT in seed)
 
-# The admin identity. ADMIN_EMAILS in infra/.env.local includes oyc3333@gmail.com.
+# The admin identity. ADMIN_EMAILS in infra/.env includes oyc3333@gmail.com.
 # admin_set_subscription stamps the audit row with the session user_id (a Google
 # sub that MUST exist in users(id) for the FK) + email. The `admin_user` fixture
 # resolves the REAL users(id) for this email (creating one if absent) so the audit

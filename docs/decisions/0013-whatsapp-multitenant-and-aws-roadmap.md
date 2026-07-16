@@ -33,7 +33,7 @@
 0. חשבון AWS + התראת תקציב + בחירת אזור + קניית דומיין (חינם חוץ מהדומיין).
 1. Lightsail instance (Ubuntu 2GB ~$12) + Static IP + firewall (רק 80/443) + Docker.
 2. דומיין → A record → Static IP; Caddy ל‑HTTPS (מחליף ngrok).
-3. git clone + `.env.local` עם סודות אמיתיים (600); כתובות production ל‑Google/PUBLIC_BASE_URL; `docker compose up`.
+3. git clone + `.env` עם סודות אמיתיים (600); כתובות production ל‑Google/PUBLIC_BASE_URL; `docker compose up`.
 4. גיבוי DB יומי (`pg_dump` + Lightsail snapshots ~$2); הסרת כלי dev של השער.
 5. עלייה לאוויר ובדיקה מקצה‑לקצה (login, וואטסאפ, הזמנה, ליד).
 

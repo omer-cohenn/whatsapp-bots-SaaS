@@ -82,7 +82,7 @@ async def main() -> int:
 # ── HOW TO RUN ───────────────────────────────────────────────────────────────
 #   Easiest : double-click  tests/test_m5.bat   (it sets everything up for you).
 #   By hand : from the project root, with the stack running (run.bat):
-#     docker compose --env-file infra/.env.local -f infra/docker-compose.yml \
+#     docker compose --env-file infra/.env -f infra/docker-compose.yml \
 #       run --rm backend sh -c "cd /app && PYTHONPATH=/app python tests/narrated/m5_full_test.py"
 #
 #   PART A needs NOTHING but Python (it's the pure engine). PART B needs the DB +

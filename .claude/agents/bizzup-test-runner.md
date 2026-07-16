@@ -13,7 +13,7 @@ explain it in language a beginner (Omer) can follow.
 
 ## The environment (important, learned facts)
 - Run everything via the compose wrapper:
-  `docker compose --env-file infra/.env.local -f infra/docker-compose.yml <cmd>`.
+  `docker compose --env-file infra/.env -f infra/docker-compose.yml <cmd>`.
 - **No `make` on this machine's Git Bash** — run the underlying `docker compose run …` commands directly.
 - **Git Bash mangles a bare `/app`** in `-e VAR=/app`; set `PYTHONPATH=/app` *inside* the container command:
   `... run --rm backend sh -c 'cd /app && PYTHONPATH=/app python tests/<file>.py'`.

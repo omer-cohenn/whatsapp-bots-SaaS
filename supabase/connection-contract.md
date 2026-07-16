@@ -40,7 +40,7 @@ response?" It is not a readiness/migration check.
 
 ## Required config (env, fail-closed)
 
-Read from a **git-ignored `.env.local`** in dev (names per `infra/.env.example`); in prod from the secret
+Read from a **git-ignored `.env`** in dev (names per `infra/.env.example`); in prod from the secret
 manager. **FAIL-CLOSED:** the backend must **refuse to boot** if a required value is missing — **no
 `change-me` / constant defaults.**
 
