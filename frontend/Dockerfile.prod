@@ -20,6 +20,9 @@ RUN npm install --no-audit --no-fund
 COPY index.html ./
 COPY vite.config.js postcss.config.js tailwind.config.js tsconfig*.json ./
 COPY src ./src
+# Static assets (logo, favicon, …). Vite copies public/* to dist/ at build time —
+# without this COPY they'd be missing and requests fall through to index.html.
+COPY public ./public
 RUN npm run build
 
 # --- serve stage: static files only, internal :80 --------------------------
