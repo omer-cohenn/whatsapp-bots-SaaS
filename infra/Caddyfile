@@ -26,9 +26,16 @@
 	encode gzip
 
 	# API + auth (this covers /api/book/* too) -> the backend, internal only.
+	# Give the backend generous read time: AI (Gemini) turns can take ~10s on a
+	# small server, and we don't want the proxy to cut a slow-but-valid response.
 	@backend path /api/* /auth/*
 	handle @backend {
-		reverse_proxy backend:8000
+		reverse_proxy backend:8000 {
+			transport http {
+				response_header_timeout 120s
+				read_timeout 120s
+			}
+		}
 	}
 
 	# Everything else -> the static frontend SPA.
