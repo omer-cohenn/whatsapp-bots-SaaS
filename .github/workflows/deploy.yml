@@ -1,0 +1,31 @@
+# Auto-deploy: every push to main SSHes into the production server and runs
+# ~/deploy.sh (git pull + docker compose up --build + prune).
+#
+# Requires three repository secrets (Settings → Secrets → Actions):
+#   DEPLOY_HOST     — the server's public IP
+#   DEPLOY_USER     — the SSH user (root)
+#   DEPLOY_SSH_KEY  — the PRIVATE key whose public half is in the server's
+#                     ~/.ssh/authorized_keys (a dedicated deploy key, nothing else)
+name: Deploy to production
+
+on:
+  push:
+    branches: [main]
+
+# Never run two deploys at once; a new push waits for the current one to finish.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 20m
+          script: ~/deploy.sh
