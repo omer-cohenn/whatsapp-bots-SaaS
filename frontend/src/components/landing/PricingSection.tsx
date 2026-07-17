@@ -7,8 +7,13 @@ export default function PricingSection() {
   return (
     <section className="bx-pricing">
       <Reveal dir="up" className="bx-pricing-head">
-        <h2 className="bx-pricing-title">מסלולים פשוטים, בלי הפתעות</h2>
-        <p className="bx-pricing-sub">מתחילים בחינם, משדרגים כשהעסק צומח.</p>
+        <h2 className="bx-pricing-title">
+          מסלולים פשוטים, בלי הפתעות
+          <span className="bx-demo-stamp">דמו</span>
+        </h2>
+        <p className="bx-pricing-sub">
+          מתחילים בחינם, משדרגים כשהעסק צומח. · המחירים להמחשה בלבד
+        </p>
       </Reveal>
 
       <div className="bx-pricing-grid">

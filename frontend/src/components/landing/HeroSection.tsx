@@ -50,10 +50,13 @@ export default function HeroSection() {
     <section className="bx-hero">
       <div className="bx-blob" />
       <header className="bx-brand">
-        <div className="bx-logo">
-          <img src="/botik-logo.png" alt="Botik" className="bx-logo-img" />
-        </div>
         <a className="bx-nav-cta" href="/auth/google">התחברות</a>
+        <div className="bx-brand-intro">
+          <img src="/botik-icon.png" alt="Botik" className="bx-logo-img" />
+          <span className="bx-brand-name">
+            הכירו את <strong>בוטיק</strong>
+          </span>
+        </div>
       </header>
 
       <div className="bx-main">

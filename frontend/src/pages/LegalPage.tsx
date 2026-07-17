@@ -21,7 +21,7 @@ export default function LegalPage({ title, children }: LegalPageProps) {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-3xl items-center px-6 py-4">
           <Link to="/" aria-label="בוטיק — לדף הבית">
-            <img src="/botik-logo.png" alt="Botik" className="h-11 w-auto" />
+            <img src="/botik-icon.png" alt="Botik" className="h-11 w-auto" />
           </Link>
         </div>
       </header>

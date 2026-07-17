@@ -20,9 +20,20 @@ export const CSS = `
 /* ---------- HERO ---------- */
 .bx-hero{position:relative;min-height:100vh;display:flex;flex-direction:column;overflow:hidden;isolation:isolate;}
 .bx-blob{position:absolute;top:-10%;left:-6%;width:55%;height:80%;z-index:-1;pointer-events:none;background:radial-gradient(closest-side,rgba(79,160,70,.16),transparent 75%);filter:blur(8px);}
-.bx-brand{display:flex;align-items:center;justify-content:space-between;padding:22px 40px;}
+.bx-brand{position:relative;display:flex;align-items:center;justify-content:center;padding:26px 40px 6px;}
+.bx-brand .bx-nav-cta{position:absolute;top:24px;inset-inline-end:40px;}
+.bx-brand-intro{display:flex;flex-direction:column;align-items:center;gap:2px;animation:bxFloatIn 1.9s cubic-bezier(.16,.72,.28,1) both;}
+@keyframes bxFloatIn{
+  0%{opacity:0;transform:translateY(34px) scale(.96);}
+  60%{opacity:1;}
+  100%{opacity:1;transform:translateY(0) scale(1);}
+}
+@media (prefers-reduced-motion: reduce){.bx-brand-intro{animation:none;}}
 .bx-logo{display:flex;align-items:center;gap:11px;}
 .bx-logo-img{height:160px;width:auto;display:block;}
+.bx-demo-stamp{display:inline-block;margin-inline-start:14px;padding:2px 20px;border:3px dashed #D85A30;color:#D85A30;border-radius:14px;font-size:.85em;font-weight:800;letter-spacing:2px;transform:rotate(-4deg);vertical-align:middle;background:rgba(216,90,48,.06);}
+.bx-brand-name{font-family:'Rubik',sans-serif;font-size:clamp(24px,4vw,38px);font-weight:500;color:#4c6238;line-height:1.15;}
+.bx-brand-name strong{font-weight:800;color:#1b3a28;}
 .bx-footer-brand .bx-logo-img{height:64px;}
 .bx-logo-mark{display:grid;place-items:center;width:40px;height:40px;border-radius:13px;background:linear-gradient(145deg,#5cb04e,#3f9a39);box-shadow:0 6px 16px rgba(63,154,57,.28);}
 .bx-logo-text{display:flex;flex-direction:column;line-height:1.05;}
