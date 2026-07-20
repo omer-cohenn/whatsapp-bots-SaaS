@@ -32,6 +32,10 @@ dependencies = [
     # M16: S3-compatible client for Cloudflare R2 object storage. Imported
     # LAZILY inside services/file_storage.py so the app still boots without it.
     "boto3==1.43.51",
+    # M17: .xlsx writer for the leads Excel export (GET /api/leads/export).
+    # Imported at module scope by services/leads/export.py, which the dashboard
+    # router imports — so this is a HARD dep, like python-multipart.
+    "openpyxl==3.1.5",
 ]
 
 [project.optional-dependencies]

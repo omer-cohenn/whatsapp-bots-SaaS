@@ -26,6 +26,11 @@
 # jmespath, s3transfer, python-dateutil, six. boto3 is pinned to 1.43.51
 # because its botocore accepts our existing urllib3==2.6.3 — older boto3 lines
 # (1.35–1.36) cap botocore at urllib3<2.3 and would force a downgrade.
+#
+# M17 added openpyxl (the .xlsx writer behind GET /api/leads/export). Its ONLY
+# runtime dependency is et-xmlfile, pinned here too. openpyxl 3.1.5 is the
+# current 3.1 line and supports Python 3.12; it pulls in nothing else (Pillow is
+# optional and only needed for embedding images, which we do not do).
 annotated-types==0.7.0
 boto3==1.43.51
 botocore==1.43.51
@@ -38,6 +43,7 @@ click==8.4.1
 colorama==0.4.6 ; sys_platform == "win32"
 cryptography==44.0.0
 distro==1.9.0
+et-xmlfile==2.0.0
 fastapi==0.115.6
 google-api-core==2.24.0
 google-api-python-client==2.149.0
@@ -55,6 +61,7 @@ httpx==0.28.1
 idna==3.18
 jmespath==1.1.0
 oauthlib==3.2.2
+openpyxl==3.1.5
 packaging==26.2
 proto-plus==1.25.0
 protobuf==5.29.5

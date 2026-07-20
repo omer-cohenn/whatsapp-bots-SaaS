@@ -6,6 +6,7 @@ so every route here inherits the deny-by-default session gate.
 
 Endpoints:
   GET  /api/leads                          → this tenant's leads (decrypted, full).
+  GET  /api/leads/export                   → the same rows as a formatted .xlsx.
   GET  /api/dashboard                      → funnel counts for a period.
   GET  /api/conversations                  → live conversations (Redis), scoped.
   GET  /api/conversations/{id}             → status + linked lead + transcript.
@@ -33,6 +34,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from fastapi.responses import Response
 
+from app.core.config import get_settings
 from app.core.crypto import DecryptionError, decrypt_pii
 from app.core.deps import current_business
 from app.core.logging import get_logger
@@ -64,9 +66,18 @@ from app.services import (
     leads as leads_service,
     whatsapp as whatsapp_service,
 )
+from app.services.leads import export as leads_export
+from app.services.leads.search import lead_matches
 
 router = APIRouter(tags=["dashboard"])
 log = get_logger("app.api.dashboard")
+
+# Ceiling for the .xlsx export. The list view stops at 500 because it renders
+# cards in the browser; a download is expected to be complete, so exports use
+# this far larger bound instead. It stays a bound on purpose — the rows are
+# decrypted one by one and held in memory to build the sheet, so "no limit"
+# would let a single large tenant push the backend into swap.
+EXPORT_MAX_ROWS = 50_000
 
 # A conversation id is part of the Redis key under this tenant's prefix; bound its
 # length/charset so it can't smuggle separators or be unreasonably large.
@@ -111,6 +122,101 @@ async def get_leads(
         ) from None
 
     return LeadsResponse(leads=[LeadItem(**row) for row in rows])
+
+
+@router.get("/leads/export")
+async def export_leads(
+    request: Request,
+    business_id: str = Depends(current_business),
+    period: Literal["week", "month", "all"] = Query("all"),
+    status_filter: Literal[
+        "all", "new", "in_progress", "abandoned", "open", "deal", "closed"
+    ] = Query("all", alias="status"),
+    flow: str | None = Query(None, max_length=40),
+    include_test: bool = Query(False),
+    q: str | None = Query(None, max_length=100),
+) -> Response:
+    """Download THIS tenant's leads as a formatted .xlsx (M17).
+
+    Same filters as `GET /api/leads` (period / status / flow / include_test) plus
+    `q`, a free-text keyword. The rows come from the very same
+    `leads_service.list_leads` call — that reuse is what guarantees tenant
+    isolation, because `tenant_connection` binds the RLS context and NO new SQL
+    is written here. `q` is then applied IN PYTHON via
+    `leads.search.lead_matches`, whose rule has a TypeScript twin in the
+    dashboard so the download always matches what the owner sees on screen.
+
+    The workbook carries decrypted customer PII: names, phones, answers, and
+    hyperlinks to the customer's uploaded files (absolute URLs pointing back at
+    the session-gated `/api/leads/files/{id}` route — still no presigned URLs).
+    Hence `Cache-Control: private, no-store`, exactly like the file download.
+
+    An empty result set is a 200 with a header-only workbook, never a 404.
+    We log a row COUNT and the non-PII filters only — never a name, a phone, an
+    answer, or the keyword the owner typed.
+    """
+    try:
+        async with tenant_connection(request.app.state.pg_pool, business_id) as conn:
+            rows = await leads_service.list_leads(
+                conn,
+                business_id,
+                period=period,
+                status=status_filter,
+                flow=flow,
+                include_test=include_test,
+                # The screen paginates at 500; a download is meant to be the
+                # WHOLE book, so we lift the cap here. It is a cap, not "no
+                # limit": one tenant's export still has a bounded ceiling, so a
+                # runaway account can't pull unbounded rows into memory.
+                limit=EXPORT_MAX_ROWS,
+            )
+    except DecryptionError:
+        # Same posture as get_leads: loud-but-generic, no str(e), no plaintext.
+        log.error("lead decryption failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="could not read leads",
+        ) from None
+
+    if q:
+        rows = [row for row in rows if lead_matches(row, q)]
+
+    base_url = get_settings().public_base_url.rstrip("/")
+    content = leads_export.build_leads_workbook(
+        rows, base_url=base_url, sheet_title=flow or "לידים"
+    )
+    safe_name = leads_export.build_export_filename(flow=flow, status=status_filter)
+
+    # RFC 5987, same shape as download_lead_file: the ASCII `filename=` fallback
+    # for old clients plus `filename*=UTF-8''...` so the Hebrew title survives.
+    quoted = quote(safe_name, safe="")
+    ascii_fallback = safe_name.encode("ascii", "ignore").decode().strip() or "leads.xlsx"
+
+    log.info(
+        "leads exported",
+        extra={
+            "business_id": business_id,
+            "rows": len(rows),
+            "period": period,
+            "status": status_filter,
+            "include_test": include_test,
+            "has_query": bool(q),
+        },
+    )
+
+    return Response(
+        content=content,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{ascii_fallback}"; filename*=UTF-8\'\'{quoted}'
+            ),
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 # A lead id is a UUID supplied in the path; bound its length so it can't be an

@@ -18,7 +18,9 @@ import Select from '../components/ui/Select'
 import Spinner from '../components/ui/Spinner'
 import Alert from '../components/ui/Alert'
 import Icon from '../components/ui/Icon'
-import { getLeads } from '../lib/dashboardClient'
+import Button from '../components/ui/Button'
+import { getLeads, leadsExportUrl } from '../lib/dashboardClient'
+import { leadMatches } from '../dashboard/leadSearch'
 import { toFriendlyError } from '../lib/friendlyError'
 import type { Lead, LeadStatusFilter } from '../dashboard/types'
 
@@ -43,6 +45,11 @@ export default function LeadsPage() {
 
   const [status, setStatus] = useState<LeadStatusFilter>(highlightId ? 'all' : 'in_progress')
   const [flow, setFlow] = useState<string>('all')
+
+  // Free-text search. Purely CLIENT-SIDE: the searchable fields (name, phone,
+  // answers) are encrypted at rest, so SQL can't match them — but the browser
+  // already holds every decrypted lead, so we filter the arrays in memory.
+  const [query, setQuery] = useState('')
 
   // Main list (respects the status + flow filters).
   const [leads, setLeads] = useState<Lead[] | null>(null)
@@ -111,7 +118,23 @@ export default function LeadsPage() {
     ]
   }, [leads, abandoned])
 
-  // KPI counts off the full (status=all) picture. Only computable when the
+  // The search narrows the VIEW only — both lists are filtered here, while the
+  // KPI cards below stay on the unfiltered numbers.
+  const trimmedQuery = query.trim()
+  const searching = trimmedQuery !== ''
+  const visibleLeads = useMemo(
+    () => (searching ? (leads ?? []).filter((l) => leadMatches(l, trimmedQuery)) : leads),
+    [leads, searching, trimmedQuery],
+  )
+  const visibleAbandoned = useMemo(
+    () => (searching ? abandoned.filter((l) => leadMatches(l, trimmedQuery)) : abandoned),
+    [abandoned, searching, trimmedQuery],
+  )
+
+  // KPI counts off the full (status=all) picture. Deliberately computed from the
+  // UNFILTERED lists: a search narrows what you look at, not what you have — the
+  // stats must keep showing the whole picture.
+  // Only computable when the
   // current filter is 'all' (that's when `leads` holds every lead). "ליד שלם" =
   // the backend `new` status; פתוחים = in_progress; ננטשו from the abandoned list.
   const counts = useMemo(() => {
@@ -122,6 +145,9 @@ export default function LeadsPage() {
       abandonedCount: abandoned.length,
     }
   }, [leads, abandoned, status])
+
+  // Nothing to export while loading, on error, or when the visible list is empty.
+  const exportDisabled = loading || !!error || (visibleLeads?.length ?? 0) === 0
 
   return (
     <DashboardLayout>
@@ -173,7 +199,81 @@ export default function LeadsPage() {
               onChange={(e) => setFlow(e.target.value)}
             />
           </div>
+
+          {/* Free-text search over the already-loaded (decrypted) leads. */}
+          <div className="flex w-full flex-col gap-1.5 sm:w-64">
+            <label
+              htmlFor="leads-search"
+              className="text-sm font-medium text-slate-800 dark:text-slate-200"
+            >
+              חיפוש
+            </label>
+            <div className="relative">
+              <input
+                id="leads-search"
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape' && query) {
+                    e.preventDefault()
+                    setQuery('')
+                  }
+                }}
+                placeholder="שם, טלפון, או כל תשובה…"
+                autoComplete="off"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 pl-9 text-sm text-slate-900 placeholder:text-slate-400 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 dark:placeholder:text-slate-400 [&::-webkit-search-cancel-button]:hidden"
+              />
+              {query ? (
+                <button
+                  type="button"
+                  onClick={() => setQuery('')}
+                  aria-label="ניקוי החיפוש"
+                  title="ניקוי החיפוש"
+                  className="absolute inset-y-0 left-0 flex items-center rounded-lg px-2.5 text-slate-400 outline-none transition-colors hover:text-slate-700 focus-visible:ring-2 focus-visible:ring-leaf dark:hover:text-slate-100"
+                >
+                  <Icon name="x" size={16} />
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Export. Sits with the filters (top of the page) because what it
+              downloads IS the current filter + search — keeping them together
+              makes that relationship obvious. `mr-auto` pushes it to the far
+              edge in RTL so it never crowds the search box. Excel green is
+              deliberate: the one button on this page that leaves the app. */}
+          <div className="flex flex-col gap-1.5 sm:mr-auto sm:self-end">
+            <button
+              type="button"
+              disabled={exportDisabled}
+              title={exportDisabled ? 'אין לידים לייצוא בתצוגה הנוכחית' : undefined}
+              aria-describedby="leads-export-note"
+              onClick={() => {
+                window.location.assign(
+                  leadsExportUrl({ status, flow: flowParam, q: trimmedQuery || undefined }),
+                )
+              }}
+              className="inline-flex items-center gap-2 rounded-lg bg-[#1D6F42] px-4 py-2 text-sm font-semibold text-white shadow-sm outline-none transition-colors hover:bg-[#175634] focus-visible:ring-2 focus-visible:ring-[#1D6F42] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-slate-900"
+            >
+              <span aria-hidden="true">📊</span>
+              ייצוא לאקסל
+            </button>
+          </div>
         </div>
+
+        {exportDisabled ? (
+          <p className="sr-only" role="status">
+            אין לידים לייצוא בתצוגה הנוכחית
+          </p>
+        ) : null}
+
+        {/* Result count — only while a search is actually narrowing the list. */}
+        {searching && !loading && !error && leads ? (
+          <p className="-mt-3 text-sm text-slate-500 dark:text-slate-400" aria-live="polite">
+            מציג {visibleLeads?.length ?? 0} מתוך {leads.length} לידים
+          </p>
+        ) : null}
 
         {/* Main list */}
         <section aria-labelledby="leads-list-heading" aria-busy={loading}>
@@ -184,23 +284,40 @@ export default function LeadsPage() {
             <Spinner label="טוען לידים…" className="py-12" />
           ) : error ? (
             <Alert tone="error">{error}</Alert>
-          ) : leads && leads.length > 0 ? (
+          ) : visibleLeads && visibleLeads.length > 0 ? (
             <ul className="flex flex-col gap-3">
-              {leads.map((lead) => (
+              {visibleLeads.map((lead) => (
                 <li key={lead.id} id={`lead-${lead.id}`}>
                   <LeadCard lead={lead} onStatusChange={refresh} onDelete={refresh} />
                 </li>
               ))}
             </ul>
+          ) : searching ? (
+            <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-slate-300 bg-white px-4 py-12 text-center dark:border-slate-600 dark:bg-slate-800">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                לא נמצאו לידים עבור "{trimmedQuery}"
+              </p>
+              <Button variant="ghost" onClick={() => setQuery('')}>
+                <Icon name="x" size={16} />
+                נקה חיפוש
+              </Button>
+            </div>
           ) : (
-            <p className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-12 text-center text-sm text-slate-500">
+            <p className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400">
               אין לידים להצגה בסינון הנוכחי.
             </p>
           )}
         </section>
 
+        {/* The export button lives up with the filters; this note stays down here
+            so it doesn't crowd the toolbar, and `aria-describedby` still ties the
+            two together for a screen reader. */}
+        <p id="leads-export-note" className="text-xs text-slate-500 dark:text-slate-400">
+          קישורי הקבצים בקובץ נפתחים בדפדפן ודורשים להיות מחוברים לחשבון.
+        </p>
+
         {/* Abandoned follow-up list (only when not already filtered to abandoned) */}
-        {!loading && !error && status !== 'abandoned' && abandoned.length > 0 ? (
+        {!loading && !error && status !== 'abandoned' && visibleAbandoned.length > 0 ? (
           <section aria-labelledby="abandoned-heading" className="flex flex-col gap-3">
             <div className="flex items-center gap-2">
               <h2
@@ -215,7 +332,7 @@ export default function LeadsPage() {
               </span>
             </div>
             <ul className="flex flex-col gap-3">
-              {abandoned.map((lead) => (
+              {visibleAbandoned.map((lead) => (
                 <li key={lead.id} id={`lead-${lead.id}`}>
                   <LeadCard lead={lead} onStatusChange={refresh} onDelete={refresh} />
                 </li>

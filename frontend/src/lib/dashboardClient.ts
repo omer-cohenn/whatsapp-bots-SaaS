@@ -66,6 +66,34 @@ export function getLeads(opts: {
   )
 }
 
+/**
+ * URL of GET /api/leads/export — the same list `getLeads` returns, rendered as
+ * an .xlsx file. Takes the SAME filter params plus `q` (the free-text search the
+ * owner typed), so the sheet matches exactly what is on screen.
+ *
+ * This returns a URL rather than a Promise on purpose: the endpoint is
+ * session-gated and answers with a file + a Content-Disposition filename, so we
+ * let the BROWSER navigate to it (plain <a href> / window.location). The session
+ * cookie rides along same-origin, the browser handles the download, and the
+ * Hebrew RFC 5987 filename survives untouched. Fetching it into a Blob would
+ * force us to re-parse `filename*=UTF-8''…` by hand for no benefit.
+ */
+export function leadsExportUrl(opts: {
+  period?: Period
+  status?: LeadStatusFilter
+  flow?: string
+  includeTest?: boolean
+  q?: string
+} = {}): string {
+  return `/api/leads/export${qs({
+    period: opts.period,
+    status: opts.status,
+    flow: opts.flow,
+    include_test: opts.includeTest,
+    q: opts.q,
+  })}`
+}
+
 /** Response of PATCH /api/leads/{id}/status. */
 export type LeadStatusResponse = {
   lead_id: string
