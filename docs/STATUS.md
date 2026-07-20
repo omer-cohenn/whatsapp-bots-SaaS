@@ -1,7 +1,26 @@
 # STATUS — read this first to resume 📍
 
-> **Last updated: 2026-06-25.** This is the single "where are we / how do I continue" file. A new session
+> **Last updated: 2026-07-17.** This is the single "where are we / how do I continue" file. A new session
 > should read this, then [`spec/mvp-checklist.md`](spec/mvp-checklist.md).
+
+## 🟢 LIVE IN PRODUCTION — https://botik-dev.duckdns.org (since 2026-07-17)
+AWS Lightsail (Frankfurt, Ubuntu 24.04, 1GB + 2GB swap) · static IP `35.157.230.101` · free DuckDNS
+domain · **Caddy** terminates auto-HTTPS and is the ONLY public door. Deploy runbook:
+[`DEPLOY.md`](DEPLOY.md) · decision: [`decisions/0025-production-deployment.md`](decisions/0025-production-deployment.md).
+
+### Open items (honest list)
+1. **GitHub Actions auto-deploy is FAILING** on the `DEPLOY_SSH_KEY` secret — manual `~/deploy.sh`
+   on the server is the working path until it's fixed.
+2. **Rotate `GOOGLE_CLIENT_SECRET` + `GEMINI_API_KEY`** — flagged in
+   [`security/hardening-report.md`](security/hardening-report.md), still not done.
+3. **Buy a real domain** later; DuckDNS is the free interim (changing it = `PUBLIC_DOMAIN` in
+   `infra/.env` + the Google OAuth redirect URIs).
+4. **Plans-catalog test drift** — 5 admin tests still expect the removed `basic` plan (migration
+   `0022` replaced the catalog with חינמי/מקצועי/עסקי).
+5. **23 known pre-existing test failures** from the greeting commit (`0dd58ad`, M8/M9/bot_sim/
+   dashboard/lead_status) — not a regression, the old assertions need updating.
+6. **Consider adding the Postman/newman gate** into the deploy workflow (collection already exists
+   in `tests/postman/`, 18/18 green when run by hand).
 
 ## Phase: BUILD (the MVP). Mapping + ground-up re-spec are DONE.
 - ✅ **M0** — the stack runs (one command, all services healthy).
@@ -33,6 +52,10 @@
 - ✅ **מודל סטטוסים אחיד לשיחות/לידים + badge לא-נקראו (2026-06-26, decision 0021)** — איחוד ה-state machine (bot / waiting+human / closed) + שלוש סיבות סגירה מפורשות בעמודה חדשה `leads.close_reason` (`completed`/`abandoned`/`answered`). **באג מרכזי שתוקן:** שעון ה-60 דק' לנטישה התאפס רק במצב בוט — עכשיו מתאפס בכל הודעה נכנסת גם ב-`waiting`/`human` (לקוח שמשוחח עם נציג לא יסומן בטעות "ננטש"). **מיגרציה `0023_close_reason.sql`**: עמודה + `sweep_abandoned_leads` מחזיר עכשיו `TABLE(lead_id, conversation_id)`, חותם `abandoned`, וה-sweep סוגר גם את שיחת ה-Redis. + תיקון replay ב-`0006` (DROP FUNCTION לפני CREATE כי ה-migrate ללא ledger). **unread badge** (ירוק-וואטסאפ, מספר לבן) על טאב "שיחות": מונה Redis per-conversation (+1 בכל הודעה נכנסת, אפס בפתיחת השיחה), `unread_total` ב-`GET /api/conversations`. תוויות עברית: "ליד הושלם"/"ליד ננטש"/"מענה הושלם". **QA:** 23 strict + 20 narrated + 61 regression (M2/M10/M14) ירוקים. **אכיפת התקרות לא נכללת** (נפרד). Plan: [`decisions/0021-conversation-lead-status-model.md`](decisions/0021-conversation-lead-status-model.md). ⚠️ **נמצאו ~12 בדיקות ישנות שנכשלות כבר על main** (M8/M9/bot_sim/dashboard/lead_status) בגלל commit `0dd58ad` (first-message greeting) — לא רגרסיה מהמיילסטון; צריך לעדכן את הבדיקות הישנות.
 - ✅ **תיקון gateway: getSock circular-dependency + re-pair (2026-06-26)** — הבוט הפסיק לענות: הודעות נכנסו ל-backend (200, replyCount:1) אבל ה-gateway קרס בשליחת התשובה על `socketModule.getSock is not a function`. השורש: תלות מעגלית `socket.js`↔`webhook.js` שנוצרה בפיצול M15 — `socket.js` עשה `module.exports = {…}` (אובייקט חדש) אחרי ש-`webhook.js` כבר תפס את ההפניה הריקה. **תוקן** ב-`gateway/src/socket.js` עם `Object.assign(module.exports, {…})` (שומר את אותה הפניה). בנוסף, ה-session של Baileys השתבש (Bad MAC) → אופס דרך **סריקת QR מחדש מעמוד `/whatsapp`** (ה-creds הישנים גובו ל-`gateway/auth_backup_pre_repair/`, gitignored). אומת חי: הודעה נכנסת → הבוט עונה, וגם הלקוח מקבל. (שגיאת `/send-bot jidDecode` הייתה רק מה-session הישן — לא חוזרת אחרי ה-re-pair.)
 - ✅ **מחיקת ליד + סימון נקרא + סדר טאבים (2026-07-15, decision 0022)** — (1) כפתור "מחק" בכל כרטיס ליד (עמוד לידים): מחיקה לצמיתות מה-DB עם Modal אישור. (2) כפתור X לסימון התראה בודדת כנקראה + "סמן הכל כנקרא" בעמוד בית — שרידותי לרענון (עמודה `leads.feed_seen_at`). (3) הטאב "הכול" הועבר למקום האחרון גם בלידים וגם בשיחות. Migration `0024_lead_feed_seen.sql`. Plan: [`decisions/0022-lead-delete-mark-read.md`](decisions/0022-lead-delete-mark-read.md).
+- ✅ **M6b (WhatsApp רב-דיירי — decision 0023)** — 2026-07-16, commits `ac28651` + `6a4b674` + `24841be`. **סוקט Baileys אחד לכל עסק**: `gateway/src/manager.js` מסנכרן סשנים מול ה-backend כל 15 שניות, `session.js` מנהל את מחזור החיים (self-chat, reconnect עם backoff, שליחות מסודרות, logout→relink), והספייק החד-דיירי `socket.js` נמחק. **ה-creds כבר לא על הדיסק**: `dbAuthState.js` שומר את ה-auth state כ**מעטפה מוצפנת אחת** ב-`whatsapp_credentials` דרך ה-API הפנימי `/internal/wa/*` (`X-Gateway-Token`) — **ה-KEK לעולם לא יוצא מה-backend**, והטבלה נגישה רק דרך pool של `gateway_role` (ל-`app_role` אפס grant). **QR per-business** ב-Redis (`wa:qr:{business_id}`), ו-`gateway_account_id = business_id` (החליף את `'spike'`). **מספר אחד = עסק אחד:** `phone_hmac` + `wa_phone_conflict()` (migration `0027`) — עסק שני שסורק מספר מקושר נדחה, מנותק, ומקבל שגיאת `phone_conflict`. **חוסן:** Bad-MAC auto-recovery (ניקוי ה-Signal session של אותו איש קשר בלבד) + getMessage resend cache. דלתות ה-dev של השער (`/qr`,`/inbox`,`/send`,`/info`) **הוסרו**. Migrations `0026`+`0027`. **Verify:** `backend/tests/strict/test_m6b_wall.py` — **12 בדיקות, כל שש תכונות ה-WALL ירוקות**. **אומת חי:** שני עסקים במקביל עם creds נפרדים; הסשן שרד restart של השער בלי סריקה מחדש. Plan: [`decisions/0023-m6b-multitenant-whatsapp.md`](decisions/0023-m6b-multitenant-whatsapp.md).
+- ✅ **הקשחת אבטחה + שער QA (decision 0024)** — 2026-07-16, commit `037a924` (PR #1). קובץ סודות **אחד** `infra/.env` (שונה מ-`.env.local`) + template אחד במעקב; **תיקון דליפת PII ב-access log** (`app/core/request_log.py` מחליף את `uvicorn.access` — שורה מצונזרת בלי query string, אחרי שדלפו `code`/`state` של OAuth ו-`cancel_token`); **רשת פרודקשן** (`docker-compose.prod.yml` + `Caddyfile` = הדלת הציבורית היחידה); `/docs`+`/redoc`+`/openapi.json` **כבויים** כש-`APP_ENV != dev`; שלושה guards (secret/log-PII/port-exposure) + `test_e2e_auth_matrix.py` (12); collection של **Postman/newman** ב-`tests/postman` (18/18). פירוט מלא: [`security/hardening-report.md`](security/hardening-report.md) + [`security/production-networking.md`](security/production-networking.md). Plan: [`decisions/0024-security-hardening-and-qa-gate.md`](decisions/0024-security-hardening-and-qa-gate.md).
+- ✅ **עלייה לאוויר (decision 0025)** — 2026-07-17, commits `8f37108`/`9755991`/`4fcf3f9`/`8ce0a0f`/`f55fd46`. Lightsail פרנקפורט + static IP + DuckDNS + Caddy HTTPS אוטומטי + firewall 22/80/443 + מסך הסכמה של Google **מפורסם** + `/root/deploy.sh` + GitHub Action (כרגע נכשל על ה-SSH key). ארבעה תיקוני deploy נלמדו: bind-mount של השער ב-prod, `COPY public/` ב-`Dockerfile.prod`, `PUBLIC_DOMAIN` ריק שובר את ה-Caddyfile, ו-timeouts של 120s ל-AI. Runbook: [`DEPLOY.md`](DEPLOY.md) · Plan: [`decisions/0025-production-deployment.md`](decisions/0025-production-deployment.md).
+- ✅ **מיתוג: אייקון ה-B-robot (decision 0026)** — 2026-07-17, commits `e940443`/`d69b20c`/`0c2e84b`. `botik-icon.png` אחד (סימן B-robot עם קו מתאר ירוק) בכל נקודות המותג כולל favicon/apple-touch-icon; חותמת **"דמו"** מסובבת על כותרת המסלולים + "המחירים להמחשה בלבד"; brand intro ממורכז וצף בראש דף הנחיתה (1.9s, מודע ל-reduced-motion). Plan: [`decisions/0026-botik-brand-icon.md`](decisions/0026-botik-brand-icon.md).
 - ⬜ **M6 (rest) — next:** per the checklist (QR onboarding, encrypted cred persistence, hardened inbound, reconnection — outbound send is now wired via M6a.2 `/send-bot`). **NOTE:** M6b must handle WhatsApp **LID addressing** for real customers (see the LID fix above) — phone-based routing won't work without LID→phone resolution.
 
 ## What works RIGHT NOW
@@ -89,6 +112,7 @@
 
 ## The map of everything
 - **Plan:** [`spec/roadmap.md`](spec/roadmap.md) · [`spec/mvp-checklist.md`](spec/mvp-checklist.md) · [`spec/build-guide.md`](spec/build-guide.md) · [`spec/architecture.md`](spec/architecture.md) · [`spec/data-model.md`](spec/data-model.md)
-- **Decisions:** [`decisions/`](decisions/) (0001 Baileys/QR · 0002 multi-tenant · 0003 model · 0004 MVP scope · 0005 auth/data · 0006 Redis live-chat)
+- **Decisions:** [`decisions/`](decisions/) (0001 Baileys/QR · 0002 multi-tenant · 0003 model · 0004 MVP scope · 0005 auth/data · 0006 Redis live-chat · … · 0023 M6b multi-tenant WhatsApp · 0024 security hardening · 0025 production deployment · 0026 Botik brand icon)
+- **Production:** [`DEPLOY.md`](DEPLOY.md) (runbook) · [`security/production-networking.md`](security/production-networking.md) · [`security/hardening-report.md`](security/hardening-report.md)
 - **Old-system map:** [`system-map/`](system-map/), [`bugs.md`](bugs.md), [`security-issues.md`](security-issues.md)
 - **AI tooling:** `.claude/agents/` (scanners + `data-architect` + `devops_aws`), `.claude/skills/progress_report`, `.claude/workflows/`
