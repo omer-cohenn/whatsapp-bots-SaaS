@@ -20,20 +20,18 @@ export const CSS = `
 /* ---------- HERO ---------- */
 .bx-hero{position:relative;min-height:100vh;display:flex;flex-direction:column;overflow:hidden;isolation:isolate;}
 .bx-blob{position:absolute;top:-10%;left:-6%;width:55%;height:80%;z-index:-1;pointer-events:none;background:radial-gradient(closest-side,rgba(79,160,70,.16),transparent 75%);filter:blur(8px);}
-.bx-brand{position:relative;display:flex;align-items:center;justify-content:center;padding:26px 40px 6px;}
-.bx-brand .bx-nav-cta{position:absolute;top:24px;inset-inline-end:40px;}
-.bx-brand-intro{display:flex;flex-direction:column;align-items:center;gap:2px;animation:bxFloatIn 1.9s cubic-bezier(.16,.72,.28,1) both;}
+.bx-brand{display:flex;align-items:center;justify-content:space-between;padding:14px 40px 0;}
 @keyframes bxFloatIn{
   0%{opacity:0;transform:translateY(34px) scale(.96);}
   60%{opacity:1;}
   100%{opacity:1;transform:translateY(0) scale(1);}
 }
-@media (prefers-reduced-motion: reduce){.bx-brand-intro{animation:none;}}
 .bx-logo{display:flex;align-items:center;gap:11px;}
-.bx-logo-img{height:160px;width:auto;display:block;}
+.bx-logo-img{height:56px;width:auto;display:block;}
 .bx-demo-stamp{display:inline-block;margin-inline-start:14px;padding:2px 20px;border:3px dashed #D85A30;color:#D85A30;border-radius:14px;font-size:.85em;font-weight:800;letter-spacing:2px;transform:rotate(-4deg);vertical-align:middle;background:rgba(216,90,48,.06);}
-.bx-brand-name{font-family:'Rubik',sans-serif;font-size:clamp(24px,4vw,38px);font-weight:500;color:#4c6238;line-height:1.15;}
+.bx-brand-name{display:block;margin-bottom:10px;font-family:'Rubik',sans-serif;font-size:clamp(30px,4.4vw,50px);font-weight:600;color:#4c6238;line-height:1.1;animation:bxFloatIn 1.9s cubic-bezier(.16,.72,.28,1) both;}
 .bx-brand-name strong{font-weight:800;color:#1b3a28;}
+@media (prefers-reduced-motion: reduce){.bx-brand-name{animation:none;}}
 .bx-footer-brand .bx-logo-img{height:64px;}
 .bx-logo-mark{display:grid;place-items:center;width:40px;height:40px;border-radius:13px;background:linear-gradient(145deg,#5cb04e,#3f9a39);box-shadow:0 6px 16px rgba(63,154,57,.28);}
 .bx-logo-text{display:flex;flex-direction:column;line-height:1.05;}
@@ -41,7 +39,7 @@ export const CSS = `
 .bx-logo-text small{font-size:11.5px;color:#7c8a7f;}
 .bx-nav-cta{font-size:14px;font-weight:700;color:#2c5a3c;text-decoration:none;padding:9px 18px;border:1.5px solid #d3cdbd;border-radius:999px;background:transparent;transition:.2s;}
 .bx-nav-cta:hover{border-color:#bcd9b8;color:#2f7a44;background:rgba(63,154,57,.06);}
-.bx-main{flex:1;display:flex;align-items:center;justify-content:center;gap:54px;width:100%;max-width:1180px;margin:0 auto;padding:8px 40px 20px;}
+.bx-main{flex:1;display:flex;align-items:flex-start;justify-content:center;gap:54px;width:100%;max-width:1180px;margin:0 auto;padding:0 40px 20px;}
 .bx-col-text{flex:1;max-width:560px;}
 .bx-eyebrow{display:inline-block;font-size:13px;font-weight:700;color:#3f9a39;letter-spacing:.4px;background:#e7f4e1;padding:6px 13px;border-radius:999px;margin-bottom:18px;}
 .bx-headline{margin:0;font-family:'Rubik';font-weight:800;letter-spacing:-.4px;line-height:1.18;font-size:clamp(30px,3.9vw,46px);color:#1b3a28;}
