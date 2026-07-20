@@ -9,6 +9,10 @@
 //   * the per-step extra-validation hint field is wire-named `validate`
 //     (matches the frozen contract; it is just a data field).
 
+// The collected-answer value shape is shared with the dashboard (M16 file steps
+// store an object, not a string), so it lives in one place.
+import type { Answers } from '../dashboard/types'
+
 // --- bound constants (mirror the Pydantic bounds, for UX only) ---------------
 export const MAX_FLOWS = 20
 export const MAX_STEPS_PER_FLOW = 30
@@ -18,8 +22,25 @@ export const MAX_HANDOFF_KEYWORDS = 30
 export const FLOW_NAME_PATTERN = /^[a-z0-9_֐-׿ ]{1,40}$/
 export const STEP_KEY_PATTERN = /^[a-z0-9_֐-׿ ]{1,40}$/
 
-export type StepType = 'text' | 'phone' | 'email' | 'choice'
+export type StepType = 'text' | 'phone' | 'email' | 'choice' | 'file'
 export type FlowType = 'lead' | 'human_handoff' | 'booking'
+
+/** The file kinds a `file` step may accept (M16). Mirrors the backend `accept`
+ * enum; an empty/absent list means "any of the supported kinds". */
+export type FileKind = 'image' | 'pdf' | 'doc' | 'ppt'
+
+export const FILE_KINDS: FileKind[] = ['image', 'pdf', 'doc', 'ppt']
+
+/** Owner-facing Hebrew labels for the accepted-kind checkboxes. */
+export const FILE_KIND_LABELS: Record<FileKind, string> = {
+  image: 'תמונה',
+  pdf: 'PDF',
+  doc: 'Word',
+  ppt: 'PowerPoint',
+}
+
+/** Per-file size limit enforced by the backend (for the owner-facing hint). */
+export const MAX_UPLOAD_MB = 10
 
 // One question inside a flow (contract §2.1).
 export type Step = {
@@ -31,6 +52,9 @@ export type Step = {
   validate?: string | null
   /** REQUIRED (2..12) only when type === 'choice'; ignored otherwise. */
   options?: string[] | null
+  /** Accepted file kinds; only meaningful when type === 'file' (M16).
+   * Empty/null = accept every supported kind. */
+  accept?: FileKind[] | null
   error_message?: string | null
 }
 
@@ -102,6 +126,7 @@ export type BotTryMeResponse = {
   state: ConvState
   /** null normally; a terminal/notable event otherwise. */
   event: TryMeEvent | null
-  /** Populated ONLY on 'lead_completed' — this conversation's own answers. */
-  lead: Record<string, string> | null
+  /** Populated ONLY on 'lead_completed' — this conversation's own answers.
+   * Values follow the same shape as a real lead (strings, or a file answer). */
+  lead: Answers | null
 }

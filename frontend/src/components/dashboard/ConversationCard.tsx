@@ -30,6 +30,7 @@ import Badge from '../ui/Badge'
 import Button from '../ui/Button'
 import Icon from '../ui/Icon'
 import Spinner from '../ui/Spinner'
+import AnswerValue, { answerPreviewText, hasFileAnswer } from './AnswerValue'
 import ChatPanel from './ChatPanel'
 import OutcomeNoteDialog from './OutcomeNoteDialog'
 
@@ -235,8 +236,13 @@ export default function ConversationCard({
                       {answers.map(([key, value]) => (
                         <div key={key} className="min-w-0">
                           <dt className="text-[11px] text-slate-400">{key}</dt>
-                          <dd className="truncate text-sm text-slate-800 dark:text-slate-200" title={value}>
-                            {value || <span className="text-slate-400">טרם נענה</span>}
+                          <dd
+                            className={`text-sm text-slate-800 dark:text-slate-200 ${
+                              hasFileAnswer(value) ? '' : 'truncate'
+                            }`}
+                            title={answerPreviewText(value)}
+                          >
+                            <AnswerValue value={value} />
                           </dd>
                         </div>
                       ))}

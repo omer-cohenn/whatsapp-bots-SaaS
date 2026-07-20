@@ -12,8 +12,9 @@
 //   GET  /internal/wa/creds/{business_id}   -> { auth_state: "<base64>"|null, key_version: int|null }
 //   PUT  /internal/wa/creds/{business_id}   body { auth_state: "<base64>" } -> { ok: true }
 //   POST /internal/wa/status/{business_id}  body { status, phone, qr_data_url } -> { ok: true }
+//   POST /internal/wa/media                 multipart -> { file_id, mime_type, size_bytes }
 
-const { request } = require('undici');
+const { request, FormData } = require('undici');
 
 const { loadConfig } = require('./config');
 const { createLogger } = require('./logger');
@@ -118,4 +119,80 @@ async function reportStatus(businessId, { status, phone = null, qrDataUrl = null
   }
 }
 
-module.exports = { listSessions, loadCreds, saveCreds, reportStatus };
+// ── M16: upload ONE customer attachment to the backend ───────────────────────
+// POST multipart/form-data /internal/wa/media. The backend is the ONLY place
+// bytes are allowed to land: it re-checks the size (413), SNIFFS the real type
+// from the content (415), envelope-encrypts the file and records the row.
+//
+// Idempotency: `message_id` is the key. Baileys re-emits the same message after
+// a reconnect, and the backend answers a repeat with the EXISTING file_id — so
+// retrying here can never create a second object or a second bill.
+//
+// Returns { file_id, mime_type, name } on success (mime_type is the SERVER's
+// sniffed value — always prefer it over what we declared) or null on any
+// failure, so the caller can tell the customer something went wrong instead of
+// crashing the socket.
+//
+// NEVER logs: the bytes, the file name, the token. Only the status code, the
+// declared mime type and the byte count.
+async function uploadMedia(businessId, { bytes, mimeType, fileName, conversationId, messageId }) {
+  // A longer budget than the JSON calls: this one carries up to 10 MiB and the
+  // backend encrypts + PUTs to object storage before it answers.
+  const MEDIA_TIMEOUT = 60000;
+  try {
+    const form = new FormData();
+    form.set('business_id', String(businessId));
+    if (conversationId) form.set('conversation_id', String(conversationId));
+    if (messageId) form.set('message_id', String(messageId));
+    if (mimeType) form.set('mime_type', String(mimeType));
+    if (fileName) form.set('file_name', String(fileName));
+    // The upload part's own filename is a fixed placeholder on purpose — the
+    // REAL (PII) name travels in the `file_name` field, which the backend
+    // sanitizes and stores encrypted.
+    form.set(
+      'file',
+      new Blob([bytes], { type: mimeType || 'application/octet-stream' }),
+      'upload.bin'
+    );
+
+    const res = await request(`${_base}/internal/wa/media`, {
+      method: 'POST',
+      // NOTE: no content-type here — undici derives the multipart boundary from
+      // the FormData body. Sending _headers (application/json) would corrupt it.
+      headers: { 'x-gateway-token': config.gatewayApiToken },
+      body: form,
+      headersTimeout: MEDIA_TIMEOUT,
+      bodyTimeout: MEDIA_TIMEOUT,
+    });
+
+    if (res.statusCode >= 400) {
+      await res.body.text().catch(() => {});
+      log.error(
+        { uploadStatus: res.statusCode, declaredMime: mimeType || null },
+        'internal: uploadMedia rejected by backend'
+      );
+      return null;
+    }
+
+    const data = await _json(res);
+    if (!data?.file_id) {
+      log.error({ uploadStatus: res.statusCode }, 'internal: uploadMedia returned no file_id');
+      return null;
+    }
+    log.info(
+      { uploadStatus: res.statusCode, storedMime: data.mime_type, sizeBytes: data.size_bytes },
+      'internal: media uploaded'
+    );
+    return {
+      file_id: String(data.file_id),
+      // Trust the SNIFFED type over the one we declared.
+      mime_type: String(data.mime_type || mimeType || ''),
+      name: fileName ? String(fileName) : '',
+    };
+  } catch (err) {
+    log.error({ err: err.message }, 'internal: uploadMedia failed');
+    return null;
+  }
+}
+
+module.exports = { listSessions, loadCreds, saveCreds, reportStatus, uploadMedia };

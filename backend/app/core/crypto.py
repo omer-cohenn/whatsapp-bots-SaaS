@@ -130,6 +130,56 @@ def decrypt_auth_state(blob: bytes | None,
         raise DecryptionError("auth_state decryption failed") from exc
 
 
+# --- M16: envelope encryption with a SPLIT envelope (bytes → object storage) -
+#
+# `encrypt_auth_state` above stores the wrapped DEK and the ciphertext TOGETHER
+# in one JSON envelope, because both halves live in the same `bytea` column.
+# For customer files (M16) the two halves live in DIFFERENT places on purpose:
+#   * the ciphertext goes to Cloudflare R2 (object storage),
+#   * the wrapped DEK goes to `lead_files.wrapped_dek` (Postgres).
+# A stolen bucket has no keys; a stolen DB dump has no bytes. So we expose the
+# wrap/unwrap step on its own instead of a combined envelope. Same KEK, same
+# key_version stamping, same fail-LOUD contract.
+
+def wrap_new_dek() -> tuple[bytes, str]:
+    """Mint a fresh data key → (raw_dek, wrapped_dek_for_storage).
+
+    The RAW dek is used once, in-process, to encrypt one payload and is then
+    dropped. Only the WRAPPED form is ever persisted. Stamp the row with
+    CURRENT_KEY_VERSION so rotation can pick the right KEK later.
+    """
+    dek = Fernet.generate_key()
+    return dek, _kek_fernet().encrypt(dek).decode()
+
+
+def unwrap_dek(wrapped_dek: str, key_version: int = CURRENT_KEY_VERSION) -> bytes:
+    """Unwrap a stored DEK with the crown KEK. Raises DecryptionError on failure."""
+    if not wrapped_dek:
+        raise DecryptionError("wrapped_dek is empty")
+    try:
+        return _kek_fernet(key_version).decrypt(wrapped_dek.encode())
+    except (InvalidToken, ValueError, TypeError) as exc:
+        raise DecryptionError("DEK unwrap failed") from exc
+
+
+def encrypt_with_dek(dek: bytes, plaintext: bytes) -> bytes:
+    """Encrypt payload bytes under an already-minted DEK. bytes → bytes."""
+    return Fernet(dek).encrypt(plaintext)
+
+
+def decrypt_with_dek(dek: bytes, ciphertext: bytes) -> bytes:
+    """Decrypt payload bytes under an unwrapped DEK. Raises on ANY failure.
+
+    NEVER falls back to returning the ciphertext (the M2 rule): a wrong key or a
+    tampered object raises, so a corrupted file can never be served as if it
+    were the real one.
+    """
+    try:
+        return Fernet(dek).decrypt(ciphertext)
+    except (InvalidToken, ValueError, TypeError) as exc:
+        raise DecryptionError("file payload decryption failed") from exc
+
+
 # --- deterministic keyed hash for lookups (no plaintext stored) --------------
 
 def phone_hash(phone: str) -> str:

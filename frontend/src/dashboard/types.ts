@@ -36,6 +36,31 @@ export type LeadStatus = 'new' | 'in_progress' | 'abandoned' | 'deal' | 'closed'
  */
 export type CloseReason = 'completed' | 'abandoned' | 'answered' | null
 
+// --- collected-answer values (M16) -------------------------------------------
+
+/**
+ * One file the customer uploaded, as stored INSIDE `leads.answers` for a step of
+ * type "file". The bytes live encrypted server-side; the owner reads them from
+ * the session-gated `GET /api/leads/files/{file_id}` (no presigned URLs).
+ */
+export type FileAnswer = {
+  file_id: string
+  /** e.g. "image/jpeg", "application/pdf". Drives preview vs. download. */
+  mime_type: string
+  /** Original file name as sent by the customer (may be missing/empty). */
+  name?: string | null
+}
+
+/**
+ * One value in `answers`: a plain string for every step type EXCEPT "file",
+ * which stores a FileAnswer (or an array of them when several files were sent).
+ * Render it through `components/dashboard/AnswerValue.tsx` — never directly.
+ */
+export type AnswerValue = string | FileAnswer | FileAnswer[]
+
+/** The whole answers map (field key → value). */
+export type Answers = Record<string, AnswerValue>
+
 // --- 1) GET /api/leads -------------------------------------------------------
 
 export type Lead = {
@@ -43,8 +68,9 @@ export type Lead = {
   lead_name: string
   contact_name: string | null
   phone: string | null
-  /** Full decrypted collected answers (owner sees everything — no hiding). */
-  answers: Record<string, string>
+  /** Full decrypted collected answers (owner sees everything — no hiding).
+   * Values are strings, except "file" steps which carry a FileAnswer / array. */
+  answers: Answers
   status: LeadStatus
   /** Why the lead/conversation closed (decision 0021), or null while still live.
    * Distinct from the owner OUTCOME (`status` deal/closed). */

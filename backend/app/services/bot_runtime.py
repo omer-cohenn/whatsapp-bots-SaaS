@@ -78,6 +78,7 @@ async def run_turn(
     conversation_id: str,
     message: str,
     is_test: bool = False,
+    media: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run ONE conversation turn end-to-end (load → engine → persist → save).
 
@@ -90,6 +91,13 @@ async def run_turn(
         message:         the inbound text from the customer.
         is_test:         True for the /sim test path → persisted rows are tagged
                          is_test so they never mix with real leads/funnel.
+        media:           OPTIONAL reference to a file the customer attached to
+                         this message — `{"file_id","mime_type","name"}`, already
+                         stored by the gateway via POST /internal/wa/media. Only
+                         the live WhatsApp webhook ever supplies it; try-me and
+                         /sim pass None, so those paths are unchanged. It is
+                         passed straight through to the pure engine (no bytes, no
+                         storage access here) and is NEVER logged.
 
     Returns:
         {
@@ -193,7 +201,7 @@ async def run_turn(
     settings = await bot_settings_service.get_settings(pool, business_id)
 
     # 4) Run the PURE engine. Same inputs → same outputs; no I/O happens here.
-    result = bot_engine.advance(settings, saved_state, message)
+    result = bot_engine.advance(settings, saved_state, message, media)
     next_state = result["state"]
     event = result["event"]
 

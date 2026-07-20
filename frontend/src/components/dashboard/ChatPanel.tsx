@@ -7,7 +7,7 @@
 // the backend resolves the business from the session cookie.
 
 import { useEffect, useRef, useState } from 'react'
-import type { ConversationStatus, Message } from '../../dashboard/types'
+import type { Answers, ConversationStatus, Message } from '../../dashboard/types'
 import {
   getConversationMessages,
   replyToConversation,
@@ -19,6 +19,7 @@ import Button from '../ui/Button'
 import Icon from '../ui/Icon'
 import Spinner from '../ui/Spinner'
 import EmojiPicker from './EmojiPicker'
+import AnswerValue from './AnswerValue'
 
 // How often (ms) we re-fetch the transcript while the panel is open.
 const POLL_MS = 4000
@@ -38,7 +39,7 @@ type Props = {
    * read-only summary of the lead's collected answers so the panel is never
    * blank. Optional — passed by the parent from the linked lead.
    */
-  fallbackAnswers?: Record<string, string>
+  fallbackAnswers?: Answers
   fallbackName?: string | null
   fallbackPhone?: string | null
 }
@@ -255,7 +256,7 @@ function EmptyFallback({
   name,
   phone,
 }: {
-  answers?: Record<string, string>
+  answers?: Answers
   name?: string | null
   phone?: string | null
 }) {
@@ -295,8 +296,8 @@ function EmptyFallback({
         {entries.map(([key, value]) => (
           <div key={key} className="flex gap-2">
             <dt className="text-xs text-slate-400">{key}:</dt>
-            <dd className="text-sm text-slate-800">
-              {value || <span className="text-slate-400">טרם נענה</span>}
+            <dd className="min-w-0 text-sm text-slate-800">
+              <AnswerValue value={value} />
             </dd>
           </div>
         ))}

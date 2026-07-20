@@ -95,7 +95,7 @@ auto-close, the words that pop the menu). Replaces the old `system_prompt.json`.
       {
         "key": "full_name",                       // machine key → becomes a key in leads.answers
         "question": "מה השם המלא שלך?",           // what the bot asks
-        "type": "text",                           // "text" | "phone" | "email" | "choice"
+        "type": "text",                           // "text" | "phone" | "email" | "choice" | "file"
         "required": true
       },
       {
@@ -111,6 +111,13 @@ auto-close, the words that pop the menu). Replaces the old `system_prompt.json`.
         "type": "choice",
         "required": true,
         "options": ["תספורת", "צבע", "החלקה"]
+      },
+      {
+        "key": "id_photo",
+        "question": "אפשר לצרף צילום של התוכנית?",
+        "type": "file",                           // M16 — the answer is an ATTACHMENT
+        "required": false,
+        "accept": ["image", "pdf"]                // REQUIRED only in spirit; omit = all kinds
       }
     ]
   },
@@ -164,10 +171,11 @@ auto-close, the words that pop the menu). Replaces the old `system_prompt.json`.
 {
   "key": "email",                 // machine key (unique within the flow)
   "question": "מה כתובת המייל?",  // the prompt the bot sends
-  "type": "email",                // "text" | "phone" | "email" | "choice"
+  "type": "email",                // "text" | "phone" | "email" | "choice" | "file"
   "required": true,               // must the user answer to advance?
   "validate": "email",            // OPTIONAL extra check hint (see rules)
   "options": ["א", "ב"],          // REQUIRED only when type = "choice"
+  "accept": ["image", "pdf"],     // OPTIONAL, and ONLY when type = "file"
   "error_message": "כתובת לא תקינה, נסו שוב"  // OPTIONAL retry message on validation fail
 }
 ```
@@ -176,14 +184,25 @@ auto-close, the words that pop the menu). Replaces the old `system_prompt.json`.
 |---|---|---|---|
 | `key` | string | yes | `^[a-z0-9_]{1,40}$`. **Unique within its flow.** Becomes a key in `leads.answers`. |
 | `question` | string | yes | 1–500 chars after trim. The text the bot sends. |
-| `type` | enum string | yes | one of **`"text"`**, **`"phone"`**, **`"email"`**, **`"choice"`**. |
+| `type` | enum string | yes | one of **`"text"`**, **`"phone"`**, **`"email"`**, **`"choice"`**, **`"file"`**. |
 | `required` | boolean | yes | `true`/`false`. If `true`, the bot won't advance without a valid answer. |
 | `validate` | string | no | extra validation hint, e.g. `"phone"` / `"email"` / a named rule. For `type:"phone"`/`"email"` validation is implied; `validate` is for overriding/extra rules. Unknown values are ignored by the engine (treated as no extra check). |
 | `options` | string[] | conditional | **required & non-empty when `type:"choice"`** (2–12 items, each 1–80 chars, deduped). **Ignored/stripped for non-choice types.** |
+| `accept` | string[] | conditional | **only meaningful when `type:"file"`** — the attachment kinds this step takes, a subset of **`"image"`**, **`"pdf"`**, **`"doc"`**, **`"ppt"`** (deduped). Omitted/empty on a file step ⇒ **all four**. **Stripped to `null` for every other type** (same rule as `options`). |
 | `error_message` | string | no | ≤ 200 chars. Shown when the user's answer fails validation; engine has a generic default if omitted. |
 
 - **Choice steps:** `options` is the closed list of valid answers. The engine matches the user's reply
   against it (and may render them as numbered options). Without `options`, a `choice` step is **invalid**.
+- **File steps (M16):** the answer is an **attachment**, not text. The customer sends a photo / PDF /
+  DOC / PPT in WhatsApp; the gateway stores it and the engine writes an **object** into `answers`:
+  `{"file_id": "<uuid>", "mime_type": "<sniffed>", "name": "<file name>"}` (every other step type writes
+  a plain string). If the customer replies with **text** instead, the step is re-asked with
+  `"אני צריך שתשלח קובץ 📎"`; if the attachment's kind is not in `accept`, the bot lists the kinds it
+  does take. A **non-`required`** file step may be skipped by writing `"דלג"` (answer stored as `null`).
+  `mime_type` is always the type the server **sniffed from the bytes**, never the one the sender declared.
+  Kind → mime mapping: `image` = jpeg/png/webp, `pdf` = application/pdf, `doc` = msword + docx,
+  `ppt` = ms-powerpoint + pptx. Files are capped at **10 MiB**; anything larger or of another type is
+  refused before it is ever downloaded.
 - **`type` vs `validate`:** `type` drives both the *input expectation* and built-in validation
   (`phone` → phone-shaped, `email` → email-shaped). `validate` is an optional extra/override. Keep them
   consistent; when in doubt the backend trusts `type`.
@@ -300,6 +319,8 @@ Before any write to `bot_settings`:
 - [ ] `human_handoff` flows have `steps: []`; `lead` flows have ≥1 step; ≤30 steps each.
 - [ ] each step: `key` unique-in-flow & snake_case; `question` non-empty; `type` in the enum;
       `required` boolean; `choice` steps have a non-empty `options` array; non-choice `options` stripped.
+- [ ] `file` steps: `accept` (if present) is a subset of `image`/`pdf`/`doc`/`ppt`, deduped, empty ⇒ all
+      four; `accept` is stripped to `null` on every non-`file` type.
 - [ ] `handoff_keywords` is an array of ≤30 trimmed strings.
 - [ ] `is_published` is a boolean (and only flips to `true` if all of the above pass).
 - [ ] **no `business_id` is read from any payload** — the tenant comes from the server session + RLS only.

@@ -29,6 +29,8 @@ import Badge from '../components/ui/Badge'
 import { tryMe } from '../lib/botClient'
 import { ApiError } from '../lib/apiClient'
 import type { ConvState, TryMeEvent } from '../botbuilder/types'
+import type { Answers } from '../dashboard/types'
+import AnswerValue from '../components/dashboard/AnswerValue'
 
 // Mirror AIChatPanel.toFriendlyError: friendly Hebrew for 401 / 5xx / network.
 function toFriendlyError(err: unknown): string {
@@ -43,7 +45,7 @@ function toFriendlyError(err: unknown): string {
 // A single thing rendered in the transcript: a chat bubble, a collected-lead
 // card, or the handoff note. Each is identified for a stable React key.
 type Bubble = { kind: 'bubble'; id: number; from: 'customer' | 'bot'; text: string }
-type LeadCard = { kind: 'lead'; id: number; lead: Record<string, string> }
+type LeadCard = { kind: 'lead'; id: number; lead: Answers }
 type HandoffNote = { kind: 'handoff'; id: number }
 type Entry = Bubble | LeadCard | HandoffNote
 
@@ -66,7 +68,7 @@ export default function TryMePage() {
 
   // Apply a tryMe response to the transcript + held state.
   const applyResponse = useCallback(
-    (replies: string[], nextState: ConvState, event: TryMeEvent | null, lead: Record<string, string> | null) => {
+    (replies: string[], nextState: ConvState, event: TryMeEvent | null, lead: Answers | null) => {
       setState(nextState)
       setEntries((prev) => {
         const added: Entry[] = replies.map((text) => ({ kind: 'bubble', id: nextId(), from: 'bot', text }))
@@ -217,7 +219,9 @@ export default function TryMePage() {
                           {Object.entries(entry.lead).map(([key, value]) => (
                             <div key={key} className="flex gap-2">
                               <dt className="font-medium text-leaf-ink">{key}:</dt>
-                              <dd className="min-w-0 break-words text-leaf-ink/90">{value}</dd>
+                              <dd className="min-w-0 break-words text-leaf-ink/90">
+                                <AnswerValue value={value} />
+                              </dd>
                             </div>
                           ))}
                         </dl>

@@ -11,13 +11,23 @@ const {
   WAMessageStubType,
   initAuthCreds,
   BufferJSON,
+  downloadMediaMessage,
 } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 const qrcode = require('qrcode');
 
 const { loadConfig } = require('./config');
 const { createLogger } = require('./logger');
-const { buildWebhookPayload, extractText } = require('./contract');
+const {
+  buildWebhookPayload,
+  extractText,
+  extractMedia,
+  checkMediaAllowed,
+  mediaMime,
+  MAX_MEDIA_BYTES,
+  MEDIA_TOO_BIG_MSG,
+  MEDIA_FAILED_MSG,
+} = require('./contract');
 const { forwardToBackend } = require('./webhook');
 const internalApi = require('./internalApi');
 const { useDbAuthState } = require('./dbAuthState');
@@ -41,6 +51,11 @@ const SENT_MSG_CAP = 500;
 // Send rate-limit: minimum gap between outgoing messages on ONE session (ban
 // safety). Sends are serialized per session.
 const SEND_MIN_GAP_MS = 1000;
+
+// Baileys wants a pino-like logger for the media download. We hand it a SILENT
+// one on purpose — its debug output includes media urls and keys, which must
+// never reach our logs.
+const mediaLogger = require('pino')({ level: 'silent' });
 
 // A fresh (unregistered) auth blob — used to wipe dead creds on logout so the
 // next start produces a new QR.
@@ -223,6 +238,52 @@ function createSession(businessId) {
     }
   }
 
+  // ── inbound media (M16) ───────────────────────────────────────────────────
+  // Download ONE already-guarded attachment and hand it to the backend.
+  // Returns { media } on success or { error: <Hebrew reply> } on failure — it
+  // NEVER throws, so a hostile or broken attachment can't kill the socket.
+  // Nothing here logs the file name or a single byte of the file.
+  async function fetchAndStoreMedia(msg, media) {
+    let bytes;
+    try {
+      // `reuploadRequest` is REQUIRED: WhatsApp media urls expire, and without it
+      // an older message's download fails outright. Baileys asks the phone to
+      // re-upload the file and then retries.
+      bytes = await downloadMediaMessage(
+        msg,
+        'buffer',
+        {},
+        { reuploadRequest: sock.updateMediaMessage, logger: mediaLogger }
+      );
+    } catch (err) {
+      log.error({ err: err.message, businessId }, 'media download failed');
+      return { error: MEDIA_FAILED_MSG };
+    }
+
+    if (!bytes || !bytes.length) {
+      log.error({ businessId }, 'media download returned no bytes');
+      return { error: MEDIA_FAILED_MSG };
+    }
+    // Second size check, now on the REAL length: `fileLength` is sender-supplied
+    // metadata and can lie, so the pre-download guard alone is not a limit.
+    if (bytes.length > MAX_MEDIA_BYTES) {
+      log.warn({ businessId, sizeBytes: bytes.length }, 'media exceeds cap after download');
+      return { error: MEDIA_TOO_BIG_MSG };
+    }
+
+    const stored = await internalApi.uploadMedia(businessId, {
+      bytes,
+      mimeType: mediaMime(media.node),
+      fileName: media.node?.fileName || null,
+      conversationId: msg.key?.remoteJid,
+      // The idempotency key: a Baileys re-emit of the same message reuses the
+      // file already stored instead of paying for a second copy.
+      messageId: msg.key?.id,
+    });
+    if (!stored) return { error: MEDIA_FAILED_MSG };
+    return { media: stored };
+  }
+
   // ── inbound ───────────────────────────────────────────────────────────────
   async function handleInbound(msg) {
     try {
@@ -234,13 +295,40 @@ function createSession(businessId) {
       if (msgId && sentMessageIds.has(msgId)) return; // our own echo
       if (msg.key?.fromMe && !selfChat) return;
 
-      const text = extractText(msg.message || {});
-      if (!text || !text.trim()) return;
+      const content = msg.message || {};
+      const text = extractText(content);
+      const media = extractMedia(content);
+
+      // Drop only messages that carry NEITHER text NOR an attachment. Before M16
+      // this early-return fired on every media message (a photo has no
+      // `conversation` field), which is why files never reached the bot at all.
+      if (media === null && (!text || !text.trim())) return;
+
+      let storedMedia = null;
+      if (media !== null) {
+        // PRE-DOWNLOAD guard: size + type are read from the message metadata, so
+        // an oversized or unsupported file costs us nothing. We tell the customer
+        // WHY in Hebrew and stop here — we do NOT forward the webhook, so the bot
+        // stays on the same step and the customer can simply resend a valid file.
+        const allowed = checkMediaAllowed(media.node);
+        if (!allowed.ok) {
+          log.info({ businessId, mediaType: media.type }, 'media refused before download');
+          await sendReplies(remoteJid, [allowed.reason]);
+          return;
+        }
+        const outcome = await fetchAndStoreMedia(msg, media);
+        if (outcome.error) {
+          await sendReplies(remoteJid, [outcome.error]);
+          return;
+        }
+        storedMedia = outcome.media;
+      }
 
       // gateway_account_id = businessId (the backend resolves the tenant from it).
       const payload = buildWebhookPayload(msg, businessId, {
         conversationId: remoteJid,
         ...(selfChat ? { selfTest: true } : {}),
+        ...(storedMedia ? { media: storedMedia } : {}),
       });
       const response = await forwardToBackend(payload);
       await sendReplies(remoteJid, response?.replies);

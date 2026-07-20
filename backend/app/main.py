@@ -21,6 +21,7 @@ from fastapi import FastAPI
 
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
+from app.api.internal_media import router as internal_media_router
 from app.api.internal_wa import router as internal_wa_router
 from app.api.me import api as api_router
 from app.api.public_booking import router as public_booking_router
@@ -138,6 +139,13 @@ def create_app() -> FastAPI:
     # X-Gateway-Token header check — NOT the owner session gate. Mounted on the
     # app root (outside the gated /api group) because the gateway has no session.
     app.include_router(internal_wa_router)
+    # M16: the internal MEDIA upload the gateway calls when a customer sends a
+    # file (POST /internal/wa/media). Same trust model + same X-Gateway-Token as
+    # internal_wa above; kept in its own module because it is the only multipart
+    # route in the app. NO new pool/client is needed: it reuses app.state.gw_pool,
+    # and the R2 client inside services/file_storage.py is built lazily on first
+    # use (so the app still boots with no object storage configured at all).
+    app.include_router(internal_media_router)
     app.include_router(auth_router)
     app.include_router(public_booking_router)
     app.include_router(api_router)

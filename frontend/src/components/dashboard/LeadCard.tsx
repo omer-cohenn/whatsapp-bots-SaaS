@@ -21,6 +21,7 @@ import { closeReasonMeta } from '../../dashboard/closeReason'
 import Badge from '../ui/Badge'
 import Icon from '../ui/Icon'
 import Modal from '../ui/Modal'
+import AnswerValue, { answerPreviewText, hasFileAnswer } from './AnswerValue'
 import ChatPanel from './ChatPanel'
 import OutcomeNoteDialog from './OutcomeNoteDialog'
 
@@ -161,8 +162,13 @@ export default function LeadCard({ lead, onStatusChange, onDelete }: Props) {
           {answers.map(([key, value]) => (
             <div key={key} className="min-w-0">
               <dt className="text-[11px] text-slate-400">{key}</dt>
-              <dd className="truncate text-sm text-slate-800 dark:text-slate-200" title={value}>
-                {value || <span className="text-slate-400">טרם נענה</span>}
+              <dd
+                className={`text-sm text-slate-800 dark:text-slate-200 ${
+                  hasFileAnswer(value) ? '' : 'truncate'
+                }`}
+                title={answerPreviewText(value)}
+              >
+                <AnswerValue value={value} />
               </dd>
             </div>
           ))}

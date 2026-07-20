@@ -83,6 +83,10 @@ async def whatsapp_webhook(
             "type": msg.type,
             "text_len": len(msg.text or ""),
             "self_test": msg.self_test,
+            # M16: only the FACT that a file rode along + its (sniffed) type.
+            # NEVER the file name, the file id, or any byte of it.
+            "has_media": msg.media is not None,
+            "media_mime": msg.media.mime_type if msg.media else None,
         },
     )
 
@@ -174,6 +178,9 @@ async def _run_bot_turn(
         conversation_id=conversation_id,
         message=msg.text or "",
         is_test=False,
+        # M16: the attachment ref (already downloaded + stored by the gateway).
+        # None for every text-only message, so nothing about the text path moves.
+        media=msg.media.model_dump() if msg.media else None,
     )
 
     # Count each bot reply we are about to hand back to the gateway (msg_out).
@@ -212,7 +219,10 @@ async def _handle_allowlist_inbound(
       * Allowed → hand to the shared core (published gate + run_turn).
     """
     # Blank/whitespace-only or non-text messages get a stable ack, no bot run.
-    if not (msg.text or "").strip():
+    # EXCEPT (M16) a message that carries a stored ATTACHMENT: a photo or PDF sent
+    # with no caption has empty text but is a real answer to a `file` step, so it
+    # must reach the engine. Dropping it here is what made media invisible before.
+    if not (msg.text or "").strip() and msg.media is None:
         return {"status": "received", "replies": []}
 
     pool = request.app.state.pg_pool

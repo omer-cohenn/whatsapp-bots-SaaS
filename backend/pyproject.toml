@@ -25,6 +25,13 @@ dependencies = [
     # URI is configured (validate-at-use) — never required at boot.
     "google-auth-oauthlib==1.2.1",
     "google-api-python-client==2.149.0",
+    # M16: multipart/form-data parsing. REQUIRED at import time by FastAPI for
+    # the POST /internal/wa/media route (File/Form params) — without it FastAPI
+    # raises at route registration, so this is a hard dep, not validate-at-use.
+    "python-multipart==0.0.20",
+    # M16: S3-compatible client for Cloudflare R2 object storage. Imported
+    # LAZILY inside services/file_storage.py so the app still boots without it.
+    "boto3==1.43.51",
 ]
 
 [project.optional-dependencies]

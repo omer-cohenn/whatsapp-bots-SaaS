@@ -7,6 +7,7 @@
 // helpers just keep the in-memory working copy well-formed enough to edit.
 
 import type { BotProfile, BotSettings, Flow, FlowType, Step, StepType } from './types'
+import { FILE_KINDS } from './types'
 
 /** Make a key that doesn't collide with any in `taken` (append _2, _3, …). */
 export function uniqueKey(base: string, taken: Iterable<string>): string {
@@ -30,6 +31,8 @@ export function emptyStep(type: StepType = 'text'): Step {
     type,
     required: true,
     options: type === 'choice' ? ['', ''] : null,
+    // A `file` step defaults to accepting everything we support (M16).
+    accept: type === 'file' ? [...FILE_KINDS] : null,
   }
 }
 

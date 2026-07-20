@@ -19,8 +19,14 @@ collected — nothing else.
 
 The flow mirrors the original `last_bo/bot/flow_engine.py` (read-only reference),
 re-shaped onto the M4 config contract (`lead_steps` is an OBJECT keyed by flow
-name; step `type` in {text, phone, email, choice}; flow `flow_type` in
+name; step `type` in {text, phone, email, choice, file}; flow `flow_type` in
 {lead, human_handoff, booking}).
+
+M16 adds the `file` step type. The engine still does NO I/O: the gateway has
+already downloaded + stored the attachment by the time we run, and hands us only
+a REFERENCE (`{"file_id","mime_type","name"}`) as the optional `media` argument.
+The engine's job is purely to decide whether that reference satisfies the current
+step, and to place it into `collected` as the step's answer.
 """
 
 from __future__ import annotations
@@ -57,6 +63,39 @@ _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 # A phone is "real enough" if it has at least this many digits.
 _MIN_PHONE_DIGITS = 9
 
+# --- file steps (M16) --------------------------------------------------------
+# The ONE translation point between a stored mime type and the owner-facing
+# "kind" vocabulary used by a step's `accept` list (see
+# app.models.bot_builder.FILE_ACCEPT_KINDS). A mime that is not in this map can
+# never satisfy a file step — it should never reach us, because the backend's
+# upload allow-list (file_storage.ALLOWED_MIME) is exactly these keys.
+_MIME_KIND: dict[str, str] = {
+    "image/jpeg": "image",
+    "image/png": "image",
+    "image/webp": "image",
+    "application/pdf": "pdf",
+    "application/msword": "doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "doc",
+    "application/vnd.ms-powerpoint": "ppt",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "ppt",
+}
+
+# Hebrew labels for the kinds, used when we tell the customer what to send.
+_KIND_LABEL: dict[str, str] = {
+    "image": "תמונה",
+    "pdf": "PDF",
+    "doc": "מסמך Word",
+    "ppt": "מצגת",
+}
+
+# Asked again when the customer answered a `file` step with plain text.
+_FILE_EXPECTED_MSG = "אני צריך שתשלח קובץ 📎"
+# Asked again when a file arrived but its kind is not on the step's accept list.
+_FILE_WRONG_KIND_MSG = "סוג הקובץ הזה לא מתאים כאן. אפשר לשלוח: "
+# Whole-message words that skip an OPTIONAL step (file steps only — a text step
+# treats these as a legitimate answer).
+_SKIP_WORDS = ("דלג", "דלגי", "אין", "אין לי", "לא", "skip", "-")
+
 # Conversation phases.
 PHASE_NEW = "new"            # brand-new conversation, not yet greeted (first turn).
 PHASE_MENU = "menu"
@@ -74,13 +113,21 @@ def initial_state() -> dict[str, Any]:
     }
 
 
-def advance(settings: dict, state: dict, message: str) -> dict[str, Any]:
+def advance(
+    settings: dict, state: dict, message: str, media: dict | None = None
+) -> dict[str, Any]:
     """Run one turn of the bot. PURE: no side effects, no I/O.
 
     Args:
         settings: this tenant's bot config (the `bot_settings` shape). Read-only.
         state:    the CURRENT conversation's state (see `initial_state`). Read-only.
         message:  the inbound text from the user (may be empty for the "open" turn).
+        media:    OPTIONAL reference to a file the customer attached to THIS
+                  message, already uploaded + stored by the gateway:
+                  `{"file_id", "mime_type", "name"}`. None for every text-only
+                  turn (try-me and /sim always pass None). It carries no bytes —
+                  only the server-minted id and metadata — so the engine stays
+                  pure and never touches storage.
 
     Returns a dict:
         {
@@ -93,6 +140,7 @@ def advance(settings: dict, state: dict, message: str) -> dict[str, Any]:
     # Work on a private copy so we never mutate the caller's state in place.
     state = _normalize_state(state)
     text = (message or "").strip()
+    media = _normalize_media(media)
 
     flows = _ordered_flows(settings)
     profile = settings.get("bot_profile") or {}
@@ -108,7 +156,9 @@ def advance(settings: dict, state: dict, message: str) -> dict[str, Any]:
         )
 
     # (a) Empty/blank message → the "open" turn: greeting + menu, sit at menu.
-    if not text:
+    #     A message that carries MEDIA is never "empty" — an attachment with no
+    #     caption is a real answer to a file step, not an open turn.
+    if not text and media is None:
         return _result(
             [_greeting_and_menu(profile, flows)],
             _menu_state(),
@@ -118,24 +168,30 @@ def advance(settings: dict, state: dict, message: str) -> dict[str, Any]:
     if state["phase"] == PHASE_HANDED_OFF:
         return _result([_HANDED_OFF_NOTE], state)
 
-    # (c) Return-to-menu keyword (checked before everything else below) → menu.
-    if _matches_menu_keyword(text, profile):
-        return _result(
-            [_greeting_and_menu(profile, flows)],
-            _menu_state(),
-        )
+    # An attachment that lands exactly on a `file` step IS the answer. Its caption
+    # must not be re-read as a menu/handoff keyword, or a photo captioned "תפריט"
+    # would silently throw away a file the customer already uploaded.
+    answering_file_step = media is not None and _current_step_type(state, flows) == "file"
 
-    # (d) Human-escalation keyword anywhere → hand off and stop answering.
-    if _matches_handoff_keyword(text, settings):
-        return _result(
-            [_handoff_message(settings, flows)],
-            _handed_off_state(),
-            event="handed_off",
-        )
+    if not answering_file_step:
+        # (c) Return-to-menu keyword (checked before everything else below) → menu.
+        if _matches_menu_keyword(text, profile):
+            return _result(
+                [_greeting_and_menu(profile, flows)],
+                _menu_state(),
+            )
+
+        # (d) Human-escalation keyword anywhere → hand off and stop answering.
+        if _matches_handoff_keyword(text, settings):
+            return _result(
+                [_handoff_message(settings, flows)],
+                _handed_off_state(),
+                event="handed_off",
+            )
 
     # (e) Mid-flow → validate this answer against the current step.
     if state["phase"] == PHASE_IN_FLOW:
-        return _advance_in_flow(state, text, flows)
+        return _advance_in_flow(state, text, flows, media)
 
     # (f) At the menu → pick a flow by number or by label/keyword.
     return _advance_menu(state, text, profile, flows)
@@ -144,7 +200,7 @@ def advance(settings: dict, state: dict, message: str) -> dict[str, Any]:
 # --- (e) in-flow handling -----------------------------------------------------
 
 def _advance_in_flow(
-    state: dict, text: str, flows: list[tuple[str, dict]]
+    state: dict, text: str, flows: list[tuple[str, dict]], media: dict | None = None
 ) -> dict[str, Any]:
     """Validate the user's answer for the current step, then advance or re-ask."""
     flow = _find_flow(flows, state["active_flow"])
@@ -155,12 +211,19 @@ def _advance_in_flow(
         return _result([_greeting_and_menu({}, flows)], _menu_state())
 
     step = steps[state["step_index"]]
-    ok, normalized = _validate_answer(step, text)
+    ok, normalized, reason = _validate_answer(step, text, media)
     if not ok:
-        error = step.get("error_message") or _DEFAULT_VALIDATION_ERROR
+        # A file step explains ITSELF (send an attachment / wrong kind) — a generic
+        # "לא הצלחתי להבין" would leave the customer with no idea what to do. The
+        # owner's own error_message still wins when they wrote one.
+        error = step.get("error_message") or reason or _DEFAULT_VALIDATION_ERROR
         return _result([_with_hint(error)], state)
 
     # Store the normalized value under the step's machine key, then advance.
+    # NOTE `normalized` is a str for every step type EXCEPT `file`, where it is
+    # the file-answer OBJECT {"file_id","mime_type","name"} (or None for a skipped
+    # optional file step). `collected` is JSON-serialized and encrypted whole on
+    # its way into leads.answers, so a nested dict rides along unchanged.
     collected = dict(state["collected"])
     collected[step["key"]] = normalized
     next_index = state["step_index"] + 1
@@ -239,26 +302,50 @@ def _advance_menu(
 
 # --- validation (per step type) ----------------------------------------------
 
-def _validate_answer(step: dict, text: str) -> tuple[bool, str]:
-    """Validate + normalize one answer against a step. Returns (ok, normalized).
+def _validate_answer(
+    step: dict, text: str, media: dict | None = None
+) -> tuple[bool, Any, str | None]:
+    """Validate + normalize one answer against a step.
 
-    text → phone → email → choice. Mirrors the old engine's `_validate` +
-    `_normalize_value`, adapted to the M4 step shape.
+    Returns `(ok, normalized, reason)`:
+      * `normalized` is a **str** for text/phone/email/choice, and for a `file`
+        step it is the file-answer OBJECT `{"file_id","mime_type","name"}` (or
+        None when an optional file step was skipped).
+      * `reason` is a step-specific customer-facing error used when `ok` is False
+        and the owner configured no `error_message`; None ⇒ use the generic one.
+
+    file → phone → email → choice → text. The `file` branch comes FIRST so a file
+    step can never fall through to the text fallback (which would happily accept
+    the customer typing "הנה הקובץ" as if it were an attachment).
     """
     step_type = step.get("type", "text")
     required = bool(step.get("required", True))
     value = text.strip()
 
+    if step_type == "file":
+        if media is not None:
+            kind = _MIME_KIND.get((media.get("mime_type") or "").lower())
+            accepted = _accepted_kinds(step)
+            if kind is None or kind not in accepted:
+                return False, None, _FILE_WRONG_KIND_MSG + _kinds_phrase(accepted)
+            return True, dict(media), None
+        # No attachment on this turn — the customer typed instead.
+        if not required and (not value or _is_skip_word(value)):
+            # Optional step: an explicit skip (or a bare empty turn) moves on with
+            # no file recorded.
+            return True, None, None
+        return False, None, _FILE_EXPECTED_MSG
+
     if step_type == "phone":
         digits = re.sub(r"\D", "", value)
         if len(digits) < _MIN_PHONE_DIGITS:
-            return False, ""
-        return True, digits
+            return False, "", None
+        return True, digits, None
 
     if step_type == "email":
         if not _EMAIL_RE.match(value):
-            return False, ""
-        return True, value
+            return False, "", None
+        return True, value, None
 
     if step_type == "choice":
         options = step.get("options") or []
@@ -266,18 +353,77 @@ def _validate_answer(step: dict, text: str) -> tuple[bool, str]:
         if value.isdigit():
             idx = int(value) - 1
             if 0 <= idx < len(options):
-                return True, options[idx]
-            return False, ""
+                return True, options[idx], None
+            return False, "", None
         # ...or an exact option string (normalize to the canonical option text).
         for opt in options:
             if value == opt:
-                return True, opt
-        return False, ""
+                return True, opt, None
+        return False, "", None
 
     # type == "text" (and any unknown type): non-empty if required.
     if required and not value:
-        return False, ""
-    return True, value
+        return False, "", None
+    return True, value, None
+
+
+# --- file-step helpers (M16) --------------------------------------------------
+
+def _normalize_media(media: dict | None) -> dict | None:
+    """Coerce the caller's media ref into the exact answer shape, or None.
+
+    Defensive: the ref crosses a process boundary (gateway → webhook → runtime),
+    so we accept only the three known keys and require a `file_id`. Anything the
+    gateway invents is dropped here rather than stored in a lead. Never logs.
+    """
+    if not isinstance(media, dict):
+        return None
+    file_id = media.get("file_id")
+    if not isinstance(file_id, str) or not file_id.strip():
+        return None
+    mime = media.get("mime_type")
+    name = media.get("name")
+    return {
+        "file_id": file_id.strip(),
+        "mime_type": (mime or "").strip().lower() if isinstance(mime, str) else "",
+        "name": name.strip()[:200] if isinstance(name, str) else "",
+    }
+
+
+def _accepted_kinds(step: dict) -> list[str]:
+    """The kinds a file step accepts. Empty/missing `accept` ⇒ every kind."""
+    accept = step.get("accept")
+    kinds = [k for k in (accept or []) if isinstance(k, str) and k in _KIND_LABEL]
+    return kinds or list(_KIND_LABEL.keys())
+
+
+def _kinds_phrase(kinds: list[str]) -> str:
+    """A Hebrew list of kind labels, e.g. 'תמונה, PDF או מצגת'."""
+    labels = [_KIND_LABEL[k] for k in kinds if k in _KIND_LABEL]
+    if not labels:
+        return "קובץ"
+    if len(labels) == 1:
+        return labels[0]
+    return ", ".join(labels[:-1]) + " או " + labels[-1]
+
+
+def _is_skip_word(text: str) -> bool:
+    """True if the WHOLE message is a skip word (optional file steps only)."""
+    low = text.strip().lower()
+    return any(low == w.lower() for w in _SKIP_WORDS)
+
+
+def _current_step_type(state: dict, flows: list[tuple[str, dict]]) -> str | None:
+    """The `type` of the step the conversation is standing on, or None."""
+    if state.get("phase") != PHASE_IN_FLOW:
+        return None
+    flow = _find_flow(flows, state.get("active_flow"))
+    steps = (flow or {}).get("steps") or []
+    idx = state.get("step_index") or 0
+    if not isinstance(idx, int) or idx < 0 or idx >= len(steps):
+        return None
+    step = steps[idx]
+    return step.get("type") if isinstance(step, dict) else None
 
 
 # --- flow selection helpers ---------------------------------------------------
@@ -308,6 +454,12 @@ def _find_flow(flows: list[tuple[str, dict]], name: str | None) -> dict | None:
 def _pick_flow(text: str, flows: list[tuple[str, dict]]) -> tuple[str, dict] | None:
     """Pick a flow from a menu message: 1-based number, else label/keyword match."""
     value = text.strip()
+
+    # An EMPTY message can never pick a flow. (Guard, not decoration: since M16 a
+    # media message with no caption reaches the menu with text="" — and `"" in
+    # label` is always True, which would otherwise select the first flow.)
+    if not value:
+        return None
 
     # 1-based number over the ordered flows.
     if value.isdigit():
@@ -349,6 +501,13 @@ def _menu_list(flows: list[tuple[str, dict]]) -> str:
 def _question_text(step: dict) -> str:
     """A step's question, with choice options listed as a numbered sub-list."""
     question = (step.get("question") or "").strip()
+    if step.get("type") == "file":
+        # A customer cannot guess that this question wants an ATTACHMENT (and
+        # which kinds), so the prompt says so explicitly under the owner's text.
+        hint = f"📎 אפשר לצרף: {_kinds_phrase(_accepted_kinds(step))}"
+        if not bool(step.get("required", True)):
+            hint += '\n(אם אין לך קובץ, אפשר לכתוב "דלג")'
+        return f"{question}\n{hint}" if question else hint
     if step.get("type") == "choice":
         options = step.get("options") or []
         if options:

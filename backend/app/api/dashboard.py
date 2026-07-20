@@ -27,11 +27,13 @@ Tenant safety on EVERY route:
 from __future__ import annotations
 
 from typing import Literal
+from urllib.parse import quote
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from fastapi.responses import Response
 
-from app.core.crypto import DecryptionError
+from app.core.crypto import DecryptionError, decrypt_pii
 from app.core.deps import current_business
 from app.core.logging import get_logger
 from app.db.session import tenant_connection
@@ -58,6 +60,7 @@ from app.models.dashboard import (
 from app.services import (
     bot_settings as bot_settings_service,
     conversation_state,
+    file_storage,
     leads as leads_service,
     whatsapp as whatsapp_service,
 )
@@ -418,3 +421,109 @@ async def publish_bot(
         request.app.state.pg_pool, business_id, body.is_published
     )
     return BotPublishResponse(is_published=is_published)
+
+
+# --- M16: owner file download ------------------------------------------------
+
+@router.get("/leads/files/{file_id}")
+async def download_lead_file(
+    request: Request,
+    file_id: str = Path(..., min_length=1, max_length=64),
+    business_id: str = Depends(current_business),
+) -> Response:
+    """Stream ONE customer-uploaded file back to the owner, decrypted.
+
+    NO PRESIGNED URLS, EVER. A presigned URL is a bearer token for the raw object
+    that leaks through history, referrers and chat forwards, and it would hand
+    out the CIPHERTEXT anyway (the bytes in R2 are envelope-encrypted and useless
+    without the KEK). The bytes therefore always flow through this session-gated
+    route, which is the only place the decryption happens.
+
+    Tenant wall, three layers:
+      1. the router-level session gate (deny-by-default under /api);
+      2. `business_id` comes from the verified session ONLY — never the path;
+      3. the SELECT runs inside `tenant_connection(pg_pool, business_id)`, so RLS
+         (`business_id = current_business_id()`, migration 0028) makes another
+         tenant's file_id indistinguishable from a nonexistent one → 404. The
+         explicit `AND business_id = $2` is a second, redundant guard.
+
+    Pool/role: `pg_pool` (app_role). This is an OWNER action on the owner's own
+    data; app_role holds SELECT on lead_files (0028). The gateway_role pool is
+    for the inbound gateway path only and is never touched here.
+
+    Response headers: the real Content-Type, `Content-Disposition: attachment`
+    with a sanitized + RFC 5987 encoded filename (Hebrew names are normal here),
+    and `Cache-Control: private, no-store` so the decrypted PII is never written
+    to a shared cache or a disk cache.
+    """
+    # A malformed uuid must never reach the query — and must look exactly like a
+    # missing file, so this route can't be used to probe id validity.
+    try:
+        file_id = str(UUID(file_id))
+    except (ValueError, AttributeError, TypeError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+
+    async with tenant_connection(request.app.state.pg_pool, business_id) as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT storage_key, wrapped_dek, key_version, mime_type, file_name
+            FROM lead_files
+            WHERE id = $1 AND business_id = $2
+            """,
+            file_id,
+            business_id,
+        )
+
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+
+    try:
+        payload = file_storage.get_decrypted(
+            row["storage_key"], row["wrapped_dek"], row["key_version"]
+        )
+    except file_storage.StorageNotConfiguredError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="file storage is not configured",
+        ) from None
+    except file_storage.StorageError:
+        log.error("file download failed", extra={"reason": "storage"})
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail="file unavailable"
+        ) from None
+    except DecryptionError:
+        # FAIL LOUD: a key mismatch or a tampered object is a real incident. We
+        # never hand back the ciphertext as a "file".
+        log.error("file download failed", extra={"reason": "decrypt"})
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="file could not be decrypted",
+        ) from None
+
+    # The stored name is PII ciphertext. If it fails to decrypt we still serve the
+    # bytes under a neutral name rather than failing the whole download.
+    try:
+        raw_name = decrypt_pii(row["file_name"])
+    except DecryptionError:
+        raw_name = None
+    safe_name = file_storage.sanitize_filename(raw_name, fallback=f"file-{file_id[:8]}")
+
+    # RFC 5987: `filename*=UTF-8''<pct-encoded>` carries non-ASCII (Hebrew) names.
+    # The plain `filename=` fallback is ASCII-only for old clients. quote() also
+    # guarantees no quote/CR/LF can break out of the header value.
+    quoted = quote(safe_name, safe="")
+    ascii_fallback = safe_name.encode("ascii", "ignore").decode() or "file"
+
+    return Response(
+        content=payload,
+        media_type=row["mime_type"],
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{ascii_fallback}"; filename*=UTF-8\'\'{quoted}'
+            ),
+            # Decrypted customer PII: no shared cache, no disk cache, ever.
+            "Cache-Control": "private, no-store",
+            # Belt-and-braces: never let a browser re-interpret the type.
+            "X-Content-Type-Options": "nosniff",
+        },
+    )

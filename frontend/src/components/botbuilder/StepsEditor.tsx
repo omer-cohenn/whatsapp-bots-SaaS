@@ -5,9 +5,16 @@
 // we focus on clear editing + light inline guidance.
 
 import { useState } from 'react'
-import type { Flow, Step, StepType } from '../../botbuilder/types'
+import type { FileKind, Flow, Step, StepType } from '../../botbuilder/types'
 import { emptyStep, uniqueKey } from '../../botbuilder/config'
-import { MAX_CHOICE_OPTIONS, MAX_STEPS_PER_FLOW, MIN_CHOICE_OPTIONS } from '../../botbuilder/types'
+import {
+  FILE_KINDS,
+  FILE_KIND_LABELS,
+  MAX_CHOICE_OPTIONS,
+  MAX_STEPS_PER_FLOW,
+  MAX_UPLOAD_MB,
+  MIN_CHOICE_OPTIONS,
+} from '../../botbuilder/types'
 import Button from '../ui/Button'
 import Field from '../ui/Field'
 import Select, { type SelectOption } from '../ui/Select'
@@ -18,6 +25,7 @@ const STEP_TYPE_OPTIONS: SelectOption[] = [
   { value: 'phone', label: 'טלפון' },
   { value: 'email', label: 'אימייל' },
   { value: 'choice', label: 'בחירה מרשימה' },
+  { value: 'file', label: 'קובץ / תמונה' },
 ]
 
 type Props = {
@@ -39,13 +47,36 @@ export default function StepsEditor({ flow, onStepsChange }: Props) {
   }
 
   function changeType(index: number, type: StepType) {
-    // Switching to/from "choice" toggles the options array on/off.
+    // Each type owns its own extra config: "choice" carries `options`, "file"
+    // carries `accept`. Switching type resets whatever the new type doesn't use,
+    // so we never save a config field that belongs to another type.
     const step = flow.steps[index]
-    const next: Partial<Step> =
-      type === 'choice'
-        ? { type, options: step.options && step.options.length >= 2 ? step.options : ['', ''] }
-        : { type, options: null }
+    const next: Partial<Step> = {
+      type,
+      options:
+        type === 'choice'
+          ? step.options && step.options.length >= 2
+            ? step.options
+            : ['', '']
+          : null,
+      accept:
+        type === 'file'
+          ? step.accept && step.accept.length > 0
+            ? step.accept
+            : [...FILE_KINDS]
+          : null,
+    }
     updateStep(index, next)
+  }
+
+  /** Tick/untick one accepted file kind (never leaves the list empty). */
+  function toggleAccept(stepIndex: number, kind: FileKind, checked: boolean) {
+    const current = flow.steps[stepIndex].accept ?? []
+    const next = checked
+      ? FILE_KINDS.filter((k) => k === kind || current.includes(k))
+      : current.filter((k) => k !== kind)
+    // An empty list would accept nothing at all — keep at least the last kind.
+    updateStep(stepIndex, { accept: next.length > 0 ? next : current })
   }
 
   function addStep() {
@@ -185,6 +216,36 @@ export default function StepsEditor({ flow, onStepsChange }: Props) {
                           הוסף אפשרות
                         </Button>
                       ) : null}
+                    </fieldset>
+                  ) : null}
+
+                  {step.type === 'file' ? (
+                    <fieldset className="mt-3">
+                      <legend className="mb-1.5 text-sm font-medium text-slate-800">
+                        סוגי קבצים מותרים
+                      </legend>
+                      <p className="mb-2 text-xs text-slate-500">
+                        בחרו לפחות סוג אחד. גודל מרבי לקובץ: {MAX_UPLOAD_MB}MB.
+                      </p>
+                      <div className="flex flex-wrap gap-x-5 gap-y-2">
+                        {FILE_KINDS.map((kind) => {
+                          const checked = (step.accept ?? []).includes(kind)
+                          return (
+                            <label
+                              key={kind}
+                              className="flex items-center gap-2 text-sm text-slate-700"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => toggleAccept(index, kind, e.target.checked)}
+                                className="h-4 w-4 rounded border-slate-300 text-leaf focus:ring-leaf"
+                              />
+                              {FILE_KIND_LABELS[kind]}
+                            </label>
+                          )
+                        })}
+                      </div>
                     </fieldset>
                   ) : null}
 

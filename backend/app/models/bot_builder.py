@@ -43,8 +43,20 @@ MAX_CHOICE_OPTIONS = 12  # choice options: 2..12 (contract §2.1)
 MAX_MENU_KEYWORDS = 20   # bot_profile.menu_keywords ≤ 20 (contract §1)
 MAX_HANDOFF_KEYWORDS = 30  # handoff_keywords ≤ 30 (contract §3)
 
-StepType = Literal["text", "phone", "email", "choice"]
+StepType = Literal["text", "phone", "email", "choice", "file"]
 FlowType = Literal["lead", "human_handoff", "booking"]
+
+# --- file steps (M16) --------------------------------------------------------
+# The customer-facing KINDS a `file` step may accept. Deliberately a tiny closed
+# vocabulary (not raw mime types): the owner/builder thinks in "תמונה / PDF /
+# מסמך Word / מצגת", and each kind maps to the concrete mime types the storage
+# allow-list already permits (see app/services/file_storage.ALLOWED_MIME and the
+# engine's _MIME_KIND map, which is the single translation point).
+#   image → image/jpeg, image/png, image/webp
+#   pdf   → application/pdf
+#   doc   → application/msword, ...wordprocessingml.document
+#   ppt   → application/vnd.ms-powerpoint, ...presentationml.presentation
+FILE_ACCEPT_KINDS: tuple[str, ...] = ("image", "pdf", "doc", "ppt")
 
 
 class Step(BaseModel):
@@ -72,6 +84,12 @@ class Step(BaseModel):
     # Required ONLY for choice steps; stripped for others (see model_validator).
     options: list[str] | None = Field(default=None)
     error_message: str | None = Field(default=None, max_length=200)
+    # M16 — file steps ONLY: which kinds of attachment this step accepts. Values
+    # come from FILE_ACCEPT_KINDS. Omitted/empty on a file step ⇒ "all kinds".
+    # Stripped to None for every other type (same rule as `options`), so
+    # extra="forbid" stays satisfied without letting the field leak onto a text
+    # step where it would mean nothing.
+    accept: list[str] | None = Field(default=None)
 
     @field_validator("key")
     @classmethod
@@ -85,7 +103,11 @@ class Step(BaseModel):
 
     @model_validator(mode="after")
     def _enforce_options_rule(self) -> "Step":
-        """choice → options required (2..12, trimmed, deduped); else → no options."""
+        """choice → options required (2..12, trimmed, deduped); else → no options.
+
+        Also enforces the M16 twin rule for `accept`: file → a normalized subset
+        of FILE_ACCEPT_KINDS (empty ⇒ all kinds); every other type → None.
+        """
         if self.type == "choice":
             opts = [o.strip() for o in (self.options or []) if o and o.strip()]
             # Dedupe but keep order (a closed answer list shouldn't repeat).
@@ -104,6 +126,25 @@ class Step(BaseModel):
         else:
             # Non-choice types never carry options (strip silently).
             self.options = None
+
+        # --- M16: `accept` is file-only, mirroring the options rule ----------
+        if self.type == "file":
+            kinds: list[str] = []
+            for raw in self.accept or []:
+                kind = (raw or "").strip().lower()
+                if not kind:
+                    continue
+                if kind not in FILE_ACCEPT_KINDS:
+                    raise ValueError(
+                        f"file step '{self.key}' accept must be a subset of "
+                        + "/".join(FILE_ACCEPT_KINDS)
+                    )
+                if kind not in kinds:
+                    kinds.append(kind)
+            # Empty/omitted ⇒ accept everything the storage allow-list permits.
+            self.accept = kinds or list(FILE_ACCEPT_KINDS)
+        else:
+            self.accept = None
         return self
 
 

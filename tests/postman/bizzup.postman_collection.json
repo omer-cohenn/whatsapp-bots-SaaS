@@ -6,10 +6,22 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "capturedServiceId", "value": "" },
-    { "key": "capturedSlot", "value": "" },
-    { "key": "bookDate", "value": "" },
-    { "key": "capturedCancelToken", "value": "" }
+    {
+      "key": "capturedServiceId",
+      "value": ""
+    },
+    {
+      "key": "capturedSlot",
+      "value": ""
+    },
+    {
+      "key": "bookDate",
+      "value": ""
+    },
+    {
+      "key": "capturedCancelToken",
+      "value": ""
+    }
   ],
   "item": [
     {
@@ -32,7 +44,19 @@
               }
             }
           ],
-          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/healthz", "host": ["{{baseUrl}}"], "path": ["healthz"] } }
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/healthz",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "healthz"
+              ]
+            }
+          }
         }
       ]
     },
@@ -54,9 +78,26 @@
           ],
           "request": {
             "method": "POST",
-            "header": [ { "key": "Content-Type", "value": "application/json" } ],
-            "body": { "mode": "raw", "raw": "{\"gateway_account_id\":\"ci-acct-nobody\",\"from\":\"+972500000001\",\"push_name\":\"CI\",\"message_id\":\"ci-nohdr\",\"timestamp\":1700000000,\"type\":\"text\",\"text\":\"hi\",\"raw\":{},\"self_test\":true,\"conversation_id\":\"self:ci\"}" },
-            "url": { "raw": "{{baseUrl}}/webhook/whatsapp", "host": ["{{baseUrl}}"], "path": ["webhook", "whatsapp"] }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"gateway_account_id\":\"ci-acct-nobody\",\"from\":\"+972500000001\",\"push_name\":\"CI\",\"message_id\":\"ci-nohdr\",\"timestamp\":1700000000,\"type\":\"text\",\"text\":\"hi\",\"raw\":{},\"self_test\":true,\"conversation_id\":\"self:ci\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhook/whatsapp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "webhook",
+                "whatsapp"
+              ]
+            }
           }
         },
         {
@@ -74,9 +115,30 @@
           ],
           "request": {
             "method": "POST",
-            "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "X-Gateway-Token", "value": "totally-wrong-not-a-real-token" } ],
-            "body": { "mode": "raw", "raw": "{\"gateway_account_id\":\"ci-acct-nobody\",\"from\":\"+972500000001\",\"push_name\":\"CI\",\"message_id\":\"ci-badhdr\",\"timestamp\":1700000000,\"type\":\"text\",\"text\":\"hi\",\"raw\":{},\"self_test\":true,\"conversation_id\":\"self:ci\"}" },
-            "url": { "raw": "{{baseUrl}}/webhook/whatsapp", "host": ["{{baseUrl}}"], "path": ["webhook", "whatsapp"] }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Gateway-Token",
+                "value": "totally-wrong-not-a-real-token"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"gateway_account_id\":\"ci-acct-nobody\",\"from\":\"+972500000001\",\"push_name\":\"CI\",\"message_id\":\"ci-badhdr\",\"timestamp\":1700000000,\"type\":\"text\",\"text\":\"hi\",\"raw\":{},\"self_test\":true,\"conversation_id\":\"self:ci\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhook/whatsapp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "webhook",
+                "whatsapp"
+              ]
+            }
           }
         },
         {
@@ -113,9 +175,30 @@
           ],
           "request": {
             "method": "POST",
-            "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "X-Gateway-Token", "value": "{{gatewayToken}}" } ],
-            "body": { "mode": "raw", "raw": "{\"gateway_account_id\":\"ci-acct-nobody\",\"from\":\"+972500000001\",\"push_name\":\"CI\",\"message_id\":\"ci-goodhdr\",\"timestamp\":1700000000,\"type\":\"text\",\"text\":\"hi\",\"raw\":{},\"self_test\":true,\"conversation_id\":\"self:ci\"}" },
-            "url": { "raw": "{{baseUrl}}/webhook/whatsapp", "host": ["{{baseUrl}}"], "path": ["webhook", "whatsapp"] }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Gateway-Token",
+                "value": "{{gatewayToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"gateway_account_id\":\"ci-acct-nobody\",\"from\":\"+972500000001\",\"push_name\":\"CI\",\"message_id\":\"ci-goodhdr\",\"timestamp\":1700000000,\"type\":\"text\",\"text\":\"hi\",\"raw\":{},\"self_test\":true,\"conversation_id\":\"self:ci\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhook/whatsapp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "webhook",
+                "whatsapp"
+              ]
+            }
           }
         },
         {
@@ -131,7 +214,21 @@
               }
             }
           ],
-          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/internal/wa/sessions", "host": ["{{baseUrl}}"], "path": ["internal", "wa", "sessions"] } }
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/internal/wa/sessions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "internal",
+                "wa",
+                "sessions"
+              ]
+            }
+          }
         },
         {
           "name": "GET /internal/wa/sessions — RIGHT token (expect 200)",
@@ -156,8 +253,23 @@
           ],
           "request": {
             "method": "GET",
-            "header": [ { "key": "X-Gateway-Token", "value": "{{gatewayToken}}" } ],
-            "url": { "raw": "{{baseUrl}}/internal/wa/sessions", "host": ["{{baseUrl}}"], "path": ["internal", "wa", "sessions"] }
+            "header": [
+              {
+                "key": "X-Gateway-Token",
+                "value": "{{gatewayToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/internal/wa/sessions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "internal",
+                "wa",
+                "sessions"
+              ]
+            }
           }
         }
       ]
@@ -200,7 +312,22 @@
               }
             }
           ],
-          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/api/book/{{bookingSlug}}/services", "host": ["{{baseUrl}}"], "path": ["api", "book", "{{bookingSlug}}", "services"] } }
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/book/{{bookingSlug}}/services",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "book",
+                "{{bookingSlug}}",
+                "services"
+              ]
+            }
+          }
         },
         {
           "name": "GET /api/book/{slug}/slots",
@@ -226,7 +353,32 @@
               }
             }
           ],
-          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/api/book/{{bookingSlug}}/slots?service_id={{capturedServiceId}}&date={{bookDate}}", "host": ["{{baseUrl}}"], "path": ["api", "book", "{{bookingSlug}}", "slots"], "query": [ { "key": "service_id", "value": "{{capturedServiceId}}" }, { "key": "date", "value": "{{bookDate}}" } ] } }
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/book/{{bookingSlug}}/slots?service_id={{capturedServiceId}}&date={{bookDate}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "book",
+                "{{bookingSlug}}",
+                "slots"
+              ],
+              "query": [
+                {
+                  "key": "service_id",
+                  "value": "{{capturedServiceId}}"
+                },
+                {
+                  "key": "date",
+                  "value": "{{bookDate}}"
+                }
+              ]
+            }
+          }
         },
         {
           "name": "POST /api/book/{slug} — create booking (capture cancel_token)",
@@ -256,9 +408,27 @@
           ],
           "request": {
             "method": "POST",
-            "header": [ { "key": "Content-Type", "value": "application/json" } ],
-            "body": { "mode": "raw", "raw": "{\"service_id\":\"{{capturedServiceId}}\",\"date\":\"{{bookDate}}\",\"time\":\"{{capturedSlot}}\",\"name\":\"CI Smoke\",\"phone\":\"+972500000009\"}" },
-            "url": { "raw": "{{baseUrl}}/api/book/{{bookingSlug}}", "host": ["{{baseUrl}}"], "path": ["api", "book", "{{bookingSlug}}"] }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"service_id\":\"{{capturedServiceId}}\",\"date\":\"{{bookDate}}\",\"time\":\"{{capturedSlot}}\",\"name\":\"CI Smoke\",\"phone\":\"+972500000009\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/book/{{bookingSlug}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "book",
+                "{{bookingSlug}}"
+              ]
+            }
           }
         },
         {
@@ -279,7 +449,23 @@
               }
             }
           ],
-          "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/api/book/{{bookingSlug}}/cancel/ci-not-the-real-token-xyz", "host": ["{{baseUrl}}"], "path": ["api", "book", "{{bookingSlug}}", "cancel", "ci-not-the-real-token-xyz"] } }
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/book/{{bookingSlug}}/cancel/ci-not-the-real-token-xyz",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "book",
+                "{{bookingSlug}}",
+                "cancel",
+                "ci-not-the-real-token-xyz"
+              ]
+            }
+          }
         },
         {
           "name": "POST /api/book/{slug}/cancel/{cancel_token} — expect 200",
@@ -300,7 +486,23 @@
               }
             }
           ],
-          "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/api/book/{{bookingSlug}}/cancel/{{capturedCancelToken}}", "host": ["{{baseUrl}}"], "path": ["api", "book", "{{bookingSlug}}", "cancel", "{{capturedCancelToken}}"] } }
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/book/{{bookingSlug}}/cancel/{{capturedCancelToken}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "book",
+                "{{bookingSlug}}",
+                "cancel",
+                "{{capturedCancelToken}}"
+              ]
+            }
+          }
         }
       ]
     },
@@ -327,8 +529,23 @@
           ],
           "request": {
             "method": "GET",
-            "header": [ { "key": "Cookie", "value": "{{sessionCookie}}", "description": "CI injects the full 'bizzup_session=<sid>' cookie via the sessionCookie env var." } ],
-            "url": { "raw": "{{baseUrl}}/api/me", "host": ["{{baseUrl}}"], "path": ["api", "me"] }
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{sessionCookie}}",
+                "description": "CI injects the full 'bizzup_session=<sid>' cookie via the sessionCookie env var."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me"
+              ]
+            }
           }
         },
         {
@@ -351,8 +568,22 @@
           ],
           "request": {
             "method": "GET",
-            "header": [ { "key": "Cookie", "value": "{{sessionCookie}}" } ],
-            "url": { "raw": "{{baseUrl}}/api/dashboard", "host": ["{{baseUrl}}"], "path": ["api", "dashboard"] }
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{sessionCookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "dashboard"
+              ]
+            }
           }
         }
       ]
@@ -378,7 +609,222 @@
               }
             }
           ],
-          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/openapi.json", "host": ["{{baseUrl}}"], "path": ["openapi.json"] } }
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/openapi.json",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "openapi.json"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. M16 — customer files (uploads + owner download)",
+      "item": [
+        {
+          "name": "POST /internal/wa/media — NO token (expect 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// The body is deliberately well-formed so the request reaches the",
+                  "// handler: a missing form field would 422 first and hide the gate.",
+                  "pm.test('media upload without a token is 401', function () {",
+                  "  pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test('the 401 body carries no file name or bytes', function () {",
+                  "  pm.expect(pm.response.text()).to.not.include('upload.bin');",
+                  "  pm.expect(pm.response.text()).to.not.include('not-a-real-image');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data; boundary=BizzUpM16Boundary"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "--BizzUpM16Boundary\r\nContent-Disposition: form-data; name=\"business_id\"\r\n\r\naaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\r\n--BizzUpM16Boundary\r\nContent-Disposition: form-data; name=\"mime_type\"\r\n\r\nimage/png\r\n--BizzUpM16Boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"upload.bin\"\r\nContent-Type: image/png\r\n\r\nnot-a-real-image\r\n--BizzUpM16Boundary--\r\n"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/internal/wa/media",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "internal",
+                "wa",
+                "media"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /internal/wa/media — token + MALFORMED business_id (expect 422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var hasToken = !!pm.environment.get('gatewayToken');",
+                  "if (!hasToken) {",
+                  "  pm.test('SKIPPED malformed business_id (no gatewayToken set)', function () { pm.expect(true).to.be.true; });",
+                  "} else {",
+                  "  pm.test('a non-uuid business_id is 422, never a 500', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Gateway-Token",
+                "value": "{{gatewayToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data; boundary=BizzUpM16Boundary"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "--BizzUpM16Boundary\r\nContent-Disposition: form-data; name=\"business_id\"\r\n\r\nnot-a-uuid\r\n--BizzUpM16Boundary\r\nContent-Disposition: form-data; name=\"mime_type\"\r\n\r\nimage/png\r\n--BizzUpM16Boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"upload.bin\"\r\nContent-Type: image/png\r\n\r\nnot-a-real-image\r\n--BizzUpM16Boundary--\r\n"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/internal/wa/media",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "internal",
+                "wa",
+                "media"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /internal/wa/media — token + disallowed content (expect 415)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var hasToken = !!pm.environment.get('gatewayToken');",
+                  "if (!hasToken) {",
+                  "  pm.test('SKIPPED content sniff (no gatewayToken set)', function () { pm.expect(true).to.be.true; });",
+                  "} else {",
+                  "  // The payload is plain ASCII declared as image/png. The sniffer",
+                  "  // decides by MAGIC BYTES, so it is refused -- and refused BEFORE",
+                  "  // any storage call, so this request never writes a row or an object.",
+                  "  pm.test('content that is not really a png is 415', function () {",
+                  "    pm.response.to.have.status(415);",
+                  "  });",
+                  "  pm.test('the 415 body does not echo the file name', function () {",
+                  "    pm.expect(pm.response.text()).to.not.include('upload.bin');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Gateway-Token",
+                "value": "{{gatewayToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data; boundary=BizzUpM16Boundary"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "--BizzUpM16Boundary\r\nContent-Disposition: form-data; name=\"business_id\"\r\n\r\naaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\r\n--BizzUpM16Boundary\r\nContent-Disposition: form-data; name=\"mime_type\"\r\n\r\nimage/png\r\n--BizzUpM16Boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"upload.bin\"\r\nContent-Type: image/png\r\n\r\nnot-a-real-image\r\n--BizzUpM16Boundary--\r\n"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/internal/wa/media",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "internal",
+                "wa",
+                "media"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/leads/files/{id} — owner download (401 no session / 404 unknown id)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var hasCookie = !!pm.environment.get('sessionCookie');",
+                  "if (hasCookie) {",
+                  "  // A file id that belongs to nobody must be a FLAT 404 -- the same",
+                  "  // answer another tenant's real file id gets. A 403 would confirm",
+                  "  // the id exists somewhere, which is an enumeration oracle.",
+                  "  pm.test('an unknown file id is 404 (never 403)', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "  });",
+                  "} else {",
+                  "  pm.test('without a session the download is 401 (deny-by-default)', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{sessionCookie}}",
+                "description": "CI injects the full 'bizzup_session=<sid>' cookie via the sessionCookie env var."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/leads/files/00000000-0000-4000-8000-000000000000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "leads",
+                "files",
+                "00000000-0000-4000-8000-000000000000"
+              ]
+            }
+          }
         }
       ]
     }

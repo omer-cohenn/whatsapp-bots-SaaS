@@ -79,6 +79,24 @@ class Settings(BaseSettings):
         default=None, alias="GOOGLE_CALENDAR_REDIRECT_URI"
     )
 
+    # --- M16 object storage (Cloudflare R2 / any S3-compatible). OPTIONAL. ----
+    # Customer files (images/PDF/DOC/PPT sent through the bot) are envelope-
+    # encrypted and stored in an S3-compatible bucket. ALL FIVE are OPTIONAL and
+    # validate-at-USE, exactly like gemini_api_key: the stack MUST still boot
+    # with no storage configured — the file feature simply REFUSES uploads with
+    # a typed StorageNotConfiguredError → HTTP 503 (see services/file_storage.py).
+    # They are therefore NOT in the fail-closed validator below.
+    #   S3_ENDPOINT  : the R2 account endpoint (https://<acct>.r2.cloudflarestorage.com)
+    #                  or http://minio:9000 in local dev. NOT a secret (a hostname).
+    #   S3_BUCKET    : bucket name. NOT a secret.
+    #   S3_REGION    : R2 ignores it but boto3/SigV4 requires one — 'auto' for R2.
+    # The two credentials ARE secrets → SecretStr, never logged, never echoed.
+    s3_endpoint: str | None = Field(default=None, alias="S3_ENDPOINT")
+    s3_access_key_id: SecretStr | None = Field(default=None, alias="S3_ACCESS_KEY_ID")
+    s3_secret_access_key: SecretStr | None = Field(default=None, alias="S3_SECRET_ACCESS_KEY")
+    s3_bucket: str | None = Field(default=None, alias="S3_BUCKET")
+    s3_region: str = Field(default="auto", alias="S3_REGION")
+
     # --- M12 back-office admin allow-list (NON-secret, fail-OPEN-on-empty) ----
     # ADMIN_EMAILS is a comma-separated list of platform-operator emails that may
     # reach /api/admin/*. It is NOT a secret and NOT fail-closed: an EMPTY value

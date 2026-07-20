@@ -140,8 +140,13 @@ def build_system_prompt(current_config: dict[str, Any]) -> str:
 - מסלולים (מפתח = שם המסלול בעברית, קצר וייחודי — זה השם שבעל העסק רואה בדשבורד):
   • איסוף מידע (lead): {{"lead_steps": {{"הצעת מחיר": {{"label": "הצעת מחיר", "flow_type": "lead",
     "steps": [{{"key": "שם מלא", "question": "מה השם המלא?", "type": "text", "required": true}}]}}}}}}
-  • סוגי שדה אפשריים ל-type: "text" | "phone" | "email" | "choice".
+  • סוגי שדה אפשריים ל-type: "text" | "phone" | "email" | "choice" | "file".
     לשדה מסוג "choice" חובה להוסיף "options": ["א", "ב"] (2 עד 12 פריטים).
+    שדה מסוג "file" מבקש מהלקוח לשלוח קובץ או תמונה (למשל צילום ת"ז, רישיון, תמונת נזק
+    או מסמך) — השתמש בו רק כשבאמת צריך קובץ. אפשר להוסיף "accept" עם הסוגים המותרים
+    מתוך ["image", "pdf", "doc", "ppt"]; אם לא צוין — כל הסוגים מותרים (עד 10MB לקובץ).
+    דוגמה: {{"key": "צילום רישיון", "question": "אפשר לשלוח צילום של הרישיון?", "type": "file",
+    "required": true, "accept": ["image", "pdf"]}}
   • מעבר לנציג (human_handoff): {{"lead_steps": {{"מעבר לנציג": {{"label": "דברו עם נציג",
     "flow_type": "human_handoff", "steps": []}}}}}}  ← למסלול כזה steps חייב להיות ריק.
   • קביעת תור (booking, שמור לשלב הבא): {{"lead_steps": {{"קביעת תור": {{"label": "קביעת תור",
@@ -155,7 +160,8 @@ def build_system_prompt(current_config: dict[str, Any]) -> str:
       "ביטוח חיים": {{"label": "ביטוח חיים", "flow_type": "lead", "steps": [
         {{"key": "שם מלא", "question": "מה השם המלא?", "type": "text", "required": true}},
         {{"key": "טלפון", "question": "מה מספר הטלפון?", "type": "phone", "required": true}},
-        {{"key": "גיל", "question": "מה הגיל?", "type": "text", "required": true}}
+        {{"key": "גיל", "question": "מה הגיל?", "type": "text", "required": true}},
+        {{"key": "צילום ת ז", "question": "אפשר לשלוח צילום של תעודת הזהות?", "type": "file", "required": false, "accept": ["image", "pdf"]}}
       ]}},
       "מעבר לנציג": {{"label": "מעבר לנציג", "flow_type": "human_handoff", "steps": []}},
       "קביעת פגישה": {{"label": "קביעת פגישה", "flow_type": "booking", "service_name": "פגישת ייעוץ", "steps": []}}
@@ -405,6 +411,8 @@ _ALLOWED_STEP_KEYS = {
     "required",
     "validate",
     "options",
+    # M16: accepted file kinds for a "file" step (dropped silently without this).
+    "accept",
     "error_message",
 }
 
