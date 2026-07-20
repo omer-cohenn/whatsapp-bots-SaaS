@@ -3,6 +3,7 @@
 > המערכת חיה ב-**https://botik-dev.duckdns.org** (מאז 2026-07-17).
 > ההחלטה המלאה: [`decisions/0025-production-deployment.md`](decisions/0025-production-deployment.md).
 > תמונת הרשת המפורטת: [`security/production-networking.md`](security/production-networking.md).
+> **המדריך המלא לשרת** (גישה, מפת קבצים, איך זה עובד): [`SERVER.md`](SERVER.md).
 > **אין במסמך הזה שום סוד.** כל הסודות יושבים ב-`infra/.env` על השרת בלבד.
 
 ## הארכיטקטורה בשורה אחת
@@ -38,9 +39,16 @@ Static IP `35.157.230.101`. Firewall: **רק 22/80/443**.
 git push origin main
 
 # 2) על השרת (הדרך העובדת כרגע)
-ssh root@botik-dev.duckdns.org
-~/deploy.sh
+ssh -i ~/.ssh/botik.pem ubuntu@botik-dev.duckdns.org
+sudo bash /root/deploy.sh
 ```
+
+> **המשתמש הוא `ubuntu`, לא `root`.** AWS חוסמת כניסת root ישירה ותענה
+> `Please login as the user "ubuntu"`. המדריך המלא לשרת — כולל מפת הקבצים,
+> ההרשאות ופתרון תקלות — ב-[`SERVER.md`](SERVER.md).
+
+> **תלות חדשה = חובה rebuild.** `deploy.sh` כולל `--build`, אז הוא מכסה את זה;
+> אבל `restart` בלבד **לא** — הקונטיינר יעלה עם האימג' הישן. נשך אותנו ב-M16 וב-M17.
 
 `deploy.sh` עושה: `git pull` → `docker compose --env-file infra/.env -f infra/docker-compose.yml
 -f infra/docker-compose.prod.yml up -d --build` → `docker system prune`.

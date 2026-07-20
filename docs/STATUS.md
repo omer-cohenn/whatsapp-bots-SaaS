@@ -1,16 +1,24 @@
 # STATUS — read this first to resume 📍
 
-> **Last updated: 2026-07-17.** This is the single "where are we / how do I continue" file. A new session
+> **Last updated: 2026-07-20.** This is the single "where are we / how do I continue" file. A new session
 > should read this, then [`spec/mvp-checklist.md`](spec/mvp-checklist.md).
+> **Getting onto the server:** [`SERVER.md`](SERVER.md) — access, file map, how it runs, troubleshooting.
 
 ## 🟢 LIVE IN PRODUCTION — https://botik-dev.duckdns.org (since 2026-07-17)
 AWS Lightsail (Frankfurt, Ubuntu 24.04, 1GB + 2GB swap) · static IP `35.157.230.101` · free DuckDNS
 domain · **Caddy** terminates auto-HTTPS and is the ONLY public door. Deploy runbook:
 [`DEPLOY.md`](DEPLOY.md) · decision: [`decisions/0025-production-deployment.md`](decisions/0025-production-deployment.md).
 
+**Latest shipped: M17** — leads keyword search + Excel export (one tab per flow), commit `74d6bcc`,
+live 2026-07-20. Decision: [`decisions/0027-m17-leads-search-and-export.md`](decisions/0027-m17-leads-search-and-export.md).
+> ⚠️ The search match rule exists TWICE — `backend/app/services/leads/search.py` and
+> `frontend/src/dashboard/leadSearch.ts`. They MUST stay identical, or the exported file stops
+> matching the on-screen list. Change both in the same commit.
+
 ### Open items (honest list)
-1. **GitHub Actions auto-deploy is FAILING** on the `DEPLOY_SSH_KEY` secret — manual `~/deploy.sh`
-   on the server is the working path until it's fixed.
+1. **GitHub Actions auto-deploy is FAILING** on the `DEPLOY_SSH_KEY` secret — manual
+   `sudo bash /root/deploy.sh` on the server is the working path until it's fixed.
+   (Log in as `ubuntu`, NOT `root` — see [`SERVER.md`](SERVER.md).)
 2. **Rotate `GOOGLE_CLIENT_SECRET` + `GEMINI_API_KEY`** — flagged in
    [`security/hardening-report.md`](security/hardening-report.md), still not done.
 3. **Buy a real domain** later; DuckDNS is the free interim (changing it = `PUBLIC_DOMAIN` in
@@ -21,6 +29,19 @@ domain · **Caddy** terminates auto-HTTPS and is the ONLY public door. Deploy ru
    dashboard/lead_status) — not a regression, the old assertions need updating.
 6. **Consider adding the Postman/newman gate** into the deploy workflow (collection already exists
    in `tests/postman/`, 18/18 green when run by hand).
+7. **Server memory is tight, but NOT because of bot count** — the baseline is infrastructure:
+   `dockerd` alone is 123MB, `containerd` 28MB, before any app code. Bot count barely moves it.
+   `available` is ~180MB. The `reverse-proxy` *healthcheck* has been failing for 3+ days with
+   `fork: Resource temporarily unavailable` (the site itself still serves 200). Lever if headroom
+   is ever needed: `WEB_CONCURRENCY` is 2 — dropping to 1 frees ~30MB. Measured table in
+   [`SERVER.md`](SERVER.md) §5.
+8. ~~`infra/.env.bak.<ts>` on the server~~ — **DONE 2026-07-20.** Shredded after verifying nothing
+   referenced it and that `.env` held all 27 keys; `.env` perms tightened 644 → 600. Next-deploy
+   safety re-verified with `docker compose config -q`.
+9. **Demo seed data in the admin business** — an insurance bot ("שקד סוכנות לביטוח", 4 flows) plus
+   300 generated leads and 8 tiny real files in R2, all tagged `cache_chat_ref LIKE 'seed:demo300:%'`
+   for a one-predicate cleanup. The previous barbershop bot config was backed up before it was
+   replaced. This is LOCAL-dev data; it is not on the production server.
 
 ## Phase: BUILD (the MVP). Mapping + ground-up re-spec are DONE.
 - ✅ **M0** — the stack runs (one command, all services healthy).
@@ -56,7 +77,36 @@ domain · **Caddy** terminates auto-HTTPS and is the ONLY public door. Deploy ru
 - ✅ **הקשחת אבטחה + שער QA (decision 0024)** — 2026-07-16, commit `037a924` (PR #1). קובץ סודות **אחד** `infra/.env` (שונה מ-`.env.local`) + template אחד במעקב; **תיקון דליפת PII ב-access log** (`app/core/request_log.py` מחליף את `uvicorn.access` — שורה מצונזרת בלי query string, אחרי שדלפו `code`/`state` של OAuth ו-`cancel_token`); **רשת פרודקשן** (`docker-compose.prod.yml` + `Caddyfile` = הדלת הציבורית היחידה); `/docs`+`/redoc`+`/openapi.json` **כבויים** כש-`APP_ENV != dev`; שלושה guards (secret/log-PII/port-exposure) + `test_e2e_auth_matrix.py` (12); collection של **Postman/newman** ב-`tests/postman` (18/18). פירוט מלא: [`security/hardening-report.md`](security/hardening-report.md) + [`security/production-networking.md`](security/production-networking.md). Plan: [`decisions/0024-security-hardening-and-qa-gate.md`](decisions/0024-security-hardening-and-qa-gate.md).
 - ✅ **עלייה לאוויר (decision 0025)** — 2026-07-17, commits `8f37108`/`9755991`/`4fcf3f9`/`8ce0a0f`/`f55fd46`. Lightsail פרנקפורט + static IP + DuckDNS + Caddy HTTPS אוטומטי + firewall 22/80/443 + מסך הסכמה של Google **מפורסם** + `/root/deploy.sh` + GitHub Action (כרגע נכשל על ה-SSH key). ארבעה תיקוני deploy נלמדו: bind-mount של השער ב-prod, `COPY public/` ב-`Dockerfile.prod`, `PUBLIC_DOMAIN` ריק שובר את ה-Caddyfile, ו-timeouts של 120s ל-AI. Runbook: [`DEPLOY.md`](DEPLOY.md) · Plan: [`decisions/0025-production-deployment.md`](decisions/0025-production-deployment.md).
 - ✅ **מיתוג: אייקון ה-B-robot (decision 0026)** — 2026-07-17, commits `e940443`/`d69b20c`/`0c2e84b`. `botik-icon.png` אחד (סימן B-robot עם קו מתאר ירוק) בכל נקודות המותג כולל favicon/apple-touch-icon; חותמת **"דמו"** מסובבת על כותרת המסלולים + "המחירים להמחשה בלבד"; brand intro ממורכז וצף בראש דף הנחיתה (1.9s, מודע ל-reduced-motion). Plan: [`decisions/0026-botik-brand-icon.md`](decisions/0026-botik-brand-icon.md).
+- ✅ **M17 (חיפוש בלידים + ייצוא לאקסל)** — 2026-07-20, commit `74d6bcc`, חי בפרודקשן. חיפוש חופשי בטבלת הלידים (שם/טלפון/מסלול/**כל מפתח שאלה**/**כל ערך תשובה**/**שמות קבצים**) — רץ בדפדפן כי `answers` מוצפן כבלוב יחיד ו-SQL לא יכול להתאים עליו. ייצוא `GET /api/leads/export` ל-`.xlsx` עם **טאב לכל מסלול** (עמודות התשובות מחושבות לכל גיליון בנפרד), צבעי טאב מעומעמים, RTL מלא (`readingOrder=2` ברמת העמודה — `sheet_view.rightToLeft` לבדו הפך רק עמודות ולא טקסט), הגנת formula-injection, וקבצים כקישורים למסלול המוגן-סשן. תקרה `EXPORT_MAX_ROWS=50_000` (נמדד: 3,000 לידים → 3.5 שניות, שיא 4.1MB, streaming). **11/11 strict.** ⚠️ כלל ההתאמה קיים **פעמיים** (`leads/search.py` + `dashboard/leadSearch.ts`) — חייבים להישאר זהים, אחרת הקובץ יפסיק להתאים למסך. Plan: [`decisions/0027-m17-leads-search-and-export.md`](decisions/0027-m17-leads-search-and-export.md).
 - ⬜ **M6 (rest) — next:** per the checklist (QR onboarding, encrypted cred persistence, hardened inbound, reconnection — outbound send is now wired via M6a.2 `/send-bot`). **NOTE:** M6b must handle WhatsApp **LID addressing** for real customers (see the LID fix above) — phone-based routing won't work without LID→phone resolution.
+
+## 🔮 Future / backlog (decided, NOT scheduled)
+
+- ⬜ **"מודל AI" — בוט שגם עונה, לא רק אוסף (מסלול תמחור נפרד).**
+  **החלטת Omer, 2026-07-20: המוצר הנוכחי נשאר מודל האיסוף. זה יהיה מוצר בתמחור אחר.**
+
+  **המצב היום (למה זו בכלל שאלה):** מנוע השיחה `bot_engine.py` הוא מכונת מצבים
+  **דטרמיניסטית וטהורה** — `phase` (new/menu/in_flow/handed_off) + `step_index`.
+  "מה לענות" = "מה השאלה הבאה ברשימה". בחירת מסלול = מספר או התאמת מחרוזת לתווית
+  (`_pick_flow`). **אין קריאת LLM בנתיב ההודעה הנכנסת** — ה-AI פועל רק בבונה הבוטים
+  ובברכת ההזמנות, כלומר במסכי הבעלים, לא בשיחת הלקוח.
+
+  **מה זה קונה לנו היום, ומה ייפרץ אם נשנה:**
+  1. **אבטחה** — אין LLM ואין גישה לנתונים בנתיב הזה, ולכן **אין prompt-injection ואין
+     נתיב exfiltration**. לקוח לא יכול להזריק הוראות: אין למי. מודל AI בשיחה **פותח
+     את שטח התקיפה הזה מאפס** ויחייב בידוד הקשר קפדני.
+  2. **עלות** — הודעה = חיפוש בטבלה. בגלל זה השרת בולע מאות בוטים מבחינת עומס
+     (ראה [`SERVER.md`](SERVER.md) §5). AI לכל הודעה הופך את זה לעלות משתנה לכל הודעה —
+     **בדיוק הסיבה שזה חייב מסלול תמחור נפרד.**
+  3. **דטרמיניזם** — אותו קלט → אותה תשובה, תמיד, וניתן לבדיקה. תשובות LLM אינן.
+
+  **המחיר של המצב הנוכחי (המגבלה שדוחפת לשינוי):** הבוט **לא יכול לענות על שאלה
+  חופשית**. "כמה עולה ביטוח חיים לגבר בן 40?" מקבל דחיפה חזרה לתפריט. השסתום היחיד
+  הוא `handoff_keywords` → אדם, וזו העברה ולא מענה.
+
+  **קשור ל-:** [`decisions/0020-pricing-tiers.md`](decisions/0020-pricing-tiers.md) — הפיצ'רים
+  העתידיים כבר מוגדרים שם כמודולי add-on נפרדים (RAG ‎+₪199 הוא ככל הנראה הבית הטבעי
+  לזה). דורש גם את אכיפת התקרות, שעדיין לא מומשה.
 
 ## What works RIGHT NOW
 - Full local stack via `run.bat` (or `make dev`): **backend `:8000` · gateway `:3000` · frontend `:5173` · postgres · redis**, health-gated startup.
