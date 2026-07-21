@@ -125,6 +125,13 @@ export type Conversation = {
   /** Unread customer messages on this conversation (WhatsApp-style). Defaults to
    * 0; reset server-side when the owner opens the conversation. */
   unread: number
+  /** M18 — the customer's name, joined server-side from the linked lead so the
+   * inbox row can show a name + initials avatar. null when the conversation has
+   * no lead yet (messaged but never started a flow). */
+  contact_name: string | null
+  /** M18 — the customer's phone, same source. Used as the display fallback when
+   * there is no name. */
+  phone: string | null
 }
 
 export type ConversationsResponse = {

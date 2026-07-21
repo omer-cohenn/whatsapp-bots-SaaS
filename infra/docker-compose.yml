@@ -67,7 +67,29 @@ services:
     restart: *restart
     # Require a password (REDIS_PASSWORD from .env). --requirepass with an
     # empty value would disable auth, so the apps fail-closed if it's unset.
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--save", "", "--appendonly", "no"]
+    #
+    # DURABILITY (M19): appendonly was "no" and save was "" — nothing was ever
+    # written to disk, so EVERY restart (i.e. every deploy) wiped every live
+    # conversation. Conversations now carry a 72h retention promise, so the AOF
+    # is on. `everysec` is the standard trade: at most ~1 second of writes is at
+    # risk on a hard kill, without an fsync per command.
+    #
+    # `--maxmemory-policy noeviction` is stated EXPLICITLY rather than left to the
+    # default: under an eviction policy Redis would silently drop keys when memory
+    # ran short, and a retention promise that can be silently evicted is not a
+    # promise. With noeviction a full instance fails writes LOUDLY instead.
+    command: [
+      "redis-server",
+      "--requirepass", "${REDIS_PASSWORD}",
+      "--appendonly", "yes",
+      "--appendfsync", "everysec",
+      "--maxmemory-policy", "noeviction",
+    ]
+    volumes:
+      # A NAMED volume. Redis's image declares an anonymous VOLUME /data, which
+      # can be orphaned on recreate — enabling the AOF without pinning the volume
+      # would have looked durable while still losing data.
+      - redis_data:/data
     environment:
       # The healthcheck runs INSIDE the container, where ${REDIS_PASSWORD} from the
       # env-file is NOT present — that caused the "unhealthy" failure. redis-cli reads
@@ -251,6 +273,9 @@ services:
 # ---------------------------------------------------------------------------
 volumes:
   pg_data:
+  # M19 — the Redis AOF. Conversations are durable across restarts now, so this
+  # volume holds real data, not a disposable cache: do NOT prune it casually.
+  redis_data:
 
 # Default network is created automatically; all services share it and resolve
 # each other by service name (backend, gateway, frontend, postgres, redis).

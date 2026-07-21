@@ -128,6 +128,63 @@ async def get_lead_by_conversation(
     return _decrypt_lead_row(row, business_id) if row is not None else None
 
 
+async def contacts_for_conversations(
+    conn: asyncpg.Connection,
+    business_id: str,
+    conversation_ids: list[str],
+) -> dict[str, dict[str, Any]]:
+    """Map conversation_id → {"contact_name", "phone"} for a BATCH of conversations.
+
+    Exists so the conversations LIST can show a real name + avatar per row (M18).
+    The list itself is served from Redis, which holds no name; the name lives on
+    the linked lead, encrypted.
+
+    Deliberately ONE query for the whole page rather than a call per row — the
+    inbox renders dozens of rows, and a per-row lookup would be a classic N+1
+    against an encrypted table.
+
+    Only `contact_name` + `phone` are selected and decrypted. The `answers` blob
+    is NOT read: it is the expensive field and the list has no use for it.
+
+    `DISTINCT ON (cache_chat_ref) … ORDER BY last_activity_at DESC` keeps the
+    NEWEST lead per conversation, matching `get_lead_by_conversation`'s choice —
+    a conversation can spawn several leads over time.
+
+    `business_id` is the caller's verified id and sits in the WHERE so RLS scopes
+    the read. Returns plaintext for the OWNER only; never logged.
+    """
+    if not conversation_ids:
+        return {}
+
+    prefix = f"conv:{business_id}:"
+    refs = [f"{prefix}{cid}" for cid in conversation_ids]
+    rows = await conn.fetch(
+        """
+        SELECT DISTINCT ON (cache_chat_ref)
+               cache_chat_ref, contact_name, phone, key_version
+        FROM leads
+        WHERE business_id = $1 AND cache_chat_ref = ANY($2::text[])
+        ORDER BY cache_chat_ref, last_activity_at DESC
+        """,
+        business_id,
+        refs,
+    )
+
+    out: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        ref = row["cache_chat_ref"] or ""
+        if not ref.startswith(prefix):
+            # Defensive: a ref that isn't this tenant's shape is skipped rather
+            # than mis-attributed to a conversation id.
+            continue
+        key_version = row["key_version"] or crypto.CURRENT_KEY_VERSION
+        out[ref[len(prefix):]] = {
+            "contact_name": crypto.decrypt_pii(row["contact_name"], key_version),
+            "phone": crypto.decrypt_pii(row["phone"], key_version),
+        }
+    return out
+
+
 async def get_active_lead_id_by_conversation(
     conn: asyncpg.Connection,
     business_id: str,

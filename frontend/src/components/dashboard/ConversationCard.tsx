@@ -1,7 +1,9 @@
 // One live conversation as an ACCORDION ROW (the StepsEditor accordion pattern:
 // only one row is open at a time, controlled by the parent list).
 //
-//  - Collapsed: a status chip + last-message preview + relative last-activity.
+//  - Collapsed: a WhatsApp-style row (M18) — initials avatar, the customer's
+//    NAME (was the raw WhatsApp jid), status chip, one-line message preview, and
+//    a trailing time + unread pill.
 //  - Expanded: lazily fetches GET /api/conversations/{id} to show the linked
 //    lead's details (name / phone / collected answers) and the handling actions:
 //      • "לשיחה עם הלקוח" — flips waiting/bot → human (POST status) and reveals
@@ -24,8 +26,9 @@ import {
   setLeadStatus,
 } from '../../lib/dashboardClient'
 import { toFriendlyError } from '../../lib/friendlyError'
-import { relativeTime } from '../../lib/formatDate'
+import { chatListTime, fullDateTime } from '../../lib/formatDate'
 import { closeReasonMeta } from '../../dashboard/closeReason'
+import Avatar from './Avatar'
 import Badge from '../ui/Badge'
 import Button from '../ui/Button'
 import Icon from '../ui/Icon'
@@ -162,6 +165,26 @@ export default function ConversationCard({
     }
   }
 
+  // What the row is TITLED. The old row printed `conversation_id` raw, which is
+  // a WhatsApp jid ("972500000000@s.whatsapp.net" or a "…@lid" privacy id) —
+  // unreadable, and not what a chat app shows. Fallback chain, best first:
+  //   1. the customer's name, from the linked lead
+  //   2. their phone number
+  //   3. the digits of the jid, if they look like a phone (a @lid privacy id
+  //      does NOT, so it is not shown as one)
+  //   4. a neutral placeholder — never the raw jid
+  const displayName = (() => {
+    const name = conversation.contact_name?.trim()
+    if (name) return name
+    const phone = conversation.phone?.trim()
+    if (phone) return phone
+    const local = conversation.conversation_id.split('@')[0]
+    if (/^\d{9,15}$/.test(local) && !conversation.conversation_id.endsWith('@lid')) {
+      return local
+    }
+    return 'לקוח ללא שם'
+  })()
+
   const lead = detail?.lead ?? null
   const answers = Object.entries(lead?.answers ?? {})
   // "Why it closed" (decision 0021) — additional context shown next to the live
@@ -169,38 +192,63 @@ export default function ConversationCard({
   const closeMeta = closeReasonMeta(lead?.close_reason ?? null)
 
   return (
-    <article className="overflow-hidden rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-slate-800">
+    // No border/rounding of its own: rows sit inside one continuous list
+    // container (see ConversationsPage) and are separated by dividers, the way a
+    // chat inbox reads. The container owns the frame.
+    <article className="bg-white dark:bg-slate-800">
       {/* Accordion header — click to expand/collapse this conversation. */}
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
         aria-controls={bodyId}
-        className="flex w-full items-center gap-3 px-4 py-3 text-right hover:bg-slate-50 dark:hover:bg-slate-700/50"
+        aria-label={`שיחה עם ${displayName}${
+          conversation.unread > 0 ? `, ${conversation.unread} הודעות שלא נקראו` : ''
+        }`}
+        className="flex w-full items-center gap-3 px-3 py-3 text-right hover:bg-slate-50 dark:hover:bg-slate-700/50"
       >
-        <span
-          aria-hidden="true"
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300"
-        >
-          <Icon name="message-circle" size={18} />
-        </span>
+        <Avatar name={displayName} />
+
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-slate-900 dark:text-slate-100" dir="ltr">
-            {conversation.conversation_id}
+          {/* Line 1: name + status chip. */}
+          <span className="flex items-center gap-2">
+            <span className="truncate text-[15px] font-semibold text-slate-900 dark:text-slate-100">
+              {displayName}
+            </span>
+            <Badge tone={meta.tone}>{meta.label}</Badge>
           </span>
-          <span className="block truncate text-xs text-slate-500">
+          {/* Line 2: the last message, one line, clipped like a chat app. */}
+          <span className="mt-0.5 block truncate text-sm text-slate-500 dark:text-slate-400">
             {conversation.preview || 'אין הודעות עדיין'}
-            {conversation.last_activity_at
-              ? ` · ${relativeTime(conversation.last_activity_at)}`
-              : ''}
           </span>
         </span>
-        <Badge tone={meta.tone}>{meta.label}</Badge>
-        <Icon
-          name="chevron-down"
-          size={18}
-          className={`flex-shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`}
-        />
+
+        {/* Trailing column: time above, unread pill below — the WhatsApp shape. */}
+        <span className="flex shrink-0 flex-col items-end gap-1.5">
+          <span
+            className={`text-xs ${
+              conversation.unread > 0
+                ? 'font-semibold text-leaf'
+                : 'text-slate-400 dark:text-slate-500'
+            }`}
+            title={fullDateTime(conversation.last_activity_at)}
+          >
+            {chatListTime(conversation.last_activity_at)}
+          </span>
+          {conversation.unread > 0 ? (
+            <span className="min-w-[20px] rounded-full bg-leaf px-1.5 py-0.5 text-center text-xs font-bold leading-none text-white">
+              {conversation.unread > 99 ? '99+' : conversation.unread}
+            </span>
+          ) : (
+            <Icon
+              name="chevron-down"
+              size={16}
+              className={`text-slate-300 transition-transform dark:text-slate-600 ${
+                open ? 'rotate-180' : ''
+              }`}
+            />
+          )}
+        </span>
       </button>
 
       {/* Accordion body — lead details + actions + (optional) inline chat. */}

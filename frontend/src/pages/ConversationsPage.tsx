@@ -11,7 +11,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import DashboardLayout from '../components/DashboardLayout'
 import ConversationCard from '../components/dashboard/ConversationCard'
-import SegmentedControl, { type Segment } from '../components/dashboard/SegmentedControl'
+import ChatTabs, { type ChatTab } from '../components/dashboard/ChatTabs'
 import Button from '../components/ui/Button'
 import Spinner from '../components/ui/Spinner'
 import Alert from '../components/ui/Alert'
@@ -23,12 +23,15 @@ import type { Conversation, ConversationStatus } from '../dashboard/types'
 
 type StatusFilter = 'all' | ConversationStatus
 
-const FILTER_SEGMENTS: Segment<StatusFilter>[] = [
-  { value: 'waiting', label: 'המתנה לנציג' },
+// Four tabs, WhatsApp-style. There is deliberately NO "נטוש" tab: abandonment
+// is a LEAD state (close_reason), not a conversation state — the conversation
+// statuses are only bot | waiting | human | closed. Abandoned leads live on the
+// leads page, under its own "נטשו" filter.
+const FILTER_TABS: ChatTab<StatusFilter>[] = [
+  { value: 'waiting', label: 'ממתינות' },
   { value: 'bot', label: 'בוט' },
   { value: 'human', label: 'נציג' },
   { value: 'closed', label: 'סגורות' },
-  { value: 'all', label: 'הכול' },
 ]
 
 export default function ConversationsPage() {
@@ -101,9 +104,19 @@ export default function ConversationsPage() {
           </Button>
         </div>
 
-        <SegmentedControl
+        {/* WhatsApp-style tab bar (M18). The counts come from the CURRENT list,
+            so only the active tab can show one — the others aren't loaded. That
+            is deliberate: a per-tab count would need a separate request per tab
+            on every render. */}
+        <ChatTabs
           label="סינון לפי מצב"
-          segments={FILTER_SEGMENTS}
+          tabs={FILTER_TABS.map((t) => ({
+            ...t,
+            count:
+              t.value === filter
+                ? (conversations ?? []).reduce((n, c) => n + (c.unread || 0), 0)
+                : undefined,
+          }))}
           value={filter}
           onChange={setFilter}
         />
@@ -117,7 +130,7 @@ export default function ConversationsPage() {
           ) : error ? (
             <Alert tone="error">{error}</Alert>
           ) : conversations && conversations.length > 0 ? (
-            <ul className="flex flex-col gap-3">
+            <ul className="divide-y divide-black/5 overflow-hidden rounded-xl border border-black/10 bg-white dark:divide-white/5 dark:border-white/10 dark:bg-slate-800">
               {conversations.map((conv) => (
                 <li key={conv.conversation_id}>
                   <ConversationCard

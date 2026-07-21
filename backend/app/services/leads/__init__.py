@@ -75,6 +75,7 @@ from app.services.leads.query import (
     STATUS_OPEN,
     get_active_lead_id_by_conversation,
     get_conversation_id_for_lead,
+    contacts_for_conversations,
     get_lead_by_conversation,
     list_leads,
 )
@@ -108,6 +109,7 @@ __all__ = [
     "mark_all_leads_feed_seen",
     # read side
     "list_leads",
+    "contacts_for_conversations",
     "get_lead_by_conversation",
     "get_active_lead_id_by_conversation",
     "get_conversation_id_for_lead",

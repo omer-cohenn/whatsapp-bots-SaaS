@@ -19,7 +19,7 @@ there is no path to read/write another tenant's conversation.
 
 TTL DEPENDS ON STATUS (decision 0010) — the transcript must NOT vanish while a
 human is needed:
-  * bot     → sliding ~30-min inactivity window (silence ⇒ expire).
+  * bot     → sliding 72-HOUR inactivity window (M19; was 30 minutes).
   * waiting → PERSIST (no expiry): the customer asked for a human; keep the chat
               alive until a person answers.
   * human   → PERSIST (no expiry): an owner is handling it; keep it alive.
@@ -27,6 +27,13 @@ human is needed:
 This is centralized in `_apply_ttl`, called by BOTH `set_status` and
 `append_message` so a new message can never resurrect a TTL on a chat that should
 persist.
+
+ENCRYPTED AT REST (M19). Message bodies and the inbox preview are customer words,
+so they are Fernet-encrypted with the same PII key the leads use before they are
+written; Redis stores ciphertext only. See `_enc`/`_dec` below. Redis is also
+configured with `appendonly yes` so a restart no longer wipes every live
+conversation, and `noeviction` so nothing is silently dropped under memory
+pressure — a retention promise that could be evicted would not be a promise.
 """
 
 from __future__ import annotations
@@ -37,9 +44,18 @@ from typing import Any
 
 import redis.asyncio as aioredis
 
+from app.core import crypto
+
 # Sliding inactivity window: silence for this long ⇒ the conversation expires.
-# The bot's working memory of a chat lives for 30 minutes of silence, then clears.
-CONVERSATION_TTL_SECONDS = 30 * 60
+#
+# M19: raised from 30 MINUTES to 72 HOURS. The old window was the bot's working
+# memory, but the same key also holds the transcript the OWNER reads — so a quiet
+# chat evaporated within half an hour and the owner lost the record of it. 72h is
+# the retention the owner asked for.
+#
+# Note this is a SLIDING window, refreshed on each message, so 72h is a floor
+# measured from the LAST activity, not from the start of the conversation.
+CONVERSATION_TTL_SECONDS = 72 * 60 * 60
 
 # A CLOSED conversation lingers this long before it's swept (kept so the owner can
 # still review a finished chat for a while). 30 days.
@@ -59,6 +75,54 @@ _VALID_ROLES = {"customer", "bot", "owner"}
 
 # Keep at most this many messages in a conversation's transcript (LTRIM bound).
 TRANSCRIPT_MAX = 200
+
+
+# --- message-body encryption (M19) -------------------------------------------
+#
+# Conversation bodies are what the CUSTOMER actually wrote on WhatsApp, so they
+# are PII and are encrypted at rest with the same PII key the leads use. Redis
+# holds ciphertext only; plaintext exists only inside this process.
+#
+# This closes the last plaintext store in the system: leads, lead files and the
+# WhatsApp credentials were already encrypted, conversations were not.
+#
+# Two fields carry customer words and both go through here: the transcript
+# `body`, and the `preview` denormalized onto the conversation hash for the inbox
+# list.
+
+# Marks a value as ciphertext written by THIS scheme. Needed because Redis will
+# hold pre-M19 plaintext rows until they age out (≤72h), and a transcript that
+# spans the upgrade must stay readable rather than turn into error text.
+_ENC_PREFIX = "enc1:"
+
+
+def _enc(text: str | None) -> str:
+    """Encrypt one customer-authored string for storage. '' stays ''."""
+    if not text:
+        return ""
+    return _ENC_PREFIX + crypto.encrypt_pii(text)
+
+
+def _dec(stored: str | None) -> str:
+    """Decrypt a stored body/preview, tolerating pre-M19 plaintext.
+
+    A value without our prefix is legacy plaintext and is returned as-is — the
+    alternative would be showing the owner an error for every message written
+    before the upgrade.
+
+    A value WITH the prefix that fails to decrypt is a real problem (wrong key,
+    corruption), but it must not take down the whole transcript, so it degrades
+    to a visible placeholder for that one line. This is the ONE place we soften
+    `decrypt_pii`'s loud contract, and only for display.
+    """
+    if not stored:
+        return ""
+    if not stored.startswith(_ENC_PREFIX):
+        return stored
+    try:
+        return crypto.decrypt_pii(stored[len(_ENC_PREFIX):]) or ""
+    except crypto.DecryptionError:
+        return "[הודעה שלא ניתן לפענח]"
 
 
 class CrossTenantConversationError(Exception):
@@ -287,7 +351,7 @@ async def list_conversations(
             "conversation_id": conv_id,
             "status": conv_status,
             "last_activity_at": meta.get("last_activity_at"),
-            "preview": meta.get("preview") or "",
+            "preview": _dec(meta.get("preview")),
             "assigned_user_id": meta.get("assigned_user_id") or None,
             # Per-conversation unread count (decision 0021) — 0 when none/read.
             "unread": await get_unread(redis, business_id, conv_id),
@@ -318,10 +382,16 @@ async def append_reply(
     _assert_owns(business_id, key)
     outbox = f"{key}:outbox"
     _assert_owns(business_id, outbox)
-    msg = json.dumps({"role": "owner", "body": text, "at": _now_iso()},
+    # Encrypted like the transcript (M19). Nothing drains this queue today — the
+    # real send goes through whatsapp.send_outbound — but it still holds message
+    # text, so it is not left as the one plaintext leftover.
+    msg = json.dumps({"role": "owner", "body": _enc(text), "at": _now_iso()},
                      ensure_ascii=False)
     await redis.rpush(outbox, msg)
-    await redis.hset(key, mapping={"preview": _preview(text), "last_activity_at": _now_iso()})
+    await redis.hset(
+        key,
+        mapping={"preview": _enc(_preview(text)), "last_activity_at": _now_iso()},
+    )
     await redis.expire(key, CONVERSATION_TTL_SECONDS)
     await redis.expire(outbox, CONVERSATION_TTL_SECONDS)
     await _register(redis, business_id, conversation_id)
@@ -358,13 +428,21 @@ async def append_message(
     _assert_owns(business_id, key)
     _assert_owns(business_id, log_key)
 
-    line = json.dumps({"role": role, "body": body, "at": _now_iso()},
+    # The body is encrypted BEFORE it touches Redis; role/timestamp stay clear so
+    # the transcript can still be ordered and filtered without decrypting.
+    line = json.dumps({"role": role, "body": _enc(body), "at": _now_iso()},
                       ensure_ascii=False)
     await redis.rpush(log_key, line)
     # Keep only the last TRANSCRIPT_MAX entries (negative indices = from the tail).
     await redis.ltrim(log_key, -TRANSCRIPT_MAX, -1)
     await redis.hset(
-        key, mapping={"preview": _preview(body), "last_activity_at": _now_iso()}
+        key,
+        mapping={
+            # The preview is customer text too — truncate FIRST, then encrypt, so
+            # only the shown fragment is stored at all.
+            "preview": _enc(_preview(body)),
+            "last_activity_at": _now_iso(),
+        },
     )
     await _register(redis, business_id, conversation_id)
     # Apply the TTL policy for the CURRENT status, NOT an unconditional 30-min
@@ -394,6 +472,7 @@ async def get_messages(
             # Tolerate a single bad line — never let it break the transcript view.
             continue
         if isinstance(item, dict):
+            item["body"] = _dec(item.get("body"))
             messages.append(item)
     return messages
 

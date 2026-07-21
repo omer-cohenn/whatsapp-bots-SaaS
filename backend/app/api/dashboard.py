@@ -31,6 +31,7 @@ from typing import Literal
 from urllib.parse import quote
 from uuid import UUID
 
+import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from fastapi.responses import Response
 
@@ -369,6 +370,13 @@ async def get_conversations(
     Strictly business-scoped (see `conversation_state.list_conversations` for the
     per-business index choice). `status` optionally filters to
     bot|waiting|human|closed.
+
+    M18: each row is then enriched with the customer's `contact_name` + `phone`,
+    joined from the linked lead in ONE batched, RLS-scoped query — the Redis
+    record has no name, and the inbox needs one to render a WhatsApp-style row
+    with an avatar. The enrichment is BEST-EFFORT: if the lookup fails the list
+    still returns, just without names, because a cosmetic join must never take
+    the inbox down. Names/phones are decrypted for the owner and NEVER logged.
     """
     redis = request.app.state.redis
     items = await conversation_state.list_conversations(
@@ -378,6 +386,22 @@ async def get_conversations(
     # 0021) — independent of any status filter, so the tab badge reflects the
     # whole inbox even when the list view is narrowed.
     total_unread = await conversation_state.unread_total(redis, business_id)
+
+    if items:
+        try:
+            async with tenant_connection(request.app.state.pg_pool, business_id) as conn:
+                contacts = await leads_service.contacts_for_conversations(
+                    conn, business_id, [it["conversation_id"] for it in items]
+                )
+            for item in items:
+                found = contacts.get(item["conversation_id"])
+                if found:
+                    item["contact_name"] = found["contact_name"]
+                    item["phone"] = found["phone"]
+        except (DecryptionError, OSError, asyncpg.PostgresError):
+            # Degrade to an un-named list rather than fail the whole inbox.
+            log.warning("conversation contact enrichment failed")
+
     return ConversationsResponse(
         conversations=[ConversationItem(**item) for item in items],
         unread_total=total_unread,

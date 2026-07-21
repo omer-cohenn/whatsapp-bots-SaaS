@@ -119,6 +119,14 @@ class ConversationItem(BaseModel):
     last_activity_at: str | None = None
     preview: str = ""
     assigned_user_id: str | None = None
+    # M18 — the customer's name + phone, joined from the linked lead so the inbox
+    # can show a real name and an initials avatar per row (the Redis conversation
+    # record holds neither). Both are DECRYPTED for the owner and are PII: they
+    # must never be logged. None when the conversation has no lead yet (the
+    # customer messaged but never started a flow) — the UI falls back to the
+    # phone, then to a neutral placeholder.
+    contact_name: str | None = None
+    phone: str | None = None
     # WhatsApp-style unread badge (decision 0021): inbound CUSTOMER messages the
     # owner hasn't read on THIS conversation. Reset to 0 when the owner opens it.
     unread: int = 0
