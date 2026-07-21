@@ -18,6 +18,7 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
@@ -149,6 +150,26 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(public_booking_router)
     app.include_router(api_router)
+
+    # M20 — /media/* (the public business-page gallery images), DEV ONLY.
+    #
+    # In production Caddy owns this prefix and serves the files straight off the
+    # read-only business_images volume (infra/Caddyfile), so a request never
+    # reaches Python: a 1 GB box cannot afford to stream photos through a worker.
+    # The dev stack has no reverse proxy at all, so without this mount the same
+    # /media/{storage_path} URL the frontend builds would 404 locally and every
+    # gallery would look broken while developing.
+    #
+    # Gated on app_env for exactly that reason — this must never become the way
+    # images are served for real. `check_dir=False` so the app still boots before
+    # the first upload has created the directory.
+    if settings.app_env != "prod":
+        app.mount(
+            "/media",
+            StaticFiles(directory=settings.business_images_dir, check_dir=False),
+            name="media",
+        )
+
     return app
 
 

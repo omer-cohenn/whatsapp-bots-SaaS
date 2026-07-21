@@ -172,7 +172,7 @@ async def list_services(
     rows = await conn.fetch(
         f"""
         SELECT id, name, duration_minutes, active, description, price,
-               image_url, created_at
+               created_at
         FROM services
         WHERE {where}
         ORDER BY created_at DESC
@@ -189,7 +189,7 @@ async def get_service(
     row = await conn.fetchrow(
         """
         SELECT id, name, duration_minutes, active, description, price,
-               image_url, created_at
+               created_at
         FROM services
         WHERE id = $1 AND business_id = $2
         """,
@@ -208,17 +208,15 @@ async def create_service(
     active: bool,
     description: str | None,
     price: int | None,
-    image_url: str | None,
 ) -> dict[str, Any]:
     """Insert a new service for this tenant; return it. RLS WITH CHECK matches."""
     row = await conn.fetchrow(
         """
         INSERT INTO services
-            (business_id, name, duration_minutes, active, description, price,
-             image_url)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+            (business_id, name, duration_minutes, active, description, price)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id, name, duration_minutes, active, description, price,
-                  image_url, created_at
+                  created_at
         """,
         business_id,
         name,
@@ -226,7 +224,6 @@ async def create_service(
         active,
         description,
         price,
-        image_url,
     )
     return _service_to_dict(row)
 
@@ -241,10 +238,8 @@ async def update_service(
     active: bool | None,
     description: str | None,
     price: int | None,
-    image_url: str | None,
     set_description: bool = False,
     set_price: bool = False,
-    set_image_url: bool = False,
 ) -> dict[str, Any] | None:
     """Partial-update a service (only provided fields). None if no row matched.
 
@@ -252,11 +247,10 @@ async def update_service(
     business_id so RLS scopes the write to this tenant. Returns the updated row,
     or None when the id doesn't exist for this tenant (caller → 404).
 
-    description/price/image_url are nullable columns, so "set to NULL" (clear)
-    must be distinguishable from "omitted". The caller passes `set_description` /
-    `set_price` / `set_image_url` = True when the field was present in the PATCH
-    body (even if its value is None), so an explicit null actually clears the
-    column.
+    description/price are nullable columns, so "set to NULL" (clear) must be
+    distinguishable from "omitted". The caller passes `set_description` /
+    `set_price` = True when the field was present in the PATCH body (even if its
+    value is None), so an explicit null actually clears the column.
     """
     sets: list[str] = []
     params: list[Any] = [service_id, business_id]
@@ -275,9 +269,6 @@ async def update_service(
     if set_price:
         params.append(price)
         sets.append(f"price = ${len(params)}")
-    if set_image_url:
-        params.append(image_url)
-        sets.append(f"image_url = ${len(params)}")
 
     if not sets:
         # Nothing to change → just return the current row (or None if absent).
@@ -288,7 +279,7 @@ async def update_service(
         UPDATE services SET {', '.join(sets)}
         WHERE id = $1 AND business_id = $2
         RETURNING id, name, duration_minutes, active, description, price,
-                  image_url, created_at
+                  created_at
         """,
         *params,
     )
@@ -319,7 +310,6 @@ def _service_to_dict(row: asyncpg.Record) -> dict[str, Any]:
         "active": bool(row["active"]),
         "description": row["description"],
         "price": int(row["price"]) if row["price"] is not None else None,
-        "image_url": row["image_url"],
         "created_at": _iso(row["created_at"]),
     }
 

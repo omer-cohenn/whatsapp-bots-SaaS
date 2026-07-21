@@ -63,11 +63,16 @@ export default function AvailabilityCalendar({
           onClick={() => onMonthChange(shiftMonth(month, -1))}
           disabled={loading}
           aria-label="חודש קודם"
-          className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-leaf disabled:opacity-40"
+          style={{ color: 'var(--bp-muted, #64748b)' }}
+          className="rounded-lg p-1.5 transition hover:brightness-75 disabled:opacity-40"
         >
           <Icon name="chevron-right" size={20} />
         </button>
-        <span aria-live="polite" className="text-sm font-semibold text-slate-900">
+        <span
+          aria-live="polite"
+          className="text-sm font-bold"
+          style={{ color: 'var(--bp-text, #0f172a)' }}
+        >
           {label}
         </span>
         <button
@@ -75,7 +80,8 @@ export default function AvailabilityCalendar({
           onClick={() => onMonthChange(shiftMonth(month, 1))}
           disabled={loading}
           aria-label="חודש הבא"
-          className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-leaf disabled:opacity-40"
+          style={{ color: 'var(--bp-muted, #64748b)' }}
+          className="rounded-lg p-1.5 transition hover:brightness-75 disabled:opacity-40"
         >
           <Icon name="chevron-left" size={20} />
         </button>
@@ -84,7 +90,11 @@ export default function AvailabilityCalendar({
       {/* Weekday header row (decorative). */}
       <div aria-hidden="true" className="mb-1 grid grid-cols-7 gap-1 text-center">
         {WEEKDAYS.map((d) => (
-          <span key={d} className="text-xs font-medium text-slate-400">
+          <span
+            key={d}
+            className="text-xs font-medium opacity-70"
+            style={{ color: 'var(--bp-muted, #94a3b8)' }}
+          >
             {d}
           </span>
         ))}
@@ -108,10 +118,21 @@ export default function AvailabilityCalendar({
             month: 'long',
           })
 
-          // Layered classes: base, today ring, availability blue, selected fill.
-          let tone = 'text-slate-300' // unavailable / past
-          if (selected) tone = 'bg-[#2563EB] text-white shadow-sm'
-          else if (isAvailable) tone = 'text-[#2563EB] hover:bg-blue-50'
+          // Palette-driven, with neutral fallbacks for the un-themed shell:
+          // unavailable = muted and faded, available = the accent, selected =
+          // filled with the accent.
+          let tone: React.CSSProperties = {
+            color: 'var(--bp-muted, #cbd5e1)',
+            opacity: 0.45,
+          }
+          if (selected) {
+            tone = {
+              backgroundColor: 'var(--bp-primary, #2563eb)',
+              color: 'var(--bp-on-primary, #ffffff)',
+            }
+          } else if (isAvailable) {
+            tone = { color: 'var(--bp-primary, #2563eb)' }
+          }
 
           return (
             <button
@@ -126,19 +147,24 @@ export default function AvailabilityCalendar({
               }
               disabled={disabled}
               onClick={() => onChange(iso)}
+              style={{
+                ...tone,
+                ...(isToday && !selected
+                  ? { boxShadow: '0 0 0 2px var(--bp-primary, #2563eb)' }
+                  : {}),
+              }}
               className={[
-                'relative flex aspect-square items-center justify-center rounded-xl text-sm font-medium transition',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf',
-                isToday && !selected ? 'ring-2 ring-leaf' : '',
-                disabled ? 'cursor-not-allowed' : 'cursor-pointer',
-                tone,
+                'relative flex aspect-square items-center justify-center rounded-[var(--bp-radius,12px)] text-sm font-semibold transition',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--bp-primary,#2563eb)]',
+                disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:brightness-95',
               ].join(' ')}
             >
               {cell.getDate()}
               {isAvailable && !selected ? (
                 <span
                   aria-hidden="true"
-                  className="absolute bottom-1.5 h-1 w-1 rounded-full bg-[#2563EB]"
+                  className="absolute bottom-1.5 h-1 w-1 rounded-full"
+                  style={{ backgroundColor: 'var(--bp-primary, #2563eb)' }}
                 />
               ) : null}
             </button>
@@ -147,7 +173,10 @@ export default function AvailabilityCalendar({
       </div>
 
       {!loading && !hasAny ? (
-        <p className="mt-3 rounded-xl border border-dashed border-slate-300 px-4 py-4 text-center text-sm text-slate-500">
+        <p
+          className="mt-3 rounded-xl border border-dashed px-4 py-4 text-center text-sm"
+          style={{ borderColor: 'var(--bp-border, #cbd5e1)', color: 'var(--bp-muted, #64748b)' }}
+        >
           אין מועדים פנויים בחודש זה
         </p>
       ) : null}

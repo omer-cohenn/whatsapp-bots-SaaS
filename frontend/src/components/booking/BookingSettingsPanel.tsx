@@ -1,7 +1,16 @@
-// The owner's booking-settings tab. Loads settings + services together, lets the
-// owner edit working hours / availability rules / the Meet toggle (saved with one
-// PUT), manage services (each saved on its own), connect Google Calendar, and
-// copy the public booking link. Tenant is server-side only.
+// The owner's booking SETUP, split across two of the three setup tabs (M20).
+// Loads settings + services together, then renders one of two sections:
+//
+//   'details'  — the public link, Google Calendar, the business details card,
+//                the welcome message, and working hours + availability rules
+//   'services' — the services editor and the live booking preview
+//
+// One component with a `section` prop rather than two, because both halves need
+// the same settings+services fetch and the same save button state; splitting
+// them would mean fetching everything twice.
+//
+// Working hours / availability / Meet are still saved with one PUT; each service
+// saves on its own. Tenant is server-side only.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type {
@@ -29,8 +38,12 @@ import ServicesEditor from './ServicesEditor'
 import AvailabilityRulesEditor from './AvailabilityRulesEditor'
 import GoogleConnectPanel from './GoogleConnectPanel'
 import BookingFlow from './BookingFlow'
+import DetailsPanel from './setup/DetailsPanel'
 
 const WELCOME_MAX = 600
+
+/** Which half of the setup this instance renders (see the file header). */
+export type SettingsSection = 'details' | 'services'
 
 // Friendly Hebrew for the AI generate failures (mirrors the bot-builder panel).
 function welcomeAiError(err: unknown): string {
@@ -47,7 +60,11 @@ function publicBookingUrl(slug: string): string {
   return `${window.location.origin}/book/${slug}`
 }
 
-export default function BookingSettingsPanel() {
+export default function BookingSettingsPanel({
+  section = 'details',
+}: {
+  section?: SettingsSection
+}) {
   const [settings, setSettings] = useState<BookingSettings | null>(null)
   const [services, setServices] = useState<ServiceItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -148,7 +165,6 @@ export default function BookingSettingsPanel() {
           duration_minutes: s.duration_minutes,
           description: s.description,
           price: s.price,
-          image_url: s.image_url,
         })),
     [services],
   )
@@ -157,6 +173,44 @@ export default function BookingSettingsPanel() {
   if (error) return <Alert tone="error">{error}</Alert>
   if (!settings) return null
 
+  // --- tab 3: "השירותים שהעסק מציע" ---
+  if (section === 'services') {
+    return (
+      <div className="flex flex-col gap-6">
+        <Card>
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
+            <Icon name="calendar-event" size={20} className="text-leaf" />
+            שירותים
+          </h2>
+          <p className="mt-1 mb-3 text-sm text-slate-500">
+            כל שירות והמשך שלו — הלקוח בוחר שירות ואז שעה פנויה.
+          </p>
+          <ServicesEditor services={services} onChanged={reloadServices} />
+        </Card>
+
+        {/* Live preview of the public booking flow using the current services */}
+        <Card>
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
+            <Icon name="eye" size={20} className="text-leaf" />
+            תצוגה מקדימה
+          </h2>
+          <p className="mt-1 mb-3 text-sm text-slate-500">
+            כך נראה דף קביעת התור ללקוחות (לתצוגה בלבד — בחירת תאריך/שעה והשליחה פעילות
+            רק בדף הציבורי).
+          </p>
+          <div className="rounded-2xl bg-[#ece9e1] p-4">
+            <BookingFlow
+              mode="preview"
+              services={previewServices}
+              welcomeMessage={settings.welcome_message}
+            />
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
+  // --- tab 1: "פרטי העסק וזמינות" ---
   return (
     <div className="flex flex-col gap-6">
       {/* Public booking link */}
@@ -185,6 +239,10 @@ export default function BookingSettingsPanel() {
         </div>
       </Card>
 
+      {/* Business details: name, tagline, about, address, the four hero fields.
+          Loads GET /api/booking/page itself — see setup/DetailsPanel. */}
+      <DetailsPanel />
+
       {/* Google Calendar */}
       <Card>
         <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
@@ -195,18 +253,6 @@ export default function BookingSettingsPanel() {
           סנכרון פגישות ליומן שלכם והזמנות אוטומטיות ללקוחות.
         </p>
         <GoogleConnectPanel />
-      </Card>
-
-      {/* Services */}
-      <Card>
-        <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
-          <Icon name="calendar-event" size={20} className="text-leaf" />
-          שירותים
-        </h2>
-        <p className="mt-1 mb-3 text-sm text-slate-500">
-          כל שירות והמשך שלו — הלקוח בוחר שירות ואז שעה פנויה.
-        </p>
-        <ServicesEditor services={services} onChanged={reloadServices} />
       </Card>
 
       {/* Welcome message (shown atop the public page; saved with the settings PUT) */}
@@ -249,25 +295,6 @@ export default function BookingSettingsPanel() {
             {genError}
           </Alert>
         ) : null}
-      </Card>
-
-      {/* Live preview of the public page using the current draft */}
-      <Card>
-        <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
-          <Icon name="eye" size={20} className="text-leaf" />
-          תצוגה מקדימה
-        </h2>
-        <p className="mt-1 mb-3 text-sm text-slate-500">
-          כך נראה דף קביעת התור ללקוחות (לתצוגה בלבד — בחירת תאריך/שעה והשליחה פעילות
-          רק בדף הציבורי).
-        </p>
-        <div className="rounded-2xl bg-[#ece9e1] p-4">
-          <BookingFlow
-            mode="preview"
-            services={previewServices}
-            welcomeMessage={settings.welcome_message}
-          />
-        </div>
       </Card>
 
       {/* Working hours + availability rules (saved together) */}

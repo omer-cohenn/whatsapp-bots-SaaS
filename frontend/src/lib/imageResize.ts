@@ -1,74 +1,80 @@
-// Client-side image resize + compress. The app has NO external file storage, so
-// the owner's service image is downscaled in the browser to a small, compressed
-// `data:` URL and stored inline in services.image_url. This keeps the payload
-// well under the backend's limit and avoids shipping multi-MB originals.
+// Client-side downscale for gallery uploads (M20).
 //
-// Strategy: load the chosen file into an <img>, draw it onto a <canvas> scaled so
-// the LONG edge is at most `maxEdge` (never upscales), then export JPEG. If the
-// result is still too big, drop the quality and re-export until it fits.
+// The server caps a gallery image at 5MB and stores the file as-is on disk, so a
+// straight-from-the-phone photo (often 4–8MB) either gets rejected or spends a
+// long time on a mobile connection. We shrink it in the browser FIRST: the
+// upload is smaller, faster, and much less likely to hit the 413.
+//
+// Deliberately narrow: we only touch LARGE `image/jpeg` files. PNG and WEBP pass
+// through untouched, because re-encoding them to JPEG would flatten transparency
+// to black — a nasty surprise on a logo-like image. Phone cameras produce JPEG,
+// which is the case that actually needs this.
+//
+// This is a convenience, never a check. The server sniffs the real type from the
+// bytes and enforces the size and the 40-image cap itself.
 
-/** Max pixels on the long edge of the resized image. */
-const MAX_EDGE = 900
-/** Target ceiling for the encoded data URL (characters). ~400KB. */
-const MAX_DATA_URL_CHARS = 400_000
-/** Starting JPEG quality, then we step down if the URL is too large. */
-const START_QUALITY = 0.82
-const MIN_QUALITY = 0.4
-const QUALITY_STEP = 0.12
+/** Long-edge cap for the resized image — plenty for a full-width gallery photo. */
+const MAX_EDGE = 1600
+/** Below this we leave the file completely alone. */
+const RESIZE_ABOVE_BYTES = 1_500_000
+/** JPEG quality for the re-encode. */
+const QUALITY = 0.85
 
-/** Read a File into a data: URL (used to feed the <img> element). */
-function readFileAsDataUrl(file: File): Promise<string> {
+/** Decode a File into a loaded <img> via an object URL (revoked either way). */
+function loadImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(new Error('קריאת הקובץ נכשלה.'))
-    reader.readAsDataURL(file)
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      resolve(img)
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('פענוח התמונה נכשל.'))
+    }
+    img.src = url
   })
 }
 
-/** Decode a data: URL into a loaded HTMLImageElement. */
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.onload = () => resolve(img)
-    img.onerror = () => reject(new Error('פענוח התמונה נכשל.'))
-    img.src = src
-  })
+/** Promise wrapper around canvas.toBlob (which is callback-based). */
+function canvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob | null> {
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality))
 }
 
 /**
- * Resize + compress an image File to a small JPEG data URL.
- * - Keeps aspect ratio; the long edge is capped at MAX_EDGE (no upscaling).
- * - Re-encodes at decreasing quality until the URL fits MAX_DATA_URL_CHARS.
- * Throws (with a Hebrew message) if the file isn't an image or can't be decoded.
+ * Return a smaller version of `file`, or the original when shrinking it would
+ * not help (small file, not a JPEG, or the browser refused to encode).
+ *
+ * NEVER throws: a failure here just means we upload the original and let the
+ * server have the final word. A resize hiccup must not block the owner.
  */
-export async function resizeImageToDataUrl(file: File): Promise<string> {
-  if (!file.type.startsWith('image/')) {
-    throw new Error('יש לבחור קובץ תמונה.')
+export async function shrinkImageForUpload(file: File): Promise<File> {
+  if (file.type !== 'image/jpeg' || file.size <= RESIZE_ABOVE_BYTES) return file
+
+  try {
+    const img = await loadImage(file)
+    const { naturalWidth: width, naturalHeight: height } = img
+    if (!width || !height) return file
+
+    // Never upscale — a 900px photo that happens to be heavy stays 900px.
+    const scale = Math.min(1, MAX_EDGE / Math.max(width, height))
+    if (scale === 1 && file.size <= RESIZE_ABOVE_BYTES) return file
+
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(width * scale))
+    canvas.height = Math.max(1, Math.round(height * scale))
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return file
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+
+    const blob = await canvasToBlob(canvas, QUALITY)
+    // Re-encoding can occasionally come out bigger; keep whichever is smaller.
+    if (!blob || blob.size >= file.size) return file
+
+    // The name is cosmetic — the server throws it away and generates a uuid.
+    return new File([blob], 'photo.jpg', { type: 'image/jpeg' })
+  } catch {
+    return file
   }
-
-  const sourceUrl = await readFileAsDataUrl(file)
-  const img = await loadImage(sourceUrl)
-
-  const { width, height } = img
-  if (!width || !height) throw new Error('פענוח התמונה נכשל.')
-
-  const scale = Math.min(1, MAX_EDGE / Math.max(width, height))
-  const targetW = Math.max(1, Math.round(width * scale))
-  const targetH = Math.max(1, Math.round(height * scale))
-
-  const canvas = document.createElement('canvas')
-  canvas.width = targetW
-  canvas.height = targetH
-  const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('עיבוד התמונה נכשל.')
-  ctx.drawImage(img, 0, 0, targetW, targetH)
-
-  let quality = START_QUALITY
-  let dataUrl = canvas.toDataURL('image/jpeg', quality)
-  while (dataUrl.length > MAX_DATA_URL_CHARS && quality > MIN_QUALITY) {
-    quality = Math.max(MIN_QUALITY, quality - QUALITY_STEP)
-    dataUrl = canvas.toDataURL('image/jpeg', quality)
-  }
-  return dataUrl
 }

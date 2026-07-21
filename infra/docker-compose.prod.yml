@@ -41,6 +41,11 @@ services:
       - ../infra/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+      # M20 — the gallery images, READ-ONLY. Caddy serves them as static files at
+      # /media/* so image traffic never enters FastAPI (the 1 GB box cannot
+      # afford to stream photos through Python). `:ro` because the proxy has no
+      # business writing here — only the backend does.
+      - business_images:/srv/business-images:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:80/ || exit 1"]
       interval: 10s
@@ -53,7 +58,15 @@ services:
     # Remove the published host port — reachable only via the proxy / internal net.
     ports: !override []
     # Run the code baked into the image, not a host bind-mount.
-    volumes: !override []
+    #
+    # ⚠️ `!override` REPLACES the base list — it does not merge. Dropping the dev
+    # source bind-mount therefore also drops the base file's business_images
+    # volume, so it MUST be restated here. If it is ever removed from this list,
+    # the backend writes gallery photos into the container's own filesystem and
+    # every deploy silently deletes all of them (this is the M19 Redis failure
+    # again — see infra/docker-compose.yml). Keep this line.
+    volumes: !override
+      - business_images:/data/business-images
     environment:
       # Turns OFF /docs, /redoc, /openapi.json (see create_app in app/main.py).
       APP_ENV: prod
@@ -84,3 +97,5 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  # Declared in the base file too; restated so this override can reference it.
+  business_images:

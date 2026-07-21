@@ -97,6 +97,22 @@ class Settings(BaseSettings):
     s3_bucket: str | None = Field(default=None, alias="S3_BUCKET")
     s3_region: str = Field(default="auto", alias="S3_REGION")
 
+    # --- M20 business-page gallery images (server DISK, not R2). NON-secret. --
+    # Gallery photos are PUBLIC marketing content, so they are stored as plain
+    # files on the server and served straight by Caddy at /media/*. This is a
+    # DIRECTORY PATH, not a credential — it gets a safe explicit default and is
+    # NOT in the fail-closed validator.
+    #
+    # ⚠️ In every deployment this path MUST be a NAMED docker volume. Without one,
+    # a container recreate (i.e. every deploy) deletes every photo every business
+    # owner uploaded, and there is no other backup. See infra/docker-compose.yml.
+    #
+    # This is deliberately SEPARATE from the S3_* settings above: those point at
+    # the encrypted customer-file bucket (PII). The two code paths never meet.
+    business_images_dir: str = Field(
+        default="/data/business-images", alias="BUSINESS_IMAGES_DIR"
+    )
+
     # --- M12 back-office admin allow-list (NON-secret, fail-OPEN-on-empty) ----
     # ADMIN_EMAILS is a comma-separated list of platform-operator emails that may
     # reach /api/admin/*. It is NOT a secret and NOT fail-closed: an EMPTY value

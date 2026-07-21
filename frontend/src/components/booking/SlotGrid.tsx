@@ -13,7 +13,10 @@ type Props = {
 export default function SlotGrid({ slots, value, onChange }: Props) {
   if (slots.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500">
+      <p
+        className="rounded-xl border border-dashed px-4 py-6 text-center text-sm"
+        style={{ borderColor: 'var(--bp-border, #cbd5e1)', color: 'var(--bp-muted, #64748b)' }}
+      >
         אין שעות פנויות ביום שנבחר. נסו תאריך אחר.
       </p>
     )
@@ -30,10 +33,23 @@ export default function SlotGrid({ slots, value, onChange }: Props) {
             role="radio"
             aria-checked={selected}
             onClick={() => onChange(slot)}
-            className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
+            // Palette-driven with neutral fallbacks: the same grid renders on the
+            // designed public page and on the plain owner preview.
+            style={
               selected
-                ? 'border-leaf bg-leaf text-white'
-                : 'border-slate-300 bg-white text-slate-800 hover:border-leaf hover:bg-leaf-soft'
+                ? {
+                    backgroundColor: 'var(--bp-primary, #639922)',
+                    borderColor: 'var(--bp-primary, #639922)',
+                    color: 'var(--bp-on-primary, #ffffff)',
+                  }
+                : {
+                    backgroundColor: 'var(--bp-bg, #ffffff)',
+                    borderColor: 'var(--bp-border, #cbd5e1)',
+                    color: 'var(--bp-text, #1e293b)',
+                  }
+            }
+            className={`rounded-[var(--bp-radius,10px)] border px-3 py-2.5 text-sm font-semibold transition ${
+              selected ? 'scale-105 shadow-md' : 'hover:brightness-95'
             }`}
           >
             {slot}

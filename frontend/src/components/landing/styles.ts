@@ -29,7 +29,7 @@ export const CSS = `
 .bx-logo{display:flex;align-items:center;gap:11px;}
 .bx-logo-img{height:56px;width:auto;display:block;}
 .bx-demo-stamp{display:inline-block;margin-inline-start:14px;padding:2px 20px;border:3px dashed #D85A30;color:#D85A30;border-radius:14px;font-size:.85em;font-weight:800;letter-spacing:2px;transform:rotate(-4deg);vertical-align:middle;background:rgba(216,90,48,.06);}
-.bx-brand-name{display:block;margin-bottom:10px;font-family:'Rubik',sans-serif;font-size:clamp(30px,4.4vw,50px);font-weight:600;color:#4c6238;line-height:1.1;animation:bxFloatIn 1.9s cubic-bezier(.16,.72,.28,1) both;}
+.bx-brand-name{display:block;margin-bottom:10px;font-family:'Rubik',sans-serif;font-size:clamp(30px,4.4vw,50px);font-weight:600;color:#4c6238;line-height:1.1;animation:bxFloatIn 1.6s cubic-bezier(.16,.72,.28,1) .75s both;}
 .bx-brand-name strong{font-weight:800;color:#1b3a28;}
 @media (prefers-reduced-motion: reduce){.bx-brand-name{animation:none;}}
 .bx-footer-brand .bx-logo-img{height:64px;}
@@ -40,7 +40,27 @@ export const CSS = `
 .bx-nav-cta{font-size:14px;font-weight:700;color:#2c5a3c;text-decoration:none;padding:9px 18px;border:1.5px solid #d3cdbd;border-radius:999px;background:transparent;transition:.2s;}
 .bx-nav-cta:hover{border-color:#bcd9b8;color:#2f7a44;background:rgba(63,154,57,.06);}
 .bx-main{flex:1;display:flex;align-items:flex-start;justify-content:center;gap:54px;width:100%;max-width:1180px;margin:0 auto;padding:0 40px 20px;}
+
+/* Hero entrance order: the PHONE lands first, then the words arrive on top of it.
+   The phone is the thing being demonstrated, so it earns the first beat; the
+   headline then reads as the explanation of what you just watched.
+
+   Safety: none of these elements sets opacity:0 in its own rule — the hidden
+   state exists ONLY inside the keyframe. So if animations are disabled, blocked,
+   or never painted, every element renders at its normal visible state instead of
+   being stuck invisible. The 'both' fill mode keeps the start frame during the delay. */
+@keyframes bxHeroIn{
+  0%{opacity:0;transform:translateY(26px);}
+  100%{opacity:1;transform:none;}
+}
+.bx-col-phone{animation:bxHeroIn .9s cubic-bezier(.16,.72,.28,1) both;}
 .bx-col-text{flex:1;max-width:560px;}
+/* Staggered, all starting after the phone has settled. */
+.bx-headline{animation:bxHeroIn .7s cubic-bezier(.16,.72,.28,1) .95s both;}
+.bx-lead-text{animation:bxHeroIn .7s cubic-bezier(.16,.72,.28,1) 1.15s both;}
+@media (prefers-reduced-motion: reduce){
+  .bx-col-phone,.bx-headline,.bx-lead-text{animation:none;}
+}
 .bx-eyebrow{display:inline-block;font-size:13px;font-weight:700;color:#3f9a39;letter-spacing:.4px;background:#e7f4e1;padding:6px 13px;border-radius:999px;margin-bottom:18px;}
 .bx-headline{margin:0;font-family:'Rubik';font-weight:800;letter-spacing:-.4px;line-height:1.18;font-size:clamp(30px,3.9vw,46px);color:#1b3a28;}
 .bx-accent{color:#4aa343;}
@@ -137,7 +157,14 @@ export const CSS = `
 
 @media (max-width:900px){
   .bx-main{flex-direction:column;gap:38px;padding-top:20px;text-align:center;}
-  .bx-col-text{max-width:560px;}
+  /* PHONE ON TOP once the columns stack. The DOM order is text-then-phone, which
+     is the right READING order (a screen reader should hit the headline first),
+     but the visual order must be the opposite: the owner wants a visitor on a
+     phone to land on the animated WhatsApp demo immediately, with the words
+     underneath it. The CSS order property flips the paint order without touching the DOM, so we
+     get both. Desktop keeps its side-by-side layout and needs no swap. */
+  .bx-col-phone{order:-1;}
+  .bx-col-text{max-width:560px;order:0;}
   .bx-lead-text{margin-inline:auto;}
 }
 

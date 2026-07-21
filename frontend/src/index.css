@@ -28,6 +28,33 @@
   }
 }
 
+/* --- M20: the booking flow follows the business page's palette ---------------
+   The owner's complaint was that their chosen design "barely showed", and the
+   reason was here: <BookingFlow> hard-coded white cards and slate text, so the
+   biggest block on the page ignored the palette entirely.
+
+   Everything below reads the `--bp-*` custom properties that `paletteVars()`
+   sets on the public page wrapper, ALWAYS with a neutral fallback — the same
+   component also renders in the owner's settings preview and on the plain
+   pre-M20 shell, where those variables do not exist. */
+.bp-booking label {
+  color: var(--bp-text, #1e293b);
+}
+.bp-booking input,
+.bp-booking textarea {
+  background-color: var(--bp-surface, #ffffff);
+  border-color: var(--bp-border, #cbd5e1);
+  color: var(--bp-text, #0f172a);
+}
+.bp-booking input:focus-visible,
+.bp-booking textarea:focus-visible {
+  --tw-ring-color: var(--bp-primary, #2563eb);
+}
+/* Field/Textarea hints, which are slate-500 by default. */
+.bp-booking p.text-xs {
+  color: var(--bp-muted, #64748b);
+}
+
 /* Honor prefers-reduced-motion: turn off animation/transitions. */
 @media (prefers-reduced-motion: reduce) {
   *,

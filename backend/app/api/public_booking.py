@@ -29,6 +29,8 @@ from app.core.logging import get_logger
 from app.db.session import tenant_connection
 from app.models.booking import (
     PublicAvailabilityResponse,
+    PublicBusinessImageItem,
+    PublicBusinessPageResponse,
     PublicBookingCreateRequest,
     PublicBookingCreateResponse,
     PublicMutationResponse,
@@ -98,6 +100,55 @@ async def _check_rate_limit(request: Request, slug: str) -> None:
 # --- public reads ------------------------------------------------------------
 
 
+@router.get("/{slug}/page", response_model=PublicBusinessPageResponse)
+async def public_business_page(
+    request: Request,
+    slug: str = Path(..., min_length=1, max_length=SLUG_MAX),
+) -> PublicBusinessPageResponse:
+    """The M20 business page an ANONYMOUS visitor sees: the hero + the gallery.
+
+    Tenant resolution is the same three-legged rule as every other public route:
+    the slug (never a business_id) goes through the SECURITY DEFINER lookup, and
+    the reads then run on a normal RLS-scoped `tenant_connection`.
+
+    What comes back is deliberately a CLOSED list: the business name, the
+    marketing copy, the four contact fields, the logo, the theme, and the ordered
+    gallery. No booking settings, no working hours, no slug echo, no counts, and
+    no customer data of any kind — `PublicBusinessPageResponse` is a separate
+    model from the owner's one precisely so a future owner-only column cannot
+    leak here by being added to a shared shape.
+
+    Every field is content the owner typed in order to publish it; the address and
+    phone are the BUSINESS's own (decision 0028), never a customer's. Images are
+    returned as relative `storage_path`s — the browser fetches them from
+    `/media/{storage_path}`, which Caddy serves off disk without touching Python.
+    """
+    business_id = await _resolve_or_404(request, slug)
+    async with tenant_connection(request.app.state.pg_pool, business_id) as conn:
+        page = await booking_service.get_page(conn, business_id)
+        name = await booking_service.business_display_name(conn, business_id)
+        images = await booking_service.list_images(conn, business_id)
+
+    return PublicBusinessPageResponse(
+        business_name=name,
+        tagline=page.get("tagline"),
+        about=page.get("about"),
+        address=page.get("address"),
+        phone=page.get("phone"),
+        whatsapp=page.get("whatsapp"),
+        instagram_url=page.get("instagram_url"),
+        waze_url=page.get("waze_url"),
+        logo_url=page.get("logo_url"),
+        page_theme=page.get("page_theme") or {},
+        images=[
+            PublicBusinessImageItem(
+                id=r["id"], storage_path=r["storage_path"], caption=r.get("caption")
+            )
+            for r in images
+        ],
+    )
+
+
 @router.get("/{slug}/services", response_model=PublicServicesResponse)
 async def public_services(
     request: Request,
@@ -123,7 +174,6 @@ async def public_services(
                 duration_minutes=r["duration_minutes"],
                 description=r.get("description"),
                 price=r.get("price"),
-                image_url=r.get("image_url"),
             )
             for r in rows
         ],

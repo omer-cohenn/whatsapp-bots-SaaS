@@ -13,6 +13,7 @@ Sub-modules:
   * slots.py    — the slot algorithm (compute_slots / compute_availability) + tz
   * crud.py     — bookings list/create/cancel/reschedule + the linked lead
   * google.py   — the Google-calendar sync hook seam (no-op until registered)
+  * page.py     — M20: the business-page fields + the gallery image rows
 
 Non-negotiables (unchanged, documented in the sub-modules): RLS always; client
 PII encrypted at rest + never logged; time stored/compared in UTC, edited in the
@@ -38,6 +39,17 @@ from app.services.booking.google import (
     GoogleHookAction,
     register_google_hook,
     run_google_hook,
+)
+from app.services.booking.page import (
+    count_images,
+    create_image,
+    delete_image_row,
+    get_image,
+    get_page,
+    list_images,
+    rename_business,
+    update_image,
+    update_page,
 )
 from app.services.booking.settings import (
     business_display_name,
@@ -74,6 +86,16 @@ __all__ = [
     "delete_service",
     "resolve_slug",
     "business_display_name",
+    "rename_business",
+    # M20 business page: the page fields + the gallery rows
+    "get_page",
+    "update_page",
+    "list_images",
+    "count_images",
+    "create_image",
+    "get_image",
+    "update_image",
+    "delete_image_row",
     # slot algorithm + time helpers
     "compute_slots",
     "compute_availability",

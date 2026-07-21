@@ -166,6 +166,11 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       # GATEWAY_API_TOKEN + the encryption keys (PII_DATA_KEY / WA_CRED_KEK /
       # PHONE_HMAC_KEY) come from env_file (../infra/.env).
+      #
+      # M20 — where the PUBLIC business-page gallery images are written. Must
+      # match the mount point of the business_images volume below AND the path
+      # Caddy serves at /media/* (infra/Caddyfile).
+      BUSINESS_IMAGES_DIR: /data/business-images
       PORT: "8000"
     ports:
       - "8000:8000"
@@ -173,6 +178,12 @@ services:
       # Mount source for dev convenience (edit-and-reload). node_modules/venv are
       # baked into the image, so we don't shadow them.
       - ../backend:/app
+      # M20 — the business-page gallery images (see the volumes block below).
+      # 🔴 This MUST be the NAMED volume, never a bind to a build context and
+      # never left implicit: without it, every `up --build` / redeploy recreates
+      # the container and DELETES every photo every business owner uploaded.
+      # There is no other backup of these files.
+      - business_images:/data/business-images
     depends_on:
       postgres:
         condition: service_healthy
@@ -276,6 +287,12 @@ volumes:
   # M19 — the Redis AOF. Conversations are durable across restarts now, so this
   # volume holds real data, not a disposable cache: do NOT prune it casually.
   redis_data:
+  # M20 — the PUBLIC business-page gallery images (decision 0028). The ONLY copy
+  # of files a business owner uploaded by hand; there is no bucket behind it and
+  # no backup. `docker compose down -v` / `docker volume prune` DESTROYS them.
+  # Mounted read-write into the backend (which writes them) and READ-ONLY into
+  # the Caddy reverse proxy (which serves them at /media/*).
+  business_images:
 
 # Default network is created automatically; all services share it and resolve
 # each other by service name (backend, gateway, frontend, postgres, redis).

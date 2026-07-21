@@ -8,14 +8,17 @@
 // means "no price" → the public card shows "ללא עלות". Sending `null` on a PATCH
 // CLEARS that column; omitting it leaves it unchanged.
 //
+// M20 removed the per-service image (`services.image_url` is gone from the DB and
+// the API now 422s on it). The business-page gallery replaces it — photos live in
+// "תמונות ועיצוב", not on individual services.
+//
 // Accessibility: the add form is a real <form> (Enter submits), every input is
 // labelled, destructive delete asks for confirm, and async state is announced.
 
-import { useId, useState } from 'react'
+import { useState } from 'react'
 import type { ServiceItem, ServiceUpdate } from '../../dashboard/appointmentTypes'
 import { createService, deleteService, updateService } from '../../lib/bookingClient'
 import { toFriendlyError } from '../../lib/friendlyError'
-import { resizeImageToDataUrl } from '../../lib/imageResize'
 import Field from '../ui/Field'
 import Textarea from '../ui/Textarea'
 import Button from '../ui/Button'
@@ -42,7 +45,6 @@ export default function ServicesEditor({ services, onChanged }: Props) {
   const [newDuration, setNewDuration] = useState('30')
   const [newDescription, setNewDescription] = useState('')
   const [newPrice, setNewPrice] = useState('')
-  const [newImage, setNewImage] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Per-row "busy" so only the touched service shows a spinner/disables.
@@ -70,13 +72,11 @@ export default function ServicesEditor({ services, onChanged }: Props) {
         active: true,
         description: newDescription.trim() || null,
         price,
-        image_url: newImage,
       })
       setNewName('')
       setNewDuration('30')
       setNewDescription('')
       setNewPrice('')
-      setNewImage(null)
       onChanged()
     } catch (err) {
       setError(toFriendlyError(err, 'הוספת השירות נכשלה. נסו שוב.'))
@@ -188,13 +188,6 @@ export default function ServicesEditor({ services, onChanged }: Props) {
           maxLength={500}
           placeholder="מה כולל השירות?"
         />
-        <ImageField
-          label="תמונת השירות (לא חובה)"
-          value={newImage}
-          onChange={setNewImage}
-          onError={setError}
-          disabled={adding}
-        />
         <div>
           <Button type="submit" disabled={adding} className="!bg-leaf hover:!bg-leaf-dark">
             <Icon name="plus" size={16} />
@@ -227,7 +220,6 @@ function ServiceRow({
   const [duration, setDuration] = useState(String(service.duration_minutes))
   const [description, setDescription] = useState(service.description ?? '')
   const [price, setPrice] = useState(service.price == null ? '' : String(service.price))
-  const [image, setImage] = useState<string | null>(service.image_url)
 
   const dur = Number(duration)
   const parsedPrice = parsePrice(price)
@@ -237,8 +229,7 @@ function ServiceRow({
     name.trim() !== service.name ||
     (Number.isFinite(dur) && dur > 0 && dur !== service.duration_minutes) ||
     description.trim() !== currentDesc ||
-    (parsedPrice !== undefined && parsedPrice !== service.price) ||
-    image !== service.image_url
+    (parsedPrice !== undefined && parsedPrice !== service.price)
   const valid =
     name.trim().length > 0 &&
     Number.isFinite(dur) &&
@@ -250,13 +241,12 @@ function ServiceRow({
       onError('המחיר חייב להיות מספר שלם אי-שלילי (₪).')
       return
     }
-    // Only send fields that actually changed (null clears description/price/image).
+    // Only send fields that actually changed (null clears description/price).
     const body: ServiceUpdate = {}
     if (name.trim() !== service.name) body.name = name.trim()
     if (dur !== service.duration_minutes) body.duration_minutes = dur
     if (description.trim() !== currentDesc) body.description = description.trim() || null
     if (parsedPrice !== service.price) body.price = parsedPrice
-    if (image !== service.image_url) body.image_url = image
     onSave(body)
   }
 
@@ -320,14 +310,6 @@ function ServiceRow({
         disabled={busy}
       />
 
-      <ImageField
-        label="תמונת השירות"
-        value={image}
-        onChange={setImage}
-        onError={onError}
-        disabled={busy}
-      />
-
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -350,91 +332,5 @@ function ServiceRow({
         </button>
       </div>
     </li>
-  )
-}
-
-// Image control shared by the add-form and each edit-row. The owner uploads a
-// file; we resize + compress it client-side to a small data URL (no external
-// storage) and hand it up via onChange. A thumbnail preview + "הסר תמונה" let
-// them clear it (onChange(null)). value: current image_url (URL or data: URL).
-function ImageField({
-  label,
-  value,
-  onChange,
-  onError,
-  disabled,
-}: {
-  label: string
-  value: string | null
-  onChange: (next: string | null) => void
-  onError: (msg: string) => void
-  disabled?: boolean
-}) {
-  const inputId = useId()
-  const [working, setWorking] = useState(false)
-
-  async function pick(ev: React.ChangeEvent<HTMLInputElement>) {
-    const file = ev.target.files?.[0]
-    // Reset the input so picking the same file again still fires onChange.
-    ev.target.value = ''
-    if (!file) return
-    setWorking(true)
-    try {
-      const dataUrl = await resizeImageToDataUrl(file)
-      onChange(dataUrl)
-    } catch (err) {
-      onError(err instanceof Error ? err.message : 'העלאת התמונה נכשלה. נסו שוב.')
-    } finally {
-      setWorking(false)
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium text-slate-800">{label}</span>
-      <div className="flex items-center gap-3">
-        {/* Thumbnail or placeholder frame (soft rounded). */}
-        <span className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[#2563EB]/15 bg-[#2563EB]/5 text-slate-400">
-          {value ? (
-            <img src={value} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <Icon name="photo" size={22} />
-          )}
-        </span>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <label
-            htmlFor={inputId}
-            className={[
-              'inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50',
-              disabled || working ? 'pointer-events-none opacity-50' : '',
-            ].join(' ')}
-          >
-            <Icon name="photo" size={16} />
-            {working ? 'מעלה…' : value ? 'החלף תמונה' : 'העלה תמונה'}
-          </label>
-          <input
-            id={inputId}
-            type="file"
-            accept="image/*"
-            onChange={(ev) => void pick(ev)}
-            disabled={disabled || working}
-            className="sr-only"
-          />
-
-          {value ? (
-            <button
-              type="button"
-              onClick={() => onChange(null)}
-              disabled={disabled || working}
-              className="inline-flex items-center gap-1.5 rounded-lg p-2 text-sm text-slate-400 transition hover:bg-red-50 hover:text-bad disabled:opacity-50"
-            >
-              <Icon name="x" size={16} />
-              הסר תמונה
-            </button>
-          ) : null}
-        </div>
-      </div>
-    </div>
   )
 }

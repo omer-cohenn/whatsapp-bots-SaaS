@@ -38,6 +38,7 @@ import {
 } from '../../lib/bookingDates'
 import AvailabilityCalendar from './AvailabilityCalendar'
 import SlotGrid from './SlotGrid'
+import ServiceCard, { priceLabel } from './public/ServiceCard'
 import Field from '../ui/Field'
 import Textarea from '../ui/Textarea'
 import Button from '../ui/Button'
@@ -56,11 +57,6 @@ function isValidPhone(phone: string): boolean {
 
 function isValidEmail(email: string): boolean {
   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)
-}
-
-/** "ללא עלות" when no price is set, else "₪{price}". */
-function priceLabel(price: number | null): string {
-  return price == null ? 'ללא עלות' : `₪${price}`
 }
 
 type Props =
@@ -256,129 +252,116 @@ export default function BookingFlow(props: Props) {
     const { slug } = props as Extract<Props, { mode: 'live' }>
     const manageUrl = `${window.location.origin}/book/${slug}/manage/${result.cancel_token}`
     return (
-      <div className="rounded-[22px] border border-leaf/30 bg-white p-7 text-center shadow-sm">
+      <div className={`${PANEL} p-7 text-center`}>
         <span
           aria-hidden="true"
-          className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-leaf-soft text-leaf-ink"
+          className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full"
+          style={{
+            backgroundColor: 'color-mix(in srgb, var(--bp-primary, #639922) 16%, transparent)',
+            color: 'var(--bp-primary, #639922)',
+          }}
         >
-          <Icon name="check" size={32} />
+          <Icon name="check" size={34} />
         </span>
-        <h2 className="text-2xl font-bold text-slate-900">ההזמנה אושרה</h2>
-        <p className="mt-2 text-sm text-slate-600">
+        <h2 className="text-2xl font-black" style={{ color: 'var(--bp-text, #0f172a)' }}>
+          ההזמנה אושרה
+        </h2>
+        <p className="mt-2 text-sm" style={{ color: 'var(--bp-muted, #64748b)' }}>
           {selectedService ? `${selectedService.name} · ` : ''}
           {fullDateTime(result.scheduled_at)}
         </p>
 
-        <div className="mt-6 rounded-2xl border border-black/10 bg-slate-50 p-4 text-start">
-          <p className="text-sm font-medium text-slate-800">לניהול ההזמנה (ביטול / שינוי מועד):</p>
+        <div
+          className="mt-6 rounded-[var(--bp-radius,18px)] border p-4 text-start"
+          style={{
+            borderColor: 'var(--bp-border, #e2e8f0)',
+            backgroundColor: 'var(--bp-bg, #f8fafc)',
+          }}
+        >
+          <p className="text-sm font-medium" style={{ color: 'var(--bp-text, #1e293b)' }}>
+            לניהול ההזמנה (ביטול / שינוי מועד):
+          </p>
           <a
             href={`/book/${slug}/manage/${result.cancel_token}`}
-            className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-leaf px-3 py-1.5 text-sm font-medium text-leaf-ink transition hover:bg-leaf-soft"
+            className="mt-2 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition hover:brightness-95"
+            style={{
+              borderColor: 'var(--bp-primary, #639922)',
+              color: 'var(--bp-primary, #639922)',
+            }}
           >
             <Icon name="external-link" size={16} />
             ניהול ההזמנה
           </a>
-          <p className="mt-2 break-all text-xs text-slate-500" dir="ltr">
+          <p className="mt-2 break-all text-xs" dir="ltr" style={{ color: 'var(--bp-muted, #94a3b8)' }}>
             {manageUrl}
           </p>
         </div>
-        <p className="mt-4 text-xs text-slate-400">שמרו את הקישור — תצטרכו אותו לשינויים.</p>
+        <p className="mt-4 text-xs" style={{ color: 'var(--bp-muted, #94a3b8)' }}>
+          שמרו את הקישור — תצטרכו אותו לשינויים.
+        </p>
       </div>
     )
   }
 
   const showSummary = Boolean(serviceId && date && time)
 
+  // ONE surface for the whole flow, with hairlines between the steps — the owner
+  // rejected the previous look ("לא אהבתי שזה מחולק ככה לתיבות"), which was four
+  // separate white cards stacked with gaps.
   return (
-    <div className="flex flex-col gap-5">
-      {/* Welcome hero */}
-      <header className="rounded-[22px] bg-white p-6 shadow-sm">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-leaf-soft px-3 py-1 text-xs font-medium text-leaf-ink">
+    <div className={`${PANEL} overflow-hidden`}>
+      {/* Welcome */}
+      <header className="px-5 py-6 sm:px-7">
+        <span
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
+          style={{
+            backgroundColor: 'color-mix(in srgb, var(--bp-primary, #639922) 14%, transparent)',
+            color: 'var(--bp-primary, #639922)',
+          }}
+        >
           <Icon name="sparkles" size={14} />
           קביעת תור
         </span>
-        <h1 className="mt-3 text-2xl font-bold text-slate-900">בואו נקבע תור</h1>
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">
+        <h2
+          className="mt-3 text-xl font-black"
+          style={{ color: 'var(--bp-text, #0f172a)' }}
+        >
+          בואו נקבע תור
+        </h2>
+        <p
+          className="mt-2 whitespace-pre-wrap text-sm leading-relaxed"
+          style={{ color: 'var(--bp-muted, #64748b)' }}
+        >
           {welcomeMessage?.trim() || DEFAULT_WELCOME}
         </p>
       </header>
 
-      <form onSubmit={(ev) => void submit(ev)} className="flex flex-col gap-5">
+      <StepTrail current={showSummary ? 4 : serviceId ? (date ? 3 : 2) : 1} />
+
+      <form onSubmit={(ev) => void submit(ev)}>
         {/* Step 1 — choose service */}
         <StepSection step={1} done={Boolean(serviceId)} title="בחרו שירות">
           {services.length === 0 ? (
-            <p className="text-sm text-slate-500">אין כרגע שירותים זמינים לקביעה.</p>
+            <p className="text-sm" style={{ color: 'var(--bp-muted, #64748b)' }}>
+              אין כרגע שירותים זמינים לקביעה.
+            </p>
           ) : (
             <div
               role="radiogroup"
               aria-label="בחירת שירות"
               className="grid grid-cols-1 gap-3 sm:grid-cols-2"
             >
-              {services.map((svc) => {
-                const selected = svc.id === serviceId
-                return (
-                  <button
-                    key={svc.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    onClick={() => pickService(svc.id)}
-                    className={[
-                      'relative flex flex-col gap-3 overflow-hidden rounded-2xl border bg-white p-3 text-start transition',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf',
-                      selected
-                        ? 'border-[#2563EB] ring-2 ring-[#2563EB]'
-                        : 'border-slate-200 hover:border-[#2563EB]/60',
-                    ].join(' ')}
-                  >
-                    {/* Image frame on top: the photo, or a placeholder when empty. */}
-                    <span className="relative block aspect-[16/9] w-full overflow-hidden rounded-2xl border border-[#2563EB]/15 bg-[#2563EB]/5">
-                      {svc.image_url ? (
-                        <img
-                          src={svc.image_url}
-                          alt=""
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-slate-400">
-                          <Icon name="photo" size={28} />
-                          <span className="text-xs font-medium">מקום לתמונה</span>
-                        </span>
-                      )}
-                      {selected ? (
-                        <span
-                          aria-hidden="true"
-                          className="absolute top-2 left-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#2563EB] text-white shadow"
-                        >
-                          <Icon name="check" size={15} />
-                        </span>
-                      ) : null}
-                    </span>
-
-                    {/* Title + description */}
-                    <span className="block px-1 text-base font-semibold text-slate-900">
-                      {svc.name}
-                    </span>
-                    {svc.description ? (
-                      <span className="block px-1 text-sm leading-relaxed text-slate-500">
-                        {svc.description}
-                      </span>
-                    ) : null}
-
-                    {/* Duration chip + price */}
-                    <span className="mt-auto flex items-center justify-between gap-2 px-1">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-                        <Icon name="clock" size={13} />
-                        {svc.duration_minutes} דק׳
-                      </span>
-                      <span className="text-sm font-semibold text-leaf-ink">
-                        {priceLabel(svc.price)}
-                      </span>
-                    </span>
-                  </button>
-                )
-              })}
+              {services.map((svc) => (
+                <ServiceCard
+                  key={svc.id}
+                  name={svc.name}
+                  description={svc.description}
+                  durationMinutes={svc.duration_minutes}
+                  price={svc.price}
+                  selected={svc.id === serviceId}
+                  onSelect={() => pickService(svc.id)}
+                />
+              ))}
             </div>
           )}
         </StepSection>
@@ -387,7 +370,13 @@ export default function BookingFlow(props: Props) {
         {serviceId ? (
           <StepSection step={2} done={Boolean(date)} title="בחרו תאריך">
             {!isLive ? (
-              <p className="rounded-xl border border-dashed border-slate-300 px-4 py-4 text-center text-sm text-slate-500">
+              <p
+                className="rounded-xl border border-dashed px-4 py-4 text-center text-sm"
+                style={{
+                  borderColor: 'var(--bp-border, #cbd5e1)',
+                  color: 'var(--bp-muted, #64748b)',
+                }}
+              >
                 בתצוגה מקדימה — לוח התאריכים יוצג ללקוח לפי הזמינות שלכם.
               </p>
             ) : availError ? (
@@ -420,30 +409,29 @@ export default function BookingFlow(props: Props) {
 
         {/* Summary + customer form */}
         {showSummary ? (
-          <section className="rounded-[22px] border border-leaf/30 bg-white p-5 shadow-sm">
-            <h2 className="mb-3 text-base font-semibold text-slate-900">סיכום ופרטים</h2>
-
-            <dl className="mb-4 grid grid-cols-2 gap-3 rounded-2xl bg-leaf-soft/60 p-4 text-sm">
-              <div>
-                <dt className="text-xs text-slate-500">שירות</dt>
-                <dd className="font-medium text-slate-900">{selectedService?.name}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-slate-500">מתי</dt>
-                <dd className="font-medium text-slate-900">{`${date} · ${time}`}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-slate-500">משך</dt>
-                <dd className="font-medium text-slate-900">
-                  {selectedService?.duration_minutes} דק׳
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs text-slate-500">מחיר</dt>
-                <dd className="font-medium text-slate-900">
-                  {priceLabel(selectedService?.price ?? null)}
-                </dd>
-              </div>
+          <StepSection step={4} done={false} title="סיכום ופרטים">
+            <dl
+              className="mb-4 grid grid-cols-2 gap-3 rounded-[var(--bp-radius,18px)] p-4 text-sm"
+              style={{
+                backgroundColor:
+                  'color-mix(in srgb, var(--bp-primary, #639922) 10%, transparent)',
+              }}
+            >
+              {[
+                ['שירות', selectedService?.name ?? ''],
+                ['מתי', `${date} · ${time}`],
+                ['משך', `${selectedService?.duration_minutes ?? ''} דק׳`],
+                ['מחיר', priceLabel(selectedService?.price ?? null)],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-xs" style={{ color: 'var(--bp-muted, #64748b)' }}>
+                    {label}
+                  </dt>
+                  <dd className="font-semibold" style={{ color: 'var(--bp-text, #0f172a)' }}>
+                    {value}
+                  </dd>
+                </div>
+              ))}
             </dl>
 
             <div className="flex flex-col gap-3">
@@ -502,19 +490,92 @@ export default function BookingFlow(props: Props) {
             <Button
               type="submit"
               disabled={submitting || !isLive}
-              className="mt-4 w-full !bg-leaf hover:!bg-leaf-dark"
+              style={{
+                backgroundColor: 'var(--bp-primary, #639922)',
+                color: 'var(--bp-on-primary, #ffffff)',
+              }}
+              className="mt-4 w-full rounded-[var(--bp-radius,12px)] py-3 text-base font-bold transition hover:brightness-110"
             >
               <Icon name="check" size={18} />
               {isLive ? (submitting ? 'מאשר…' : 'אישור הזמנה') : 'אישור הזמנה (תצוגה מקדימה)'}
             </Button>
-          </section>
+          </StepSection>
         ) : null}
       </form>
     </div>
   )
 }
 
-// A numbered step card with a badge that flips to a check when the step is done.
+/**
+ * The whole flow's surface. A palette variable with a neutral fallback, so the
+ * same component looks right on the designed page AND on the plain shell.
+ * `bp-booking` is what the CSS in `index.css` hooks onto to theme the inputs.
+ */
+const PANEL =
+  'bp-booking rounded-[var(--bp-radius,22px)] border border-[color:var(--bp-border,transparent)] bg-[color:var(--bp-surface,#ffffff)] shadow-sm'
+
+/**
+ * The reference's three-dot progress rail, themed by the palette. Purely
+ * decorative (aria-hidden) — the real, announced progress is the numbered
+ * <StepSection> headings, which are landmarks a screen reader already walks.
+ */
+function StepTrail({ current }: { current: number }) {
+  const steps = ['שירות', 'תאריך', 'שעה', 'פרטים']
+  return (
+    <div
+      aria-hidden="true"
+      className="mx-auto flex max-w-md items-center gap-1 px-5 pb-6 sm:px-7"
+    >
+      {steps.map((label, i) => {
+        const n = i + 1
+        const reached = current >= n
+        return (
+          <div key={label} className="flex flex-1 items-center gap-1 last:flex-none">
+            <div className="flex flex-col items-center gap-1">
+              <span
+                className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition"
+                style={
+                  reached
+                    ? {
+                        backgroundColor: 'var(--bp-primary, #639922)',
+                        color: 'var(--bp-on-primary, #ffffff)',
+                      }
+                    : {
+                        backgroundColor:
+                          'color-mix(in srgb, var(--bp-muted, #94a3b8) 18%, transparent)',
+                        color: 'var(--bp-muted, #64748b)',
+                      }
+                }
+              >
+                {n}
+              </span>
+              <span
+                className="text-[10px] font-semibold"
+                style={{ color: reached ? 'var(--bp-primary, #639922)' : 'var(--bp-muted, #94a3b8)' }}
+              >
+                {label}
+              </span>
+            </div>
+            {n < steps.length ? (
+              <span
+                className="mb-4 h-0.5 flex-1 rounded-full"
+                style={{
+                  backgroundColor:
+                    current > n
+                      ? 'var(--bp-primary, #639922)'
+                      : 'color-mix(in srgb, var(--bp-muted, #94a3b8) 18%, transparent)',
+                }}
+              />
+            ) : null}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// A numbered step, separated from its neighbours by ONE hairline instead of
+// being its own floating card. Same information, continuous surface.
 function StepSection({
   step,
   done,
@@ -527,19 +588,34 @@ function StepSection({
   children: React.ReactNode
 }) {
   return (
-    <section className="rounded-[22px] bg-white p-5 shadow-sm">
-      <h2 className="mb-4 flex items-center gap-2.5 text-base font-semibold text-slate-900">
+    <section
+      className="border-t px-5 py-6 sm:px-7"
+      style={{ borderColor: 'var(--bp-border, #e2e8f0)' }}
+    >
+      <h3
+        className="mb-4 flex items-center gap-2.5 text-base font-bold"
+        style={{ color: 'var(--bp-text, #0f172a)' }}
+      >
         <span
           aria-hidden="true"
-          className={[
-            'flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold',
-            done ? 'bg-leaf text-white' : 'bg-slate-100 text-slate-500',
-          ].join(' ')}
+          className="flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold"
+          style={
+            done
+              ? {
+                  backgroundColor: 'var(--bp-primary, #639922)',
+                  color: 'var(--bp-on-primary, #ffffff)',
+                }
+              : {
+                  backgroundColor:
+                    'color-mix(in srgb, var(--bp-muted, #94a3b8) 18%, transparent)',
+                  color: 'var(--bp-muted, #64748b)',
+                }
+          }
         >
           {done ? <Icon name="check" size={16} /> : step}
         </span>
         {title}
-      </h2>
+      </h3>
       {children}
     </section>
   )

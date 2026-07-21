@@ -8,6 +8,8 @@
 #   /            -> the static frontend SPA           (service: frontend:80)
 #   /api/*       -> the FastAPI backend (incl /api/book/*)  (service: backend:8000)
 #   /auth/*      -> the FastAPI backend (Google OAuth)      (service: backend:8000)
+#   /media/*     -> STATIC business-page gallery images     (the business_images
+#                   volume, mounted read-only at /srv/business-images)
 # Deliberately NOT routed here (stay internal-only): /webhook/*, /internal/*,
 # /docs, /openapi.json, and the gateway's QR/dev routes.
 #
@@ -35,6 +37,35 @@
 				response_header_timeout 120s
 				read_timeout 120s
 			}
+		}
+	}
+
+	# M20 business-page gallery images — served STATICALLY, straight off the
+	# read-only business_images volume. Python is deliberately NOT in this path:
+	# a 1 GB box cannot afford to stream photos through a FastAPI worker, and a
+	# reverse proxy does static files far better than we ever would.
+	#
+	# `uri strip_prefix /media` turns /media/{business_id}/{uuid}.jpg into the
+	# path {business_id}/{uuid}.jpg inside the root. file_server does NOT follow
+	# ".." out of its root, and every filename in there is a server-generated
+	# uuid with an extension derived from sniffed magic bytes (see
+	# app/services/business_images.py) — no client-supplied name ever lands here.
+	#
+	# These files are immutable: a new upload gets a new uuid, and an edit is a
+	# delete + re-upload. So they can be cached hard. 30 days is long enough to
+	# make repeat page views free without pinning a mistake forever.
+	@media path /media/*
+	handle @media {
+		uri strip_prefix /media
+		header Cache-Control "public, max-age=2592000, immutable"
+		# Belt and braces on a directory the internet reads: never let a browser
+		# re-interpret a stored file as something executable.
+		header X-Content-Type-Options "nosniff"
+		root * /srv/business-images
+		file_server {
+			# No directory listings — a visitor must know the exact uuid path.
+			# Without this, /media/{business_id}/ would enumerate a whole gallery.
+			index ""
 		}
 	}
 

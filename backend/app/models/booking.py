@@ -41,13 +41,22 @@ MAX_SERVICE_NAME_CHARS = 120
 # Service blurb (public card) + the per-business public-page welcome message.
 MAX_SERVICE_DESC_CHARS = 500
 MAX_WELCOME_MESSAGE_CHARS = 600
-# A service image is EITHER a short http(s) URL OR a client-resized data: URL
-# (the frontend canvas-compresses the upload to a tiny data URL). The bound is
-# generous enough to hold a small compressed data URL but still finite (abuse
-# guard) — see the M11.2 contract.
-MAX_SERVICE_IMAGE_CHARS = 2_000_000
 # A booking-page slug is the public handle; bound it tightly.
 SLUG_MAX = 64
+
+# --- M20 business-page bounds (decision 0028) --------------------------------
+# All owner-authored PUBLIC copy — bounded so a body can never become an abuse
+# vector, generous enough for real Hebrew text.
+MAX_TAGLINE_CHARS = 160
+MAX_ABOUT_CHARS = 2000
+MAX_ADDRESS_CHARS = 240
+MAX_PAGE_PHONE_CHARS = 40
+MAX_PAGE_URL_CHARS = 500
+# One gallery caption ("תספורת פייד") — two words, not a paragraph.
+MAX_CAPTION_CHARS = 120
+# The gallery position. Bounded far above the 40-image cap so a re-order can use
+# sparse values, but still finite.
+MAX_SORT_ORDER = 10_000
 
 
 def _valid_time(value: str) -> str:
@@ -144,9 +153,6 @@ class ServiceItem(BaseModel):
     # (None => the UI shows "ללא עלות").
     description: str | None = None
     price: int | None = None
-    # OPTIONAL service image: an http(s) URL OR a client-resized data: URL.
-    # None => the public card shows a placeholder frame.
-    image_url: str | None = None
     created_at: str | None = None
 
 
@@ -167,8 +173,6 @@ class ServiceCreateRequest(BaseModel):
     description: str | None = Field(default=None, max_length=MAX_SERVICE_DESC_CHARS)
     # OPTIONAL price in ₪ (whole shekels). None => "ללא עלות" on the public page.
     price: int | None = Field(default=None, ge=0)
-    # OPTIONAL image: an http(s) URL OR a resized data: URL. None => placeholder.
-    image_url: str | None = Field(default=None, max_length=MAX_SERVICE_IMAGE_CHARS)
 
 
 class ServiceUpdateRequest(BaseModel):
@@ -181,9 +185,6 @@ class ServiceUpdateRequest(BaseModel):
     active: bool | None = None
     description: str | None = Field(default=None, max_length=MAX_SERVICE_DESC_CHARS)
     price: int | None = Field(default=None, ge=0)
-    # OPTIONAL image: explicit null clears it, omitted leaves it unchanged (same
-    # partial-update semantics as description/price, via model_fields_set).
-    image_url: str | None = Field(default=None, max_length=MAX_SERVICE_IMAGE_CHARS)
 
 
 # --- bookings (admin: GET /api/bookings, PATCH /api/bookings/{id}) -----------
@@ -333,9 +334,6 @@ class PublicServiceItem(BaseModel):
     # renders "ללא עלות"). These are owner-authored, public — never PII.
     description: str | None = None
     price: int | None = None
-    # OPTIONAL image (http(s) URL OR resized data: URL). None => the public card
-    # renders a placeholder frame.
-    image_url: str | None = None
 
 
 class PublicServicesResponse(BaseModel):
@@ -439,3 +437,170 @@ class PublicMutationResponse(BaseModel):
     booking_id: str
     status: str
     scheduled_at: str  # UTC ISO-8601
+
+
+# --- M20 business page (owner: /api/booking/page + /api/booking/images) -------
+#
+# The "business page" is the visual shell around the existing booking flow: a
+# hero (logo, name, tagline, address, four contact buttons) plus a photo gallery.
+# EVERY field here is owner-authored PUBLIC marketing content — including the
+# address and phone, which are the BUSINESS's own details, not a customer's.
+# That is a deliberate, documented exception to the encryption rule (decision
+# 0028 / migration 0029), and it does not extend to anything else.
+#
+# Image BYTES never appear in these models: an image row carries a
+# `storage_path`, and the browser fetches the file from `/media/{storage_path}`,
+# which Caddy serves straight off disk without touching Python.
+
+
+class BusinessImageItem(BaseModel):
+    """One gallery image row (owner + public responses share this shape).
+
+    `storage_path` is the relative path inside the images volume
+    (`{business_id}/{uuid}.{ext}`). The public URL is `/media/{storage_path}` —
+    the frontend builds it, the API never stores a full URL, so the origin can
+    change without a data migration.
+    """
+
+    id: str
+    storage_path: str
+    caption: str | None = None
+    sort_order: int = 0
+    mime_type: str | None = None
+    size_bytes: int | None = None
+    created_at: str | None = None
+
+
+class BusinessPageResponse(BaseModel):
+    """GET /api/booking/page — the owner's view of the page + its gallery.
+
+    `slug` is echoed so the wizard can show/copy the public link. `page_theme` is
+    a free-form jsonb object the frontend owns (palette / radius / font); the
+    backend stores and returns it without interpreting it, so C and D can evolve
+    the theme shape without a backend change. `{}` means "the default look".
+    """
+
+    slug: str | None = None
+    business_name: str = ""
+    tagline: str | None = None
+    about: str | None = None
+    address: str | None = None
+    phone: str | None = None
+    whatsapp: str | None = None
+    instagram_url: str | None = None
+    waze_url: str | None = None
+    logo_url: str | None = None
+    page_theme: dict = Field(default_factory=dict)
+    images: list[BusinessImageItem] = Field(default_factory=list)
+    updated_at: str | None = None
+
+
+class BusinessPageUpdateRequest(BaseModel):
+    """PUT /api/booking/page — partial update; EVERY field is optional.
+
+    Same house rule as the services PATCH: an OMITTED key leaves the column
+    alone, while an EXPLICIT null CLEARS it (the route reads `model_fields_set`
+    to tell the two apart). Clearing matters here because "empty field ⇒ the
+    button is not rendered" is the product rule for the four contact buttons.
+
+    `slug` is NOT accepted — it is server-owned.
+
+    `business_name` IS accepted (M20 revision). The account is created from the
+    Google profile at first login, so a solo owner's page is titled with their
+    PERSONAL name until they change it. Unlike every other field here it may not
+    be cleared to null: a page with no name has nothing to render, so an empty
+    value is rejected rather than stored.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    business_name: str | None = Field(default=None, min_length=1, max_length=120)
+    tagline: str | None = Field(default=None, max_length=MAX_TAGLINE_CHARS)
+    about: str | None = Field(default=None, max_length=MAX_ABOUT_CHARS)
+    address: str | None = Field(default=None, max_length=MAX_ADDRESS_CHARS)
+    phone: str | None = Field(default=None, max_length=MAX_PAGE_PHONE_CHARS)
+    whatsapp: str | None = Field(default=None, max_length=MAX_PAGE_PHONE_CHARS)
+    instagram_url: str | None = Field(default=None, max_length=MAX_PAGE_URL_CHARS)
+    waze_url: str | None = Field(default=None, max_length=MAX_PAGE_URL_CHARS)
+    logo_url: str | None = Field(default=None, max_length=MAX_PAGE_URL_CHARS)
+    page_theme: dict | None = None
+
+    @field_validator("instagram_url", "waze_url", "logo_url")
+    @classmethod
+    def _check_url(cls, value: str | None) -> str | None:
+        """Only http(s) links. Blocks `javascript:` / `data:` in an href we render.
+
+        These three values are rendered as an `href`/`src` on a PUBLIC page, so a
+        `javascript:` URL here would be stored XSS against every visitor. An
+        empty string is normalized to None (the UI sends "" when the owner clears
+        a field, and "" must mean "no button", not a link to the current page).
+        """
+        if value is None:
+            return None
+        if not value:
+            return None
+        if not (value.startswith("http://") or value.startswith("https://")):
+            raise ValueError("url must start with http:// or https://")
+        return value
+
+    @field_validator("tagline", "about", "address", "phone", "whatsapp")
+    @classmethod
+    def _empty_is_null(cls, value: str | None) -> str | None:
+        """An empty string means "cleared", which is stored as NULL, not ""."""
+        return value or None
+
+
+class BusinessImageUpdateRequest(BaseModel):
+    """PATCH /api/booking/images/{id} — caption and/or position.
+
+    `caption` follows the omit-vs-null rule (explicit null clears the caption);
+    `sort_order` is a plain optional int — there is no "no position", so an
+    omitted key simply leaves the current one.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    caption: str | None = Field(default=None, max_length=MAX_CAPTION_CHARS)
+    sort_order: int | None = Field(default=None, ge=0, le=MAX_SORT_ORDER)
+
+
+class BusinessImagesResponse(BaseModel):
+    """GET-style envelope for the gallery (display order)."""
+
+    images: list[BusinessImageItem]
+
+
+class PublicBusinessImageItem(BaseModel):
+    """One gallery image as the PUBLIC page sees it: the path + the caption.
+
+    No size, no mime, no created_at — a visitor has no use for them, and each is
+    one more fact about the business we would be publishing for free.
+    """
+
+    id: str
+    storage_path: str
+    caption: str | None = None
+
+
+class PublicBusinessPageResponse(BaseModel):
+    """GET /api/book/{slug}/page — what an ANONYMOUS visitor may see.
+
+    Deliberately a SEPARATE model from `BusinessPageResponse`: it carries only
+    the fields the public hero + gallery render. No settings, no slug echo, no
+    internal ids beyond each image's own id (which the UI needs as a list key),
+    and — obviously — no customer data of any kind. A new owner-only column added
+    to `booking_settings` later cannot leak here by accident, because adding it
+    to this model is a separate, visible edit.
+    """
+
+    business_name: str = ""
+    tagline: str | None = None
+    about: str | None = None
+    address: str | None = None
+    phone: str | None = None
+    whatsapp: str | None = None
+    instagram_url: str | None = None
+    waze_url: str | None = None
+    logo_url: str | None = None
+    page_theme: dict = Field(default_factory=dict)
+    images: list[PublicBusinessImageItem] = Field(default_factory=list)

@@ -1,16 +1,18 @@
 -- ============================================================================
--- 0012_service_image.sql — service card image (M11.2)
+-- 0012_service_image.sql — SUPERSEDED by 0029_business_page.sql (M20).
 -- ----------------------------------------------------------------------------
--- One additive column so each service card can carry a picture:
---   services.image_url — OPTIONAL. Holds either a public http(s) URL OR a
---                        client-side-resized, compressed `data:` URL (the
---                        frontend shrinks the upload on a canvas). NULL =>
---                        the card shows a placeholder frame. Owner-authored,
---                        public marketing content — no PII/ciphertext.
+-- This file USED to add `services.image_url` (M11.2): an optional column holding
+-- either an http(s) URL or a client-resized `data:` URL for a service card
+-- picture. M20 replaced that feature with the business-page gallery
+-- (`business_images` + files on disk), and 0029 DROPs the column for good —
+-- Omer's decision, 2026-07-21 (see docs/decisions/0028-m20-business-page.md).
 --
--- Purely additive: no new table, no RLS/grant change. `services` already has
--- RLS + app_role grants (0009), which cover any new column automatically.
--- Idempotent via ADD COLUMN IF NOT EXISTS.
+-- WHY THE BODY IS GONE RATHER THAN THE FILE:
+-- the migration runner has no ledger — it replays EVERY file in this directory
+-- on every boot, in filename order. Leaving the ALTER here would have re-ADDed
+-- the column on each start, and the end state would have been correct only by
+-- the accident that 0029 sorts after 0012. That is a trap, not a design. The
+-- file itself stays so the numbering never shifts and old logs still line up.
+--
+-- Nothing to run. Do not add statements here — write a new numbered migration.
 -- ============================================================================
-
-ALTER TABLE services ADD COLUMN IF NOT EXISTS image_url text;  -- http(s) URL or resized data: URL, NULL=>placeholder

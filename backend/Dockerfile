@@ -21,6 +21,14 @@ COPY pyproject.toml ./
 # Run as a non-root user.
 RUN useradd --create-home --uid 10001 appuser \
     && chown -R appuser:appuser /app
+
+# M20 — the mount point for the business_images named volume. It MUST exist in
+# the image and be owned by appuser BEFORE the volume is attached: when Docker
+# first creates an empty named volume it copies the image directory's contents
+# AND its ownership. Without this the volume is created root-owned, and the
+# non-root process cannot write a single gallery photo (PermissionError → 500).
+RUN mkdir -p /data/business-images \
+    && chown -R appuser:appuser /data
 USER appuser
 
 EXPOSE 8000
