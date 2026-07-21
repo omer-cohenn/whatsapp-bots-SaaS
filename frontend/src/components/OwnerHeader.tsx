@@ -42,7 +42,9 @@ function UserChip({ name, picture }: { name: string; picture: string }) {
           className="h-7 w-7 rounded-full border border-slate-200"
         />
       ) : null}
-      <span className="max-w-[10rem] truncate">{name}</span>
+      {/* Narrower cap on phones so a long Google display name cannot push the
+          header into a horizontal overflow. */}
+      <span className="max-w-[7rem] truncate sm:max-w-[10rem]">{name}</span>
     </span>
   )
 }
@@ -52,11 +54,15 @@ export default function OwnerHeader() {
 
   return (
     <header className="border-b border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-end gap-3 px-6 py-3">
-        <div className="flex items-center gap-4">
+      {/* px-4 on phones, the original px-6 from `sm` up — the shell adds no
+          horizontal padding of its own, so this is the only gutter here. */}
+      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-end gap-3 px-4 py-3 sm:px-6">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-4">
           <ConnectionPill status={connection?.status} />
           {user ? <UserChip name={user.name} picture={user.picture} /> : null}
-          <Button variant="secondary" onClick={() => void logout()}>
+          {/* Below `lg` the drawer already carries a "יציאה" button, so this
+              duplicate is hidden rather than eating scarce header width. */}
+          <Button variant="secondary" className="hidden lg:inline-flex" onClick={() => void logout()}>
             יציאה
           </Button>
         </div>

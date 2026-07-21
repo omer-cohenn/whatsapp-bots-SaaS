@@ -156,9 +156,12 @@ export default function LeadsPage() {
           </h1>
         </div>
 
-        {/* KPI cards (when we can compute them, i.e. status=all) */}
+        {/* KPI cards (when we can compute them, i.e. status=all).
+            שלוש עמודות בכל רוחב — גם ב-390px. StatCard במובייל הוא שורה
+            (צ'יפ + מספר) עם תווית מתחת, כך ששלושה כרטיסים נכנסים בנוחות
+            ל-358px השימושיים ונקראים כשורת מדדים אחת, כמו בדסקטופ. */}
         {counts.completedCount !== null ? (
-          <div className="grid grid-cols-3 gap-3" aria-label="סיכום לידים">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3" aria-label="סיכום לידים">
             <StatCard
               icon="checks"
               chipClassName="bg-[#1D9E75]"
@@ -188,7 +191,9 @@ export default function LeadsPage() {
             value={status}
             onChange={setStatus}
           />
-          <div className="w-48">
+          {/* בטלפון התיבה ממלאת את שארית השורה (במקום 192px קבועים שמשאירים
+              חור); מ-`sm` ומעלה חוזרת לרוחב הקבוע של הדסקטופ. */}
+          <div className="min-w-0 flex-1 sm:w-48 sm:flex-none">
             <Select
               label="סינון לפי מסלול"
               options={flowOptions}
@@ -219,7 +224,7 @@ export default function LeadsPage() {
                 }}
                 placeholder="שם, טלפון, או כל תשובה…"
                 autoComplete="off"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 pl-9 text-sm text-slate-900 placeholder:text-slate-400 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 dark:placeholder:text-slate-400 [&::-webkit-search-cancel-button]:hidden"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 pl-9 text-sm sm:py-2 text-slate-900 placeholder:text-slate-400 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 dark:placeholder:text-slate-400 [&::-webkit-search-cancel-button]:hidden"
               />
               {query ? (
                 <button
@@ -240,7 +245,7 @@ export default function LeadsPage() {
               makes that relationship obvious. `mr-auto` pushes it to the far
               edge in RTL so it never crowds the search box. Excel green is
               deliberate: the one button on this page that leaves the app. */}
-          <div className="flex flex-col gap-1.5 sm:mr-auto sm:self-end">
+          <div className="flex w-full flex-col gap-1.5 sm:mr-auto sm:w-auto sm:self-end">
             <button
               type="button"
               disabled={exportDisabled}
@@ -251,7 +256,7 @@ export default function LeadsPage() {
                   leadsExportUrl({ status, flow: flowParam, q: trimmedQuery || undefined }),
                 )
               }}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#1D6F42] px-4 py-2 text-sm font-semibold text-white shadow-sm outline-none transition-colors hover:bg-[#175634] focus-visible:ring-2 focus-visible:ring-[#1D6F42] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-slate-900"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#1D6F42] px-4 py-2.5 text-sm font-semibold sm:py-2 text-white shadow-sm outline-none transition-colors hover:bg-[#175634] focus-visible:ring-2 focus-visible:ring-[#1D6F42] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-slate-900"
             >
               <span aria-hidden="true">📊</span>
               ייצוא לאקסל

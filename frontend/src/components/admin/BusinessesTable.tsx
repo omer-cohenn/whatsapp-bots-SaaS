@@ -34,7 +34,69 @@ export default function BusinessesTable({ rows, plans, caption }: Props) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+    <>
+      {/* מתחת ל-md: שורת כרטיס לכל עסק. הטבלה הזו רחבה 720px בשמונה עמודות —
+          לגרור אותה לצדדים במסך של 358px זה עונש על המסך שהכי משתמשים בו
+          לסריקה מהירה. הכרטיס לא מוותר על שום נתון: הוא מציג את כל שמונת
+          השדות, רק מסודרים בשתי עמודות במקום בשמונה. מ-md ומעלה חוזרת
+          הטבלה המקורית, ללא שינוי. */}
+      <ul aria-label={caption} className="flex flex-col gap-2 md:hidden">
+        {rows.map((row) => (
+          <li
+            key={row.business_id}
+            className="rounded-2xl border border-slate-200 bg-white p-3"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <Link
+                to={`/admin/businesses/${encodeURIComponent(row.business_id)}`}
+                className="flex min-h-11 min-w-0 flex-1 items-center break-words rounded text-sm font-medium text-leaf-ink underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2"
+              >
+                {row.name || 'ללא שם'}
+              </Link>
+              <span className="shrink-0">
+                <StatusBadge status={row.status} />
+              </span>
+            </div>
+
+            {row.owner_email ? (
+              <p className="mt-0.5 break-all text-xs text-slate-500">
+                {row.owner_email}
+              </p>
+            ) : null}
+
+            {/* שאר השדות — שתי עמודות, לא עמודה אחת ארוכה. */}
+            <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+              <div className="flex flex-col">
+                <dt className="text-slate-500">נרשם</dt>
+                <dd className="font-medium text-slate-900">{shortDate(row.created_at)}</dd>
+              </div>
+              <div className="flex flex-col">
+                <dt className="text-slate-500">כניסה אחרונה</dt>
+                <dd className="font-medium text-slate-900">
+                  {shortDate(row.last_login_at)}
+                </dd>
+              </div>
+              <div className="flex flex-col">
+                <dt className="text-slate-500">לידים</dt>
+                <dd className="font-medium tabular-nums text-slate-900">
+                  {row.leads_count}
+                </dd>
+              </div>
+              <div className="flex flex-col">
+                <dt className="text-slate-500">הודעות (30 ימים)</dt>
+                <dd className="font-medium tabular-nums text-slate-900">{row.msgs_30d}</dd>
+              </div>
+              <div className="col-span-2 flex flex-col">
+                <dt className="text-slate-500">מנוי</dt>
+                <dd className="font-medium text-slate-900">{planLabel(row.plan_code)}</dd>
+              </div>
+            </dl>
+          </li>
+        ))}
+      </ul>
+
+      {/* מ-md ומעלה: הטבלה המקורית, בלי שינוי. */}
+      <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white md:block">
       <table className="w-full min-w-[720px] border-collapse text-sm">
         <caption className="sr-only">{caption}</caption>
         <thead>
@@ -76,6 +138,7 @@ export default function BusinessesTable({ rows, plans, caption }: Props) {
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   )
 }

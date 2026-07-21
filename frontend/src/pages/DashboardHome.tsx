@@ -142,21 +142,23 @@ export default function DashboardHome() {
 
   return (
     <DashboardLayout>
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-10">
+      {/* המעטפת לא מרפדת אופקית (ראו docs/spec/responsive-shell.md), אז העמוד
+          מחזיק gutter משלו: `px-4 sm:px-6` — בדיוק היישור של OwnerHeader. */}
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:gap-10 sm:px-6 sm:py-10">
         {/* Greeting + publish toggle */}
-        <section className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 sm:text-4xl dark:text-slate-100">
+        <section className="flex flex-wrap items-start justify-between gap-3 sm:gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl lg:text-4xl dark:text-slate-100">
               שלום{user?.name ? `, ${user.name.split(' ')[0]}` : ''} 👋
             </h1>
             {business?.name ? (
-              <p className="mt-2 text-base text-slate-600 dark:text-slate-400">
+              <p className="mt-1 text-sm text-slate-600 sm:mt-2 sm:text-base dark:text-slate-400">
                 ניהול בוט הוואטסאפ של <span className="font-medium">{business.name}</span>
               </p>
             ) : null}
           </div>
           {isPublished !== null ? (
-            <div className="flex items-center gap-4 rounded-2xl bg-white px-5 py-4 shadow-[0_10px_26px_rgba(70,60,35,0.07)] dark:border dark:border-white/10 dark:bg-slate-800 dark:shadow-none">
+            <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-[0_10px_26px_rgba(70,60,35,0.07)] sm:gap-4 sm:px-5 sm:py-4 dark:border dark:border-white/10 dark:bg-slate-800 dark:shadow-none">
               <p className="text-sm font-medium text-slate-700 dark:text-slate-300">מצב הבוט</p>
               <PublishToggle isPublished={isPublished} onChange={setIsPublished} />
             </div>
@@ -165,7 +167,7 @@ export default function DashboardHome() {
 
         {/* Funnel / KPI (no visible heading by design; the section is still
             named for screen readers). */}
-        <section aria-label="משפך הלידים" className="flex flex-col gap-5">
+        <section aria-label="משפך הלידים" className="flex flex-col gap-3 sm:gap-5">
           <div className="flex flex-wrap items-center justify-end gap-3">
             <SegmentedControl
               label="טווח זמן"
@@ -180,8 +182,10 @@ export default function DashboardHome() {
           ) : error ? (
             <Alert tone="error">{error}</Alert>
           ) : stats ? (
+            // 2×2 בטלפון, 4 בשורה בדסקטופ. במכוון לא עמודה אחת: ארבע רצועות
+            // ברוחב מלא הן לא לוח מחוונים — הן רשימה שגוללים לידה.
             <div
-              className="grid grid-cols-2 gap-4 sm:grid-cols-4"
+              className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4"
               aria-label="סיכום משפך הלידים"
             >
               {/* RTL: first card renders on the visual right. */}

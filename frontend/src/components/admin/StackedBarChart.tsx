@@ -49,11 +49,18 @@ export default function StackedBarChart({
 
   return (
     <figure className="m-0">
+      {/* הגרף היחיד כאן שיש בתוכו טקסט (שמות התוכניות על ציר ה-x). ה-SVG
+          מוקטן יחד עם המכולה, כך שגם הטקסט מוקטן: ב-358px ה-viewBox של 600
+          מתכווץ לפקטור 0.6 והתוויות יורדות ל-~6.5px — בלתי קריא. לכן דווקא
+          כאן בוחרים גלילה אופקית עם רוחב מינימלי של 480px (פקטור ~0.8,
+          תוויות ~9px): עדיף לגלול מעט מאשר להסתכל על גרף שאי אפשר לקרוא.
+          הגלילה היא של המכולה בלבד — העמוד לא נגלל לצדדים. */}
+      <div className="min-w-0 overflow-x-auto">
       <svg
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
         role="img"
         aria-label={ariaLabel}
-        className="h-44 w-full"
+        className="h-44 w-full min-w-[480px] sm:min-w-0"
       >
         {/* Baseline */}
         <line
@@ -95,6 +102,7 @@ export default function StackedBarChart({
           )
         })}
       </svg>
+      </div>
 
       {/* Legend */}
       <ul className="mt-2 flex flex-wrap items-center gap-4 text-xs text-slate-600">

@@ -130,7 +130,10 @@ export default function StepsEditor({ flow, onStepsChange }: Props) {
                   onClick={() => setOpenIndex(open ? -1 : index)}
                   aria-expanded={open}
                   aria-controls={`step-body-${index}`}
-                  className="flex flex-1 items-center gap-2.5 rounded-lg px-2 py-1.5 text-right hover:bg-slate-50"
+                  // min-w-0 lets the truncating summary actually shrink instead
+                  // of forcing the row wider than the phone; min-h keeps the
+                  // whole header a comfortable tap target.
+                  className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-1.5 text-right hover:bg-slate-50 sm:min-h-0"
                 >
                   <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-leaf-soft text-xs text-leaf-ink">
                     {index + 1}
@@ -148,15 +151,17 @@ export default function StepsEditor({ flow, onStepsChange }: Props) {
                   variant="ghost"
                   onClick={() => removeStep(index)}
                   aria-label={`מחק שלב ${index + 1}`}
-                  className="flex-shrink-0 px-2 py-1 text-bad hover:bg-red-50"
+                  className="min-h-[44px] min-w-[44px] flex-shrink-0 px-2 py-1 text-bad hover:bg-red-50 sm:min-h-0 sm:min-w-0"
                 >
                   <Icon name="trash" size={16} />
                 </Button>
               </div>
 
-              {/* Accordion body — the step editor (only when expanded). */}
+              {/* Accordion body — the step editor (only when expanded).
+                  Tighter side padding on phones so the fields inside keep as
+                  much of the 358px as possible. */}
               {open ? (
-                <div id={`step-body-${index}`} className="border-t border-slate-100 px-4 pb-4 pt-3">
+                <div id={`step-body-${index}`} className="border-t border-slate-100 px-3 pb-4 pt-3 sm:px-4">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Field
                       label="מזהה השדה"
@@ -195,7 +200,7 @@ export default function StepsEditor({ flow, onStepsChange }: Props) {
                           <div key={optIndex} className="flex items-center gap-2">
                             <Field
                               label={`אפשרות ${optIndex + 1}`}
-                              className="flex-1"
+                              className="min-w-0 flex-1"
                               value={opt}
                               onChange={(e) => updateOption(index, optIndex, e.target.value)}
                             />
@@ -203,7 +208,7 @@ export default function StepsEditor({ flow, onStepsChange }: Props) {
                               variant="ghost"
                               onClick={() => removeOption(index, optIndex)}
                               aria-label={`מחק אפשרות ${optIndex + 1}`}
-                              className="mt-6 px-2 py-1 text-bad hover:bg-red-50"
+                              className="mt-6 min-h-[44px] min-w-[44px] flex-shrink-0 px-2 py-1 text-bad hover:bg-red-50 sm:min-h-0 sm:min-w-0"
                             >
                               <Icon name="x" size={16} />
                             </Button>
@@ -211,7 +216,11 @@ export default function StepsEditor({ flow, onStepsChange }: Props) {
                         ))}
                       </div>
                       {(step.options ?? []).length < MAX_CHOICE_OPTIONS ? (
-                        <Button variant="secondary" onClick={() => addOption(index)} className="mt-2">
+                        <Button
+                          variant="secondary"
+                          onClick={() => addOption(index)}
+                          className="mt-2 min-h-[44px] sm:min-h-0"
+                        >
                           <Icon name="plus" size={15} />
                           הוסף אפשרות
                         </Button>
@@ -233,7 +242,7 @@ export default function StepsEditor({ flow, onStepsChange }: Props) {
                           return (
                             <label
                               key={kind}
-                              className="flex items-center gap-2 text-sm text-slate-700"
+                              className="flex min-h-[44px] items-center gap-2 text-sm text-slate-700 sm:min-h-0"
                             >
                               <input
                                 type="checkbox"
@@ -249,7 +258,7 @@ export default function StepsEditor({ flow, onStepsChange }: Props) {
                     </fieldset>
                   ) : null}
 
-                  <label className="mt-3 flex items-center gap-2 text-sm text-slate-700">
+                  <label className="mt-3 flex min-h-[44px] items-center gap-2 text-sm text-slate-700 sm:min-h-0">
                     <input
                       type="checkbox"
                       checked={step.required}
@@ -277,7 +286,7 @@ export default function StepsEditor({ flow, onStepsChange }: Props) {
         variant="secondary"
         onClick={addStep}
         disabled={atMax}
-        className="justify-center border border-dashed border-slate-300 bg-transparent"
+        className="min-h-[44px] justify-center border border-dashed border-slate-300 bg-transparent sm:min-h-0"
       >
         <Icon name="plus" size={15} />
         {atMax ? `הגעת למקסימום (${MAX_STEPS_PER_FLOW})` : 'הוסף שלב'}

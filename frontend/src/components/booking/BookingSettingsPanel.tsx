@@ -211,6 +211,10 @@ export default function BookingSettingsPanel({
   }
 
   // --- tab 1: "פרטי העסק וזמינות" ---
+  // Built once: the link is shown, copied AND opened, and all three must be the
+  // exact same string (the copy button must never copy a shortened display text).
+  const bookingUrl = publicBookingUrl(settings.slug)
+
   return (
     <div className="flex flex-col gap-6">
       {/* Public booking link */}
@@ -222,20 +226,35 @@ export default function BookingSettingsPanel({
         <p className="mt-1 text-sm text-slate-500">
           שתפו את הקישור הזה עם הלקוחות — או שהבוט ישלח אותו אוטומטית.
         </p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <code dir="ltr" className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-800">
-            {publicBookingUrl(settings.slug)}
-          </code>
-          <CopyButton value={publicBookingUrl(settings.slug)} />
-          <a
-            href={publicBookingUrl(settings.slug)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+        {/* 🔴 A URL is one unbreakable word. As a plain flex item the <code> got
+            `min-width: auto` — i.e. the full string — so on a phone it refused to
+            shrink, spilled out of the card and shoved "העתק קישור" ו"פתח" off the
+            screen. Three things fix it, and all three are needed:
+              min-w-0   — lets the box actually shrink below its text width
+              break-all — gives the URL somewhere to wrap (it has no spaces)
+              flex-col  — on a phone the link gets its own line, the two buttons
+                          share the next one, so both stay reachable.
+            The buttons still receive the FULL url (bookingUrl), never what the
+            box happens to display. */}
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <code
+            dir="ltr"
+            className="min-w-0 flex-1 break-all rounded-lg bg-slate-100 px-3 py-2 text-start text-sm text-slate-800"
           >
-            <Icon name="external-link" size={16} />
-            פתח
-          </a>
+            {bookingUrl}
+          </code>
+          <div className="flex flex-wrap items-center gap-2">
+            <CopyButton value={bookingUrl} className="min-h-[44px] sm:min-h-0" />
+            <a
+              href={bookingUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 sm:min-h-0"
+            >
+              <Icon name="external-link" size={16} />
+              פתח
+            </a>
+          </div>
         </div>
       </Card>
 

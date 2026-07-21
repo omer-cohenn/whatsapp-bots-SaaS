@@ -32,7 +32,7 @@ export default function Select({
       <select
         id={selectId}
         aria-describedby={hintId}
-        className={`rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 ${className}`}
+        className={`rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base sm:py-2 sm:text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 ${className}`}
         {...rest}
       >
         {options.map((opt) => (

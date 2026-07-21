@@ -144,9 +144,19 @@ export default function TryMePage() {
 
   return (
     <DashboardLayout>
-      <div className="mx-auto flex w-full max-w-2xl flex-col px-4 py-6 sm:px-6">
+      {/* On a phone the chat is the whole point of the page, so the page itself
+          is sized to the viewport and the CHAT flexes to fill whatever is left
+          over — the composer is then always on screen and the page never scrolls
+          as a whole (only the transcript does).
+          7rem ≈ the shell chrome above <main> on mobile (the 61px hamburger bar
+          + the 50px OwnerHeader, measured). 100dvh — the DYNAMIC viewport unit —
+          shrinks when the on-screen keyboard opens, which is exactly what keeps
+          the input row reachable above it; 100vh would not.
+          From sm up nothing changes: height goes back to auto and the chat keeps
+          its original 70vh, so tablet and desktop are untouched. */}
+      <div className="mx-auto flex h-[calc(100dvh-7rem)] w-full max-w-2xl flex-col px-4 py-4 sm:h-auto sm:px-6 sm:py-6">
         {/* Header */}
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 sm:mb-5">
           <div>
             <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
               <Icon name="player-play" size={22} className="text-leaf" />
@@ -156,7 +166,12 @@ export default function TryMePage() {
               דברו עם הבוט כאילו אתם לקוח. זהו מצב בדיקה — שום דבר לא נשמר.
             </p>
           </div>
-          <Button onClick={onReset} disabled={sending || opening} variant="secondary">
+          <Button
+            onClick={onReset}
+            disabled={sending || opening}
+            variant="secondary"
+            className="min-h-[44px] sm:min-h-0"
+          >
             <Icon name="player-play" size={16} />
             התחל מחדש
           </Button>
@@ -165,7 +180,10 @@ export default function TryMePage() {
         {/* WhatsApp-style chat window */}
         <section
           aria-label="צ׳אט בדיקה עם הבוט"
-          className="flex h-[70vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+          // Phones: fill the leftover column height (min-h-0 lets the inner
+          // transcript scroll instead of stretching the box). sm and up: the
+          // original fixed 70vh block.
+          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:h-[70vh] sm:flex-none"
         >
           {/* Chat bar (mimics a WhatsApp conversation header). */}
           <header className="flex items-center gap-3 border-b border-slate-200 bg-leaf-dark px-4 py-3 text-white">
@@ -195,7 +213,12 @@ export default function TryMePage() {
                       className={isCustomer ? 'flex justify-start' : 'flex justify-end'}
                     >
                       <span
-                        className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm shadow-sm ${
+                        // 85% of the column on phones (a narrow screen needs the
+                        // extra width more than it needs the gutter), 80% from
+                        // sm as before. break-words stops a long unbroken string
+                        // — a URL, a run of digits — widening the bubble past
+                        // the screen.
+                        className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm shadow-sm sm:max-w-[80%] ${
                           isCustomer
                             ? 'rounded-tl-sm bg-leaf text-white'
                             : 'rounded-tr-sm border border-slate-200 bg-white text-slate-800'
@@ -210,14 +233,17 @@ export default function TryMePage() {
                 if (entry.kind === 'lead') {
                   return (
                     <li key={entry.id} className="flex justify-end">
-                      <div className="max-w-[85%] rounded-2xl border border-leaf/30 bg-leaf-soft px-4 py-3 text-sm text-leaf-ink shadow-sm">
+                      <div className="max-w-[92%] rounded-2xl border border-leaf/30 bg-leaf-soft px-3 py-3 text-sm text-leaf-ink shadow-sm sm:max-w-[85%] sm:px-4">
                         <p className="mb-2 flex items-center gap-2 font-medium">
                           <Icon name="users" size={16} />
                           זה מה שהיה נאסף (במצב בדיקה — לא נשמר)
                         </p>
                         <dl className="space-y-1">
                           {Object.entries(entry.lead).map(([key, value]) => (
-                            <div key={key} className="flex gap-2">
+                            // flex-wrap so a long Hebrew field name + a long
+                            // answer drop onto separate lines rather than
+                            // stretching the card.
+                            <div key={key} className="flex flex-wrap gap-x-2">
                               <dt className="font-medium text-leaf-ink">{key}:</dt>
                               <dd className="min-w-0 break-words text-leaf-ink/90">
                                 <AnswerValue value={value} />
@@ -280,13 +306,16 @@ export default function TryMePage() {
               maxLength={2000}
               disabled={opening}
               placeholder="כתבו הודעה כאילו אתם לקוח…"
-              className="max-h-32 flex-1 resize-none rounded-2xl border border-slate-300 px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 disabled:bg-slate-50"
+              // text-base (16px) on phones is deliberate: iOS Safari zooms the
+              // whole page in when you focus an input smaller than 16px, which
+              // wrecks the layout mid-conversation. Back to text-sm from sm.
+              className="max-h-32 min-w-0 flex-1 resize-none rounded-2xl border border-slate-300 px-3.5 py-2 text-base text-slate-900 placeholder:text-slate-400 disabled:bg-slate-50 sm:text-sm"
             />
             <Button
               type="submit"
               disabled={sending || opening || input.trim().length === 0}
               aria-label="שלח הודעה"
-              className="h-10 w-10 flex-shrink-0 rounded-full !bg-leaf p-0 text-white hover:!bg-leaf-dark"
+              className="h-11 w-11 flex-shrink-0 rounded-full !bg-leaf p-0 text-white hover:!bg-leaf-dark sm:h-10 sm:w-10"
             >
               <Icon name="send" size={18} />
             </Button>

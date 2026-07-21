@@ -61,7 +61,11 @@ export default function PublishToggle({ isPublished, onChange }: Props) {
           aria-label={isPublished ? 'הבוט מפורסם — לחצו כדי לכבות' : 'הבוט כבוי — לחצו כדי לפרסם'}
           disabled={saving}
           onClick={() => void toggle()}
-          className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full p-0.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 disabled:opacity-60 dark:focus-visible:ring-offset-slate-800 ${
+          // The switch STAYS 24×44 visually — a fatter track would look wrong next to
+          // the label. Instead a transparent ::before pad grows the touch target to
+          // ~44px square without moving a pixel. Note the inset must clear the
+          // padding box, not the border box, so -inset-[10px] and not -inset-2.
+          className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full p-0.5 transition before:absolute before:-inset-[10px] before:content-[''] sm:before:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 disabled:opacity-60 dark:focus-visible:ring-offset-slate-800 ${
             isPublished ? 'bg-leaf' : 'bg-slate-300 dark:bg-slate-600'
           }`}
         >

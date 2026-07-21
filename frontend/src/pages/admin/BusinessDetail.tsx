@@ -141,10 +141,11 @@ export default function BusinessDetail() {
 
   return (
     <DashboardLayout>
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-10">
+      {/* gutter של העמוד עצמו — המעטפת לא מרפדת את <main>. */}
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-10">
         <Link
           to="/admin/businesses"
-          className="inline-flex w-fit items-center gap-1 rounded text-sm font-medium text-leaf-ink underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2"
+          className="inline-flex min-h-11 w-fit items-center gap-1 rounded text-sm font-medium text-leaf-ink sm:min-h-0 underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2"
         >
           <Icon name="chevron-right" size={16} />
           חזרה לרשימת העסקים
@@ -161,19 +162,29 @@ export default function BusinessDetail() {
             {/* Header */}
             <Card>
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
-                    <Icon name="building-store" size={24} className="text-leaf" />
-                    {business.name || 'עסק ללא שם'}
+                {/* min-w-0 + break-words: שם עסק או אימייל ארוכים לא ידחפו
+                    את הכרטיס מעבר לרוחב המסך. */}
+                <div className="min-w-0 flex-1">
+                  <h1 className="flex items-start gap-2 text-xl font-bold text-slate-900 sm:text-2xl">
+                    <Icon
+                      name="building-store"
+                      size={24}
+                      className="mt-0.5 shrink-0 text-leaf"
+                    />
+                    <span className="min-w-0 break-words">
+                      {business.name || 'עסק ללא שם'}
+                    </span>
                   </h1>
                   {business.owner_email ? (
-                    <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-600">
-                      <Icon name="mail" size={15} />
-                      {business.owner_email}
+                    <p className="mt-1 flex items-start gap-1.5 text-sm text-slate-600">
+                      <Icon name="mail" size={15} className="mt-0.5 shrink-0" />
+                      <span className="min-w-0 break-all">{business.owner_email}</span>
                     </p>
                   ) : null}
                 </div>
-                <StatusBadge status={business.status} />
+                <span className="shrink-0">
+                  <StatusBadge status={business.status} />
+                </span>
               </div>
 
               <dl className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -190,7 +201,8 @@ export default function BusinessDetail() {
                     business.last_login_at ? fullDateTime(business.last_login_at) : null
                   }
                 />
-                <div className="flex gap-6">
+                {/* שני נתונים בתא אחד — ב-390px gap-6 היה דוחס אותם, gap-4 נושם. */}
+                <div className="flex gap-4 sm:gap-6">
                   <Fact label="לידים" value={String(business.leads_count)} />
                   <Fact label="הודעות (30 ימים)" value={String(business.msgs_30d)} />
                 </div>
@@ -255,7 +267,7 @@ export default function BusinessDetail() {
                   setDeleteError(null)
                   setConfirmOpen(true)
                 }}
-                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white outline-none transition hover:bg-red-700 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+                className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white outline-none transition hover:bg-red-700 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 sm:w-auto"
               >
                 <Icon name="trash" size={16} />
                 מחיקת העסק
@@ -281,19 +293,21 @@ export default function BusinessDetail() {
                 onChange={(e) => setConfirmText(e.target.value)}
                 placeholder={business.name?.trim() || 'מחק'}
                 aria-label="אישור מחיקה"
-                className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-200"
+                className="mt-3 min-h-11 w-full rounded-lg border border-slate-300 px-3 py-2 text-base outline-none focus:border-red-500 focus:ring-2 focus:ring-red-200 sm:text-sm"
               />
               {deleteError ? (
                 <div className="mt-3">
                   <Alert tone="error">{deleteError}</Alert>
                 </div>
               ) : null}
-              <div className="mt-5 flex justify-end gap-2">
+              {/* בטלפון הכפתורים נערמים ותופסים רוחב מלא (מטרת נגיעה ~44px);
+                  מ-sm ומעלה זו שורת אישור/ביטול רגילה מיושרת לסוף. */}
+              <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <button
                   type="button"
                   onClick={() => setConfirmOpen(false)}
                   disabled={deleting}
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                  className="min-h-11 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
                 >
                   ביטול
                 </button>
@@ -304,7 +318,7 @@ export default function BusinessDetail() {
                     deleting ||
                     confirmText.trim() !== (business.name?.trim() || 'מחק')
                   }
-                  className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {deleting ? 'מוחק…' : 'מחק לצמיתות'}
                 </button>

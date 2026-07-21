@@ -54,10 +54,16 @@ export default function FlowTypeSelector({ value, onChange }: Props) {
       <span id="flow-type-label" className="text-sm font-medium text-slate-800">
         סוג המסלול
       </span>
+      {/* The four options add up to ~415px — far past the ~326px a phone leaves
+          inside this card. A radiogroup is a CHOICE, so hiding options behind a
+          horizontal scroll would be wrong: the owner has to see everything they
+          can pick. The pill therefore wraps onto two rows on phones (square-ish
+          corners while wrapped so the shape still reads as one group) and snaps
+          back to the single-row segmented control from sm upward. */}
       <div
         role="radiogroup"
         aria-labelledby="flow-type-label"
-        className="inline-flex rounded-full bg-slate-100 p-1"
+        className="inline-flex w-full flex-wrap rounded-2xl bg-slate-100 p-1 sm:w-auto sm:flex-nowrap sm:rounded-full"
       >
         {OPTIONS.map((opt) => {
           if (!opt.enabled) {
@@ -65,7 +71,7 @@ export default function FlowTypeSelector({ value, onChange }: Props) {
               <span
                 key={opt.value}
                 aria-disabled="true"
-                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-slate-400"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-slate-400 sm:min-h-0"
               >
                 {opt.label}
                 <Badge tone="leaf">בקרוב</Badge>
@@ -85,7 +91,7 @@ export default function FlowTypeSelector({ value, onChange }: Props) {
               tabIndex={selected ? 0 : -1}
               onClick={() => onChange(opt.value as FlowType)}
               onKeyDown={(e) => onKeyDown(e, opt.value as FlowType)}
-              className={`rounded-full px-4 py-1.5 text-xs font-medium transition ${
+              className={`min-h-[44px] rounded-full px-3 py-1.5 text-xs font-medium transition sm:min-h-0 sm:px-4 ${
                 selected
                   ? 'bg-leaf text-white shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'

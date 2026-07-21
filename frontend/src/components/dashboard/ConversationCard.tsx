@@ -211,11 +211,15 @@ export default function ConversationCard({
 
         <span className="min-w-0 flex-1">
           {/* Line 1: name + status chip. */}
+          {/* השם מקוצץ, אבל צ'יפ הסטטוס לעולם לא מתכווץ (`shrink-0`) — בטלפון
+              "מי" ו"באיזה מצב" הם שתי העובדות שחייבות להישאר קריאות במבט. */}
           <span className="flex items-center gap-2">
             <span className="truncate text-[15px] font-semibold text-slate-900 dark:text-slate-100">
               {displayName}
             </span>
-            <Badge tone={meta.tone}>{meta.label}</Badge>
+            <span className="shrink-0">
+              <Badge tone={meta.tone}>{meta.label}</Badge>
+            </span>
           </span>
           {/* Line 2: the last message, one line, clipped like a chat app. */}
           <span className="mt-0.5 block truncate text-sm text-slate-500 dark:text-slate-400">
@@ -253,7 +257,7 @@ export default function ConversationCard({
 
       {/* Accordion body — lead details + actions + (optional) inline chat. */}
       {open ? (
-        <div id={bodyId} className="border-t border-black/10 px-4 pb-4 pt-3 dark:border-white/10">
+        <div id={bodyId} className="border-t border-black/10 px-3 pb-4 pt-3 sm:px-4 dark:border-white/10">
           {loadingDetail ? (
             <Spinner className="py-6" label="טוען פרטי שיחה…" />
           ) : detailError ? (
@@ -280,7 +284,7 @@ export default function ConversationCard({
                   </div>
 
                   {answers.length > 0 ? (
-                    <dl className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 sm:gap-x-6">
                       {answers.map(([key, value]) => (
                         <div key={key} className="min-w-0">
                           <dt className="text-[11px] text-slate-400">{key}</dt>

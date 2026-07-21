@@ -126,7 +126,8 @@ export default function AdminCrm() {
 
   return (
     <DashboardLayout>
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-10">
+      {/* gutter של העמוד עצמו — המעטפת לא מרפדת את <main>. */}
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-10">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
             <Icon name="layout-columns" size={22} className="text-leaf" />
@@ -134,7 +135,7 @@ export default function AdminCrm() {
           </h1>
           <Link
             to="/admin"
-            className="inline-flex items-center gap-1 rounded text-sm font-medium text-leaf-ink underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2"
+            className="inline-flex min-h-11 items-center gap-1 rounded text-sm font-medium text-leaf-ink sm:min-h-0 underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2"
           >
             <Icon name="chevron-right" size={16} />
             חזרה לניהול
@@ -144,6 +145,8 @@ export default function AdminCrm() {
         <p className="text-sm text-slate-600">
           כל עסק הוא כרטיס שנע בין שלבי המכירה. הזיזו כרטיס עם תפריט השלב, או פִּתחו
           אותו כדי לקבוע תזכורת חזרה ולהוסיף פתקים.
+          {/* רמז שמופיע רק כשהלוח נגלל אופקית (מתחת ל-lg). */}
+          <span className="lg:hidden"> החליקו לצדדים כדי לעבור בין השלבים.</span>
         </p>
 
         {flash ? <Alert tone={flash.tone}>{flash.text}</Alert> : null}
@@ -157,14 +160,28 @@ export default function AdminCrm() {
             אין עדיין עסקים בצינור המכירות.
           </p>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          // הלוח נשאר לוח גם בטלפון. מתחת ל-lg אנחנו לא מערימים את חמשת
+          // השלבים אחד מתחת לשני — זה הורג את המטאפורה של ה-kanban ומכריח
+          // גלילה אנכית אינסופית. במקום זה: רצועה אחת שנגללת אופקית, כל עמודה
+          // ברוחב 78vw כך שנראית פיסה מהעמודה הבאה (רמז שאפשר להחליק),
+          // עם snap כדי שההחלקה תיעצר בול על עמודה. הגלילה היא של הרצועה
+          // בלבד — העמוד עצמו לא נגלל לצדדים.
+          //
+          // [contain:paint]: ב-RTL, העמודות של הרצועה יושבות בקואורדינטות x
+          // שליליות (העמודה החמישית ב--1187px). הדפדפן אמנם לא מאפשר לגלול
+          // את העמוד לצדדים — window.scrollX נשאר 0 — אבל הוא כן מדווח על
+          // documentElement.scrollWidth מנופח (983 במקום 387), וזו בדיוק
+          // הבדיקה המחייבת בחוזה המעטפת. contain:paint אומר לדפדפן שהציור
+          // של המכולה חסום בגבולותיה (מה שממילא קורה כאן), וה-scrollWidth
+          // חוזר להיות שווה לרוחב החלון. מ-lg זה הופך ל-grid רגיל, אז מבטלים.
+          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [contain:paint] lg:grid lg:grid-cols-5 lg:gap-4 lg:overflow-visible lg:pb-0 lg:[contain:none]">
             {CRM_STAGE_ORDER.map((stage) => {
               const cards = byStage[stage]
               return (
                 <section
                   key={stage}
                   aria-label={`שלב: ${CRM_STAGE_META[stage].label}`}
-                  className="flex flex-col gap-3 rounded-2xl bg-[#f4f3ee] p-3"
+                  className="flex w-[78vw] max-w-[320px] shrink-0 snap-start flex-col gap-3 rounded-2xl bg-[#f4f3ee] p-3 lg:w-auto lg:max-w-none lg:shrink"
                 >
                   <div className="flex items-center justify-between gap-2 px-1">
                     <h2 className="flex items-center gap-2 text-sm font-medium text-slate-700">

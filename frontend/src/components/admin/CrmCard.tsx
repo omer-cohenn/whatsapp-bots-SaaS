@@ -39,11 +39,13 @@ export default function CrmCard({ business, onMove, onOpen, busy }: Props) {
         <button
           type="button"
           onClick={onOpen}
-          className="rounded text-start text-sm font-medium text-slate-900 underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2"
+          className="min-w-0 flex-1 break-words rounded py-1 text-start text-sm font-medium text-slate-900 underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2"
         >
           {business.name || 'עסק ללא שם'}
         </button>
-        <Badge tone="neutral">{planCodeLabel(business.plan_code)}</Badge>
+        <span className="shrink-0">
+          <Badge tone="neutral">{planCodeLabel(business.plan_code)}</Badge>
+        </span>
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
@@ -64,6 +66,8 @@ export default function CrmCard({ business, onMove, onOpen, busy }: Props) {
         </span>
       </div>
 
+      {/* שורת הפעולות — מטרות נגיעה ~44px בטלפון,
+          וחזרה לשורה הצפופה המקורית מ-lg ומעלה. */}
       <div className="mt-1 flex items-center gap-2">
         <label htmlFor={selectId} className="sr-only">
           שינוי שלב עבור {business.name || 'עסק'}
@@ -73,7 +77,7 @@ export default function CrmCard({ business, onMove, onOpen, busy }: Props) {
           value={business.stage}
           disabled={busy}
           onChange={(e) => onMove(e.target.value as CrmStage)}
-          className="flex-1 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 disabled:opacity-60"
+          className="min-h-11 flex-1 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 disabled:opacity-60 lg:min-h-0 lg:text-xs"
         >
           {CRM_STAGE_ORDER.map((s) => (
             <option key={s} value={s}>
@@ -84,7 +88,7 @@ export default function CrmCard({ business, onMove, onOpen, busy }: Props) {
         <button
           type="button"
           onClick={onOpen}
-          className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs font-medium text-slate-700 outline-none transition hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2"
+          className="min-h-11 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 outline-none transition hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 lg:min-h-0 lg:px-2 lg:text-xs"
         >
           פרטים
         </button>

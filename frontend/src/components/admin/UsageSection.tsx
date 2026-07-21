@@ -133,7 +133,9 @@ export default function UsageSection({ businessId }: { businessId: string }) {
       ) : error ? (
         <Alert tone="error">{error}</Alert>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        // מ-md ומעלה שני גרפים בשורה (הסיידבר עדיין מוסתר שם, אז יש רוחב).
+        // ב-390px גרף אחד בשורה — שני גרפים ברוחב 175px זה כבר לא גרף.
+        <div className="grid gap-4 [&>*]:min-w-0 md:grid-cols-2">
           {charts.map(({ metric, points, cumulative, total }) => (
             <Card key={metric} className="!p-4">
               <div className="mb-3 flex items-baseline justify-between gap-2">

@@ -35,6 +35,8 @@ export default function SegmentedControl<T extends string>({
     >
       {segments.map((seg) => {
         const selected = seg.value === value
+        // `py-2.5` במובייל: כל צ'יפ הופך ליעד נגיעה סביר (~40px עם ריפוד המכל).
+        // מ-`sm` ומעלה `sm:py-1.5` מחזיר בדיוק את הגובה המקורי של הדסקטופ.
         return (
           <button
             key={seg.value}
@@ -43,7 +45,7 @@ export default function SegmentedControl<T extends string>({
             name={name}
             aria-checked={selected}
             onClick={() => onChange(seg.value)}
-            className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf ${
+            className={`rounded-full px-3.5 py-2.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf sm:py-1.5 ${
               selected
                 ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
                 : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'

@@ -156,7 +156,9 @@ export default function ServicesEditor({ services, onChanged }: Props) {
               maxLength={120}
             />
           </div>
-          <div className="w-32">
+          {/* On a phone these two share one line as equal halves; from `sm` up
+              they are the fixed narrow columns they always were. */}
+          <div className="w-[calc(50%-0.375rem)] flex-none sm:w-32">
             <Field
               label="משך (דקות)"
               type="number"
@@ -167,7 +169,7 @@ export default function ServicesEditor({ services, onChanged }: Props) {
               onChange={(ev) => setNewDuration(ev.target.value)}
             />
           </div>
-          <div className="w-32">
+          <div className="w-[calc(50%-0.375rem)] flex-none sm:w-32">
             <Field
               label="מחיר ₪ (לא חובה)"
               type="number"
@@ -262,7 +264,7 @@ function ServiceRow({
             disabled={busy}
           />
         </div>
-        <div className="w-28">
+        <div className="w-[calc(50%-0.375rem)] flex-none sm:w-28">
           <Field
             label="משך (דקות)"
             type="number"
@@ -274,7 +276,7 @@ function ServiceRow({
             disabled={busy}
           />
         </div>
-        <div className="w-28">
+        <div className="w-[calc(50%-0.375rem)] flex-none sm:w-28">
           <Field
             label="מחיר ₪"
             type="number"
@@ -315,7 +317,7 @@ function ServiceRow({
           type="button"
           onClick={save}
           disabled={busy || !dirty || !valid}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-leaf px-3 py-1.5 text-sm font-medium text-leaf-ink transition hover:bg-leaf-soft disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-leaf px-3 py-1.5 text-sm font-medium text-leaf-ink transition hover:bg-leaf-soft disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0"
         >
           <Icon name="device-floppy" size={16} />
           {busy ? 'שומר…' : 'שמור'}
@@ -326,7 +328,7 @@ function ServiceRow({
           onClick={onDelete}
           disabled={busy}
           aria-label={`מחק את השירות ${service.name}`}
-          className="rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-bad disabled:opacity-50"
+          className="rounded-lg p-2.5 text-slate-400 transition hover:bg-red-50 hover:text-bad disabled:opacity-50 sm:p-2"
         >
           <Icon name="trash" size={18} />
         </button>

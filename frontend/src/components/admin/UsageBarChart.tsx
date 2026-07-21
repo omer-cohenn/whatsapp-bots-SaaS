@@ -42,12 +42,15 @@ export default function UsageBarChart({ points, color, ariaLabel }: Props) {
 
   return (
     <figure className="m-0">
+      {/* כמו LineChart: אין טקסט בתוך ה-SVG ו-preserveAspectRatio="none",
+          אז המקלות פשוט נדחסים ונשארים קריאים (30 ימים ב-358px = ~12px
+          למקל). אין סיבה לגלילה אופקית — רק קצת יותר גובה בטלפון. */}
       <svg
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
         role="img"
         aria-label={ariaLabel}
         preserveAspectRatio="none"
-        className="h-32 w-full"
+        className="h-36 w-full sm:h-32"
       >
         {/* Baseline */}
         <line

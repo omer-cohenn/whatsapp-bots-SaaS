@@ -118,9 +118,13 @@ export default function BookingsCalendar({ bookings, selectedDay, onSelectDay }:
 
   return (
     <div className="rounded-xl border border-black/10 bg-white p-3 sm:p-4">
-      {/* Toolbar: view toggle + period navigation */}
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div role="tablist" aria-label="תצוגת יומן" className="inline-flex rounded-full bg-slate-100 p-1">
+      {/* Toolbar: view toggle + period navigation.
+          The two together need ~330px and the card only offers ~285px on a
+          phone, so instead of letting them wrap into a ragged line they stack:
+          the toggle on top, then the navigation spread edge to edge so ‹ › land
+          under the thumbs rather than bunched in the middle. */}
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
+        <div role="tablist" aria-label="תצוגת יומן" className="flex rounded-full bg-slate-100 p-1 sm:inline-flex">
           {VIEWS.map((v) => {
             const on = v.id === view
             return (
@@ -130,7 +134,7 @@ export default function BookingsCalendar({ bookings, selectedDay, onSelectDay }:
                 role="tab"
                 aria-selected={on}
                 onClick={() => changeView(v.id)}
-                className={`rounded-full px-3 py-1 text-sm font-medium transition ${
+                className={`flex-1 rounded-full px-3 py-2 text-sm font-medium transition sm:flex-none sm:py-1 ${
                   on ? 'bg-leaf text-white' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -140,23 +144,23 @@ export default function BookingsCalendar({ bookings, selectedDay, onSelectDay }:
           })}
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center justify-between gap-1 sm:justify-start">
           <button
             type="button"
             onClick={() => step(1)}
             aria-label="הבא"
-            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
+            className="rounded-lg p-2.5 text-slate-500 hover:bg-slate-100 sm:p-1.5"
           >
             <Icon name="chevron-right" size={18} />
           </button>
-          <span className="min-w-[7.5rem] text-center text-sm font-semibold text-slate-800">
+          <span className="min-w-0 flex-1 text-center text-sm font-semibold text-slate-800 sm:min-w-[7.5rem] sm:flex-none">
             {label}
           </span>
           <button
             type="button"
             onClick={() => step(-1)}
             aria-label="הקודם"
-            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
+            className="rounded-lg p-2.5 text-slate-500 hover:bg-slate-100 sm:p-1.5"
           >
             <Icon name="chevron-left" size={18} />
           </button>
@@ -166,7 +170,7 @@ export default function BookingsCalendar({ bookings, selectedDay, onSelectDay }:
       {view !== 'day' ? (
         <>
           {/* Weekday headers */}
-          <div className="grid grid-cols-7 gap-1.5">
+          <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
             {HEB_DOW.map((d) => (
               <div key={d} className="pb-1 text-center text-[11px] font-medium text-slate-400">
                 {d}
@@ -175,7 +179,9 @@ export default function BookingsCalendar({ bookings, selectedDay, onSelectDay }:
           </div>
 
           {/* Day cells */}
-          <div className="grid grid-cols-7 gap-1.5">
+          {/* gap-1 on a phone: 7 columns in ~285px, and every 2px of gutter comes
+              straight out of the tap target of every day cell. */}
+          <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
             {cells.map((day) => {
               const count = countByDay.get(dayKey(day)) ?? 0
               const muted = view === 'month' && !isSameMonth(day, cursor)

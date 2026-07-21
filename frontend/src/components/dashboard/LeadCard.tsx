@@ -128,7 +128,7 @@ export default function LeadCard({ lead, onStatusChange, onDelete }: Props) {
   }
 
   return (
-    <article className="rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-slate-800">
+    <article className="rounded-xl border border-black/10 bg-white p-3 sm:p-4 dark:border-white/10 dark:bg-slate-800">
       <div className="flex items-center gap-3">
         <span
           aria-hidden="true"
@@ -156,9 +156,12 @@ export default function LeadCard({ lead, onStatusChange, onDelete }: Props) {
         </div>
       </div>
 
-      {/* Every collected answer — nothing hidden. */}
+      {/* Every collected answer — nothing hidden.
+          גם בטלפון זו רשת של שתי עמודות ולא עמודה אחת: הערכים כאן קצרים
+          (שם, טלפון, בחירה מתפריט), אז שתי עמודות מקוצצות (`truncate`) מראות
+          פי שניים מידע במבט אחד — והערך המלא זמין ב-`title` ובלחיצה. */}
       {answers.length > 0 ? (
-        <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 border-t border-black/10 pt-3 sm:grid-cols-3 dark:border-white/10">
+        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-black/10 pt-3 sm:grid-cols-3 sm:gap-x-6 dark:border-white/10">
           {answers.map(([key, value]) => (
             <div key={key} className="min-w-0">
               <dt className="text-[11px] text-slate-400">{key}</dt>
@@ -204,7 +207,10 @@ export default function LeadCard({ lead, onStatusChange, onDelete }: Props) {
         </div>
       ) : null}
 
-      {/* Actions: ONE in-app chat button + manual status + delete. Shown at any status. */}
+      {/* Actions: ONE in-app chat button + manual status + delete. Shown at any status.
+          `flex-wrap` ולא עמודה: בטלפון הכפתורים נשברים לשתי שורות צפופות
+          במקום ארבע שורות ברוחב מלא. `ms-auto` על "מחק" עדיין דוחף אותו
+          לקצה, כך שכפתור ההרס לא צמוד לפעולות הרגילות. */}
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-black/10 pt-3 dark:border-white/10">
         {lead.conversation_id ? (
           <button
@@ -212,7 +218,7 @@ export default function LeadCard({ lead, onStatusChange, onDelete }: Props) {
             onClick={() => void openInAppChat()}
             disabled={openingChat}
             aria-expanded={showChat}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-leaf px-3 py-1.5 text-sm font-medium text-white outline-none transition-colors hover:bg-leaf-dark focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-leaf px-3 py-2.5 text-sm font-medium sm:py-1.5 text-white outline-none transition-colors hover:bg-leaf-dark focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Icon name="message-circle" size={16} />
             {openingChat ? 'פותח…' : "צ'אט באפליקציה"}
@@ -228,7 +234,7 @@ export default function LeadCard({ lead, onStatusChange, onDelete }: Props) {
               setOutcome('deal')
             }}
             disabled={saving !== null}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-leaf px-3 py-1.5 text-sm font-medium text-leaf-ink outline-none transition-colors hover:bg-leaf-soft focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-leaf px-3 py-2.5 text-sm font-medium sm:py-1.5 text-leaf-ink outline-none transition-colors hover:bg-leaf-soft focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Icon name="checks" size={16} />
             {saving === 'deal' ? 'מעדכן…' : 'בוצעה עסקה'}
@@ -243,7 +249,7 @@ export default function LeadCard({ lead, onStatusChange, onDelete }: Props) {
               setOutcome('closed')
             }}
             disabled={saving !== null}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 outline-none transition-colors hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-medium sm:py-1.5 text-slate-600 outline-none transition-colors hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
           >
             <Icon name="x" size={16} />
             {saving === 'closed' ? 'מעדכן…' : 'ליד סגור'}
@@ -256,7 +262,7 @@ export default function LeadCard({ lead, onStatusChange, onDelete }: Props) {
           onClick={() => { setDeleteError(null); setShowDeleteConfirm(true) }}
           disabled={saving !== null || deleting}
           title="מחק ליד לצמיתות"
-          className="ms-auto inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 outline-none transition-colors hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+          className="ms-auto inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-2.5 text-sm font-medium sm:py-1.5 text-red-600 outline-none transition-colors hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Icon name="trash" size={15} />
           מחק

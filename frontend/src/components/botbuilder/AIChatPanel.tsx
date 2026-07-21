@@ -153,8 +153,14 @@ export default function AIChatPanel({ open, onClose, config, onApplyChanges }: P
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex">
-      {/* Backdrop (click to close). Decorative — the dialog owns the a11y. */}
+    // h-[100dvh] (dynamic viewport height) rather than inset-0's static height:
+    // when the phone's on-screen keyboard opens, dvh shrinks with it, so the
+    // composer at the bottom of the panel stays visible instead of being buried
+    // under the keyboard.
+    <div className="fixed inset-0 z-50 flex h-[100dvh]">
+      {/* Backdrop (click to close). Decorative — the dialog owns the a11y.
+          On a phone the panel takes the full width, so this strip collapses to
+          nothing; the header's X button is then the way out (and Escape). */}
       <button
         type="button"
         aria-label="סגירת עוזר ה-AI"
@@ -177,7 +183,7 @@ export default function AIChatPanel({ open, onClose, config, onApplyChanges }: P
             variant="ghost"
             onClick={onClose}
             aria-label="סגור"
-            className="px-2 py-1 text-white hover:bg-white/10"
+            className="min-h-[44px] min-w-[44px] px-2 py-1 text-white hover:bg-white/10 sm:min-h-0 sm:min-w-0"
           >
             <Icon name="x" size={18} />
           </Button>
@@ -256,13 +262,15 @@ export default function AIChatPanel({ open, onClose, config, onApplyChanges }: P
             rows={1}
             maxLength={8000}
             placeholder="כתוב הודעה... (אפשר גם לתאר בוט שלם ואבנה אותו)"
-            className="max-h-32 flex-1 resize-none rounded-2xl border border-slate-300 px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400"
+            // text-base (16px) on phones stops iOS Safari zooming the page in
+            // on focus; text-sm again from sm up.
+            className="max-h-32 min-w-0 flex-1 resize-none rounded-2xl border border-slate-300 px-3.5 py-2 text-base text-slate-900 placeholder:text-slate-400 sm:text-sm"
           />
           <Button
             type="submit"
             disabled={sending || input.trim().length === 0}
             aria-label="שלח הודעה"
-            className="h-10 w-10 flex-shrink-0 rounded-full bg-leaf p-0 text-white hover:bg-leaf-dark"
+            className="h-11 w-11 flex-shrink-0 rounded-full bg-leaf p-0 text-white hover:bg-leaf-dark sm:h-10 sm:w-10"
           >
             <Icon name="send" size={18} />
           </Button>

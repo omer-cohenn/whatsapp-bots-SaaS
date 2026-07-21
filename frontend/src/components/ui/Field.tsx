@@ -21,7 +21,7 @@ export default function Field({ label, hint, id, className = '', ...rest }: Fiel
       <input
         id={inputId}
         aria-describedby={hintId}
-        className={`rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 ${className}`}
+        className={`rounded-lg border border-slate-300 px-3 py-2.5 text-base sm:py-2 sm:text-sm text-slate-900 placeholder:text-slate-400 ${className}`}
         {...rest}
       />
       {hint ? (

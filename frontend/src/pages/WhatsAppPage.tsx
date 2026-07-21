@@ -131,6 +131,7 @@ export default function WhatsAppPage() {
             variant="secondary"
             onClick={() => void refreshStatus()}
             disabled={loading}
+            className="min-h-[44px] sm:min-h-0"
           >
             <Icon name="refresh" size={16} />
             רענון

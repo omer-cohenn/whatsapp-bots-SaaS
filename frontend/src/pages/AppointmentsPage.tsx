@@ -22,7 +22,7 @@
 // The `settings` id is kept for the setup's first tab so the Google OAuth return
 // URL (/settings/calendar) still lands where it always did.
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import DashboardLayout from '../components/DashboardLayout'
 import Icon from '../components/ui/Icon'
 import BookingsPanel from '../components/booking/BookingsPanel'
@@ -49,22 +49,32 @@ export default function AppointmentsPage({ defaultTab = 'bookings' }: { defaultT
           ניהול פגישות
         </h1>
 
-        {/* Tabs (accessible tablist). */}
+        {/* Tabs (accessible tablist).
+            Two layouts, one markup. Above `sm` it is the original flat row.
+            Below it, four full-length Hebrew labels are ~430px of text and the
+            row wrapped into a ragged two-line mess with the group caption
+            orphaned mid-line. So on a phone the tablist becomes a 3-column
+            grid: "פגישות" spans the full first row (it is the day-to-day view
+            and deserves the width), the caption gets its own line, and the
+            three setup steps sit side by side as equal thirds — labels wrap to
+            two short lines rather than being truncated, so nothing is hidden
+            and nothing scrolls sideways. */}
         <div
           role="tablist"
           aria-label="ניהול פגישות"
-          className="flex flex-wrap items-end gap-1 border-b border-slate-200"
+          className="grid grid-cols-3 items-end gap-x-1 border-b border-slate-200 sm:flex sm:flex-wrap"
         >
           {TABS.map((t, index) => {
             const selected = t.id === tab
             // A thin rule + caption where the day-to-day view ends and setup begins.
+            // Phone: a full-width caption line. Desktop: the original inline rule.
             const startsSetup = t.setup && !TABS[index - 1]?.setup
             return (
-              <div key={t.id} className="flex items-end">
+              <Fragment key={t.id}>
                 {startsSetup ? (
                   <span
                     id="setup-group-label"
-                    className="mx-2 mb-2 border-e border-slate-200 pe-3 text-xs text-slate-400"
+                    className="col-span-3 mt-2 text-xs text-slate-400 sm:col-auto sm:mx-2 sm:mt-0 sm:mb-2 sm:self-end sm:border-e sm:border-slate-200 sm:pe-3"
                   >
                     הקמת העמוד העסקי
                   </span>
@@ -77,7 +87,9 @@ export default function AppointmentsPage({ defaultTab = 'bookings' }: { defaultT
                   aria-controls={`panel-${t.id}`}
                   aria-describedby={t.setup ? 'setup-group-label' : undefined}
                   onClick={() => setTab(t.id)}
-                  className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
+                  className={`-mb-px flex min-h-[44px] items-center justify-center border-b-2 px-1 text-center text-xs font-medium leading-tight transition sm:block sm:min-h-0 sm:px-4 sm:py-2 sm:text-sm ${
+                    t.setup ? '' : 'col-span-3'
+                  } ${
                     selected
                       ? 'border-leaf text-leaf-ink'
                       : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -85,7 +97,7 @@ export default function AppointmentsPage({ defaultTab = 'bookings' }: { defaultT
                 >
                   {t.label}
                 </button>
-              </div>
+              </Fragment>
             )
           })}
         </div>

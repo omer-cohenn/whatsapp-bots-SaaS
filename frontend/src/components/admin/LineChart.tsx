@@ -67,12 +67,16 @@ export default function LineChart({
 
   return (
     <figure className="m-0">
+      {/* אין כאן טקסט בתוך ה-SVG (רק tooltips), ו-preserveAspectRatio="none"
+          מותח את הגרף לרוחב המכולה — אז ב-358px שום דבר לא נהיה בלתי קריא,
+          רק צר יותר. לכן כאן אין גלילה אופקית: הגרף מתמתח. מה שכן — קו מגמה
+          שנדחס לרוחב מאבד גובה יחסי, אז בטלפון נותנים לו קצת יותר גובה. */}
       <svg
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
         role="img"
         aria-label={ariaLabel}
         preserveAspectRatio="none"
-        className="h-40 w-full"
+        className="h-48 w-full sm:h-40"
       >
         {/* Baseline */}
         <line

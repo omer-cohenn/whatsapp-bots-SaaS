@@ -102,8 +102,11 @@ export default function DonutChart({ slices, ariaLabel, centerCaption }: Props) 
         </g>
       </svg>
 
-      {/* Legend — the accessible source of truth. */}
-      <ul className="flex flex-col gap-2 text-sm">
+      {/* Legend — the accessible source of truth.
+          הטבעת היא 128px קבועים והמקרא קצר, אז השניים נכנסים זה לצד זה גם
+          ב-358px; ה-flex-wrap שמעל כבר מוריד את המקרא לשורה משלו אם צריך.
+          min-w-0 מונע מהמקרא להרחיב את הכרטיס ולדחוף גלילה אופקית. */}
+      <ul className="flex min-w-0 flex-col gap-2 text-sm">
         {slices.map((s) => {
           const pct = total > 0 ? Math.round((s.value / total) * 100) : 0
           return (

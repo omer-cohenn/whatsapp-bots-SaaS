@@ -75,7 +75,9 @@ export default function AdminHome() {
 
   return (
     <DashboardLayout>
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 py-10">
+      {/* המעטפת לא מוסיפה ריפוד אופקי — העמוד מחזיק את ה-gutter של עצמו
+          (px-4 sm:px-6), בדיוק כמו OwnerHeader שמעליו. */}
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:gap-8 sm:px-6 sm:py-10">
         <header>
           <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900 sm:text-3xl">
             <Icon name="shield" size={26} className="text-leaf" />
@@ -97,6 +99,8 @@ export default function AdminHome() {
           ) : error ? (
             <Alert tone="error">{error}</Alert>
           ) : overview ? (
+            // תשע האריחים נשארים רשת של 2 עמודות בטלפון ולא הופכים לתשע
+            // רצועות ברוחב מלא — דשבורד צריך להיראות כמו דשבורד גם בפלאפון.
             <div
               className="grid grid-cols-2 gap-3 sm:grid-cols-4"
               aria-label="סיכום נתוני הפלטפורמה"
@@ -177,7 +181,11 @@ export default function AdminHome() {
             <Icon name="chart-bar" size={20} className="text-leaf" />
             אנליטיקה
           </h2>
-          <div className="grid gap-4 lg:grid-cols-2">
+          {/* [&>*]:min-w-0 — פריט ב-grid מקבל min-width:auto, כלומר הוא מסרב
+              להצטמצם מתחת לרוחב התוכן שלו. בלי זה, הרוחב המינימלי של גרף
+              ההודעות-לפי-תוכנית (שגולל אופקית מבפנים) ניפח את כל העמודה
+              והבריח את ארבעת הכרטיסים אל מעבר לרוחב המסך. */}
+          <div className="grid gap-4 [&>*]:min-w-0 md:grid-cols-2">
             <TrendsCard />
             <LeadsByTypeCard />
             <ByPlanCard />
@@ -197,7 +205,7 @@ export default function AdminHome() {
             </h2>
             <Link
               to="/admin/businesses"
-              className="inline-flex items-center gap-1 rounded text-sm font-medium text-leaf-ink underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2"
+              className="inline-flex min-h-11 items-center gap-1 rounded text-sm font-medium text-leaf-ink sm:min-h-0 underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2"
             >
               כל העסקים
               <Icon name="chevron-left" size={16} />

@@ -62,16 +62,32 @@ export default function WorkingHoursEditor({ value, onChange }: Props) {
             key={key}
             className="flex flex-col gap-2 rounded-xl border border-black/10 bg-white p-3 sm:flex-row sm:items-start"
           >
-            <div className="flex w-20 flex-shrink-0 items-center pt-1.5">
+            {/* Phone: the weekday is a header line, with "סגור" beside it so a
+                closed day costs one short line instead of two. Desktop keeps the
+                fixed 80px label column on the right of the ranges. */}
+            <div className="flex items-center justify-between sm:w-20 sm:flex-shrink-0 sm:justify-start sm:pt-2.5">
               <span className="text-sm font-medium text-slate-800">{label}</span>
+              {ranges.length === 0 ? (
+                <span className="text-sm text-slate-400 sm:hidden">סגור</span>
+              ) : null}
             </div>
 
             <div className="flex min-w-0 flex-1 flex-col gap-2">
               {ranges.length === 0 ? (
-                <p className="py-1.5 text-sm text-slate-400">סגור</p>
+                <p className="hidden py-1.5 text-sm text-slate-400 sm:block">סגור</p>
               ) : (
                 ranges.map((range, idx) => (
-                  <div key={idx} className="flex flex-wrap items-center gap-2">
+                  // Phone: a fixed 4-track grid (start · – · end · bin). A
+                  // wrapping flex row at 390px dropped the "–" and the bin onto
+                  // a line of their own and the day stopped reading as ONE
+                  // range; the grid keeps it on one line and lets the two time
+                  // inputs split whatever is left. From `sm` up it goes back to
+                  // the original flex row, where the inputs keep their natural
+                  // width instead of stretching across the card.
+                  <div
+                    key={idx}
+                    className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-1.5 sm:flex sm:flex-wrap sm:gap-2"
+                  >
                     <label className="sr-only" htmlFor={`d${key}-${idx}-s`}>
                       {label} – שעת התחלה {idx + 1}
                     </label>
@@ -80,7 +96,7 @@ export default function WorkingHoursEditor({ value, onChange }: Props) {
                       type="time"
                       value={range.s}
                       onChange={(ev) => updateRange(key, idx, 's', ev.target.value)}
-                      className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-900"
+                      className="w-full min-w-0 rounded-lg border border-slate-300 px-2 py-2.5 text-sm text-slate-900 sm:w-auto sm:py-1.5"
                     />
                     <span aria-hidden="true" className="text-slate-400">
                       –
@@ -93,13 +109,13 @@ export default function WorkingHoursEditor({ value, onChange }: Props) {
                       type="time"
                       value={range.e}
                       onChange={(ev) => updateRange(key, idx, 'e', ev.target.value)}
-                      className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-900"
+                      className="w-full min-w-0 rounded-lg border border-slate-300 px-2 py-2.5 text-sm text-slate-900 sm:w-auto sm:py-1.5"
                     />
                     <button
                       type="button"
                       onClick={() => removeRange(key, idx)}
                       aria-label={`הסר טווח שעות מ${label}`}
-                      className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-bad"
+                      className="rounded-lg p-2.5 text-slate-400 transition hover:bg-red-50 hover:text-bad sm:p-1.5"
                     >
                       <Icon name="trash" size={16} />
                     </button>
@@ -110,7 +126,7 @@ export default function WorkingHoursEditor({ value, onChange }: Props) {
               <button
                 type="button"
                 onClick={() => addRange(key)}
-                className="inline-flex w-fit items-center gap-1 text-sm font-medium text-leaf-ink transition hover:text-leaf-dark"
+                className="inline-flex min-h-[44px] w-fit items-center gap-1 text-sm font-medium text-leaf-ink transition hover:text-leaf-dark sm:min-h-0"
               >
                 <Icon name="plus" size={16} />
                 הוסף טווח שעות

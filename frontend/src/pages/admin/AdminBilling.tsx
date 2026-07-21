@@ -63,7 +63,8 @@ export default function AdminBilling() {
 
   return (
     <DashboardLayout>
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-10">
+      {/* gutter של העמוד עצמו — המעטפת לא מרפדת את <main>. */}
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-10">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
             <Icon name="chart-bar" size={22} className="text-leaf" />
@@ -71,7 +72,7 @@ export default function AdminBilling() {
           </h1>
           <Link
             to="/admin"
-            className="inline-flex items-center gap-1 rounded text-sm font-medium text-leaf-ink underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2"
+            className="inline-flex min-h-11 items-center gap-1 rounded text-sm font-medium text-leaf-ink sm:min-h-0 underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2"
           >
             <Icon name="chevron-right" size={16} />
             חזרה לניהול
@@ -110,18 +111,22 @@ export default function AdminBilling() {
           ) : error ? (
             <Alert tone="error">{error}</Alert>
           ) : rows.length > 0 ? (
+            // חמש עמודות קצרות (עסק / תוכנית / 3 מספרים) — בניגוד לטבלת
+            // העסקים, הן כן נכנסות ב-358px אם מצמצמים ריפוד וגופן. לכן כאן
+            // אין גלילה אופקית ואין ויתור על עמודה: הטבלה נשארת טבלה.
+            // ה-overflow-x-auto נשאר כרשת ביטחון לשמות עסק ארוכים במיוחד.
             <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-              <table className="w-full min-w-[640px] border-collapse text-sm">
+              <table className="w-full border-collapse text-xs sm:min-w-[640px] sm:text-sm">
                 <caption className="sr-only">
                   סך ההודעות לכל עסק, בסיס החיוב, ממוין לפי סך הכול
                 </caption>
                 <thead>
                   <tr className="border-b border-slate-200 text-right text-xs font-medium text-slate-500">
-                    <th scope="col" className="px-4 py-3">עסק</th>
-                    <th scope="col" className="px-4 py-3">תוכנית</th>
-                    <th scope="col" className="px-4 py-3">נכנסות</th>
-                    <th scope="col" className="px-4 py-3">יוצאות</th>
-                    <th scope="col" className="px-4 py-3">סה״כ</th>
+                    <th scope="col" className="px-2 py-3 sm:px-4">עסק</th>
+                    <th scope="col" className="px-2 py-3 sm:px-4">תוכנית</th>
+                    <th scope="col" className="px-2 py-3 sm:px-4">נכנסות</th>
+                    <th scope="col" className="px-2 py-3 sm:px-4">יוצאות</th>
+                    <th scope="col" className="px-2 py-3 sm:px-4">סה״כ</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -130,7 +135,7 @@ export default function AdminBilling() {
                       key={row.business_id}
                       className="border-b border-slate-100 last:border-0 transition-colors hover:bg-slate-50"
                     >
-                      <td className="px-4 py-3 font-medium text-slate-900">
+                      <td className="max-w-[9rem] break-words px-2 py-3 font-medium text-slate-900 sm:max-w-none sm:px-4">
                         <Link
                           to={`/admin/businesses/${encodeURIComponent(row.business_id)}`}
                           className="rounded text-leaf-ink underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2"
@@ -138,12 +143,12 @@ export default function AdminBilling() {
                           {row.name || 'ללא שם'}
                         </Link>
                       </td>
-                      <td className="px-4 py-3 text-slate-600">
+                      <td className="px-2 py-3 sm:px-4 text-slate-600">
                         {planCodeLabel(row.plan_code)}
                       </td>
-                      <td className="px-4 py-3 tabular-nums text-slate-900">{row.msg_in}</td>
-                      <td className="px-4 py-3 tabular-nums text-slate-900">{row.msg_out}</td>
-                      <td className="px-4 py-3 font-semibold tabular-nums text-slate-900">
+                      <td className="px-2 py-3 sm:px-4 tabular-nums text-slate-900">{row.msg_in}</td>
+                      <td className="px-2 py-3 sm:px-4 tabular-nums text-slate-900">{row.msg_out}</td>
+                      <td className="px-2 py-3 sm:px-4 font-semibold tabular-nums text-slate-900">
                         {row.total}
                       </td>
                     </tr>
@@ -151,12 +156,12 @@ export default function AdminBilling() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t border-slate-200 bg-slate-50 text-right font-medium text-slate-700">
-                    <td className="px-4 py-3" colSpan={2}>
+                    <td className="px-2 py-3 sm:px-4" colSpan={2}>
                       סך הכול
                     </td>
-                    <td className="px-4 py-3 tabular-nums">{totals.in}</td>
-                    <td className="px-4 py-3 tabular-nums">{totals.out}</td>
-                    <td className="px-4 py-3 tabular-nums">{totals.total}</td>
+                    <td className="px-2 py-3 sm:px-4 tabular-nums">{totals.in}</td>
+                    <td className="px-2 py-3 sm:px-4 tabular-nums">{totals.out}</td>
+                    <td className="px-2 py-3 sm:px-4 tabular-nums">{totals.total}</td>
                   </tr>
                 </tfoot>
               </table>

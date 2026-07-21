@@ -16,12 +16,21 @@ function ThemeToggleRow() {
   const isDark = theme === 'dark'
 
   return (
-    <div className="flex items-center justify-between gap-4">
+    // min-h-[44px] keeps the whole row at a comfortable touch height on phones.
+    <div className="flex min-h-[44px] items-center justify-between gap-4">
       <span className="text-sm font-medium text-slate-800 dark:text-slate-100">
         מצב כהה
       </span>
 
-      {/* Pill-shaped toggle switch — aria-pressed + visible focus ring */}
+      {/* Pill-shaped toggle switch — aria-pressed + visible focus ring.
+          The pill itself is only 28px tall, well under the ~44px touch target a
+          finger needs. The `before:` overlay grows the CLICKABLE area without
+          changing a single visible pixel, so the switch looks identical on
+          desktop and stays comfortably tappable on a phone.
+          The offset is 10px, not 8px: an absolutely-positioned ::before is inset
+          from its containing block's PADDING box, and the 2px transparent border
+          makes that box 24×44 rather than 28×48. 24 + 2×10 = 44px of real tap
+          height (measured — 8px only got us to 40px). */}
       <button
         type="button"
         role="switch"
@@ -30,6 +39,7 @@ function ThemeToggleRow() {
         onClick={toggleTheme}
         className={[
           'relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent',
+          'before:absolute before:-inset-[10px] before:content-[""]',
           'transition-colors duration-200 ease-in-out',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2',
           isDark ? 'bg-leaf' : 'bg-slate-300',
@@ -75,7 +85,7 @@ function DeleteAccountSection() {
       <button
         type="button"
         onClick={() => setModalOpen(true)}
-        className="inline-flex items-center gap-2 rounded-lg border border-bad px-4 py-2 text-sm font-medium text-bad transition hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bad focus-visible:ring-offset-2 dark:hover:bg-red-950"
+        className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-bad px-4 py-2 text-sm font-medium text-bad transition hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bad focus-visible:ring-offset-2 sm:min-h-0 dark:hover:bg-red-950"
       >
         <Icon name="trash" size={16} />
         מחק חשבון
@@ -105,7 +115,7 @@ function DeleteAccountSection() {
             type="button"
             onClick={handleConfirmDelete}
             disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg bg-bad px-4 py-2 text-sm font-medium text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bad focus-visible:ring-offset-2"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-bad px-4 py-2 text-sm font-medium text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bad focus-visible:ring-offset-2 sm:min-h-0"
           >
             {loading ? 'מוחק…' : 'כן, מחק לצמיתות'}
           </button>
@@ -114,7 +124,7 @@ function DeleteAccountSection() {
             type="button"
             onClick={() => setModalOpen(false)}
             disabled={loading}
-            className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+            className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 sm:min-h-0 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
           >
             ביטול
           </button>
@@ -129,9 +139,12 @@ function DeleteAccountSection() {
 export default function SettingsPage() {
   return (
     <DashboardLayout>
-      <div className="p-6 md:p-8">
+      {/* The shell adds NO horizontal padding, so the page owns its gutter:
+          px-4 on phones, px-6 from sm — which lines the content up with the
+          OwnerHeader above it (see docs/spec/responsive-shell.md §2). */}
+      <div className="px-4 py-6 sm:px-6 md:py-8">
         {/* Page heading */}
-        <div className="mb-8 flex items-center gap-3">
+        <div className="mb-6 flex items-center gap-3 sm:mb-8">
           <Icon name="settings" size={24} className="text-leaf-deep dark:text-leaf-light" />
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">הגדרות</h1>
         </div>
@@ -140,7 +153,7 @@ export default function SettingsPage() {
           {/* ── Section 1: Display ───────────────────────────────────────── */}
           <section
             aria-labelledby="section-display"
-            className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800"
+            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 dark:border-slate-700 dark:bg-slate-800"
           >
             <h2
               id="section-display"
@@ -154,7 +167,7 @@ export default function SettingsPage() {
           {/* ── Section 2: Account ───────────────────────────────────────── */}
           <section
             aria-labelledby="section-account"
-            className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800"
+            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 dark:border-slate-700 dark:bg-slate-800"
           >
             <h2
               id="section-account"

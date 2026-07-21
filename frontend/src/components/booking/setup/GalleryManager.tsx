@@ -192,7 +192,7 @@ export default function GalleryManager({ images, onImagesChange }: Props) {
         onDragLeave={() => setDragOver(false)}
         onDrop={drop}
         className={[
-          'flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed px-4 py-8 text-center transition',
+          'flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed px-4 py-6 text-center transition sm:py-8',
           dragOver ? 'border-leaf bg-leaf-soft' : 'border-slate-300 bg-slate-50',
           atCap ? 'opacity-60' : '',
         ].join(' ')}
@@ -206,7 +206,7 @@ export default function GalleryManager({ images, onImagesChange }: Props) {
         <label
           htmlFor={fileInputId}
           className={[
-            'mt-1 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50',
+            'mt-1 inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 sm:min-h-0',
             atCap || busy ? 'pointer-events-none opacity-50' : 'cursor-pointer',
           ].join(' ')}
         >
@@ -344,9 +344,12 @@ function GalleryTile({
         maxLength={CAPTION_MAX}
         disabled={busy}
         placeholder="כיתוב קצר…"
-        className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-900 placeholder:text-slate-400 disabled:opacity-60"
+        className="w-full min-w-0 rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-900 placeholder:text-slate-400 disabled:opacity-60 sm:py-1"
       />
 
+      {/* Two tiles per phone row leaves ~132px for controls, so the three buttons
+          get p-2.5 (36px) there rather than the desktop p-1.5 (28px) — the
+          largest target three of them still fit into. */}
       <div className="flex items-center justify-between">
         {/* Reordering without a mouse. In RTL, "earlier" is to the right. */}
         <div className="flex items-center gap-0.5">
@@ -355,7 +358,7 @@ function GalleryTile({
             onClick={() => onMove(index - 1)}
             disabled={busy || index === 0}
             aria-label={`הזז את ${position} אחת קדימה`}
-            className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 disabled:opacity-30"
+            className="rounded-lg p-2.5 text-slate-500 transition hover:bg-slate-100 disabled:opacity-30 sm:p-1.5"
           >
             <Icon name="chevron-right" size={16} />
           </button>
@@ -364,11 +367,14 @@ function GalleryTile({
             onClick={() => onMove(index + 1)}
             disabled={busy || index === total - 1}
             aria-label={`הזז את ${position} אחת אחורה`}
-            className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 disabled:opacity-30"
+            className="rounded-lg p-2.5 text-slate-500 transition hover:bg-slate-100 disabled:opacity-30 sm:p-1.5"
           >
             <Icon name="chevron-left" size={16} />
           </button>
-          <span aria-hidden="true" className="px-1 text-xs text-slate-400">
+          {/* Hidden on a phone: it is aria-hidden decoration, and its ~20px is
+              the difference between 32px and 36px move/delete buttons in a
+              132px-wide tile. The order is legible from the grid itself. */}
+          <span aria-hidden="true" className="hidden px-1 text-xs text-slate-400 sm:inline">
             {index + 1}
           </span>
         </div>
@@ -378,7 +384,7 @@ function GalleryTile({
           onClick={onDelete}
           disabled={busy}
           aria-label={`מחק את ${position}`}
-          className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-bad disabled:opacity-40"
+          className="rounded-lg p-2.5 text-slate-400 transition hover:bg-red-50 hover:text-bad disabled:opacity-40 sm:p-1.5"
         >
           <Icon name="trash" size={16} />
         </button>

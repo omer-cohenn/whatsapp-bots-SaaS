@@ -22,7 +22,7 @@ export default function TestModeCard() {
           </p>
           <Link
             to="/bot-builder"
-            className="inline-flex w-fit items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark"
+            className="inline-flex min-h-[44px] w-fit items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark sm:min-h-0"
           >
             <Icon name="robot" size={16} />
             לבונה הבוט ולפרסום

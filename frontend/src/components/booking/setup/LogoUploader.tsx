@@ -108,7 +108,7 @@ export default function LogoUploader({ page, onUploaded, disabled }: Props) {
             <label
               htmlFor={inputId}
               className={[
-                'inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50',
+                'inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 sm:min-h-0',
                 locked ? 'pointer-events-none opacity-50' : 'cursor-pointer',
               ].join(' ')}
             >
@@ -134,7 +134,7 @@ export default function LogoUploader({ page, onUploaded, disabled }: Props) {
                 type="button"
                 onClick={() => void removeLogo()}
                 disabled={locked}
-                className="inline-flex items-center gap-1.5 rounded-lg p-1.5 text-sm text-slate-400 transition hover:bg-red-50 hover:text-bad disabled:opacity-40"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg p-1.5 text-sm text-slate-400 transition hover:bg-red-50 hover:text-bad disabled:opacity-40 sm:min-h-0"
               >
                 <Icon name="trash" size={16} />
                 הסרה

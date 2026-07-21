@@ -27,18 +27,27 @@ export default function ConnectView({
         לא מחובר
       </p>
 
+      {/* QR SIZE — the one thing on this page that must not be "made to fit".
+          A QR that shrinks below scanning size is worthless, so the floor here
+          is 224px (h-56) of drawn code and it is NEVER reduced on small screens.
+          That fits: a 390px phone leaves ~358px after the page gutter and ~318px
+          inside the card, so 224px clears it with room to spare — no shrinking
+          and no horizontal scroll are needed. On roomier screens it grows a
+          little (up to 256px) since a bigger code is easier to scan, which is
+          why this is w-full with a max, rather than a fixed square. */}
       {hasQr ? (
         <img
           src={qr!.qr_data_url as string}
           alt="קוד QR לחיבור הוואטסאפ. סרקו אותו מהטלפון כדי לחבר את החשבון."
-          className="h-56 w-56 rounded-xl border border-slate-200 bg-white p-2"
+          className="aspect-square h-auto w-full min-w-[224px] max-w-[256px] rounded-xl border border-slate-200 bg-white p-2"
           width={224}
           height={224}
         />
       ) : linked ? (
         // A session is coming up (or re-linking after a logout) — QR is imminent.
         <div
-          className="flex h-56 w-56 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400"
+          // Same footprint as the real QR above, so nothing jumps when it loads.
+          className="flex aspect-square w-full min-w-[224px] max-w-[256px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400"
           role="status"
         >
           <span
@@ -53,7 +62,8 @@ export default function ConnectView({
       ) : (
         // Nothing started yet — invite the owner to begin (creates the session).
         <div
-          className="flex h-56 w-56 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400"
+          // Same footprint as the real QR above, so nothing jumps when it loads.
+          className="flex aspect-square w-full min-w-[224px] max-w-[256px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400"
           role="status"
         >
           <Icon name="brand-whatsapp" size={32} className="text-leaf" />
@@ -72,7 +82,7 @@ export default function ConnectView({
           row exists (linked) the QR flow takes over and the page polls to
           'connected' on its own. */}
       {!linked ? (
-        <Button onClick={onStart} disabled={starting}>
+        <Button onClick={onStart} disabled={starting} className="min-h-[44px] sm:min-h-0">
           {starting ? (
             <>
               <span

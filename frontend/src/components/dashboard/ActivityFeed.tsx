@@ -88,14 +88,16 @@ export default function ActivityFeed({ leads, onMarkSeen, onMarkAllSeen }: Props
   return (
     <section aria-labelledby="activity-heading" className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h2 id="activity-heading" className="text-xl font-bold text-slate-900 dark:text-slate-100">
+        <h2 id="activity-heading" className="text-lg font-bold text-slate-900 sm:text-xl dark:text-slate-100">
           התראות
         </h2>
         {visible.length > 1 ? (
           <button
             type="button"
             onClick={onMarkAllSeen}
-            className="rounded text-xs font-medium text-leaf-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf dark:text-leaf-light"
+            // `-my-2 py-2` במובייל: מגדיל את שטח הנגיעה בלי להזיז את הטקסט
+            // ובלי לשנות את גובה השורה — הפריסה בדסקטופ נשארת זהה.
+            className="-my-2 rounded py-2 text-xs font-medium text-leaf-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf sm:my-0 sm:py-0 dark:text-leaf-light"
           >
             סמן הכל כנקרא
           </button>
@@ -111,18 +113,18 @@ export default function ActivityFeed({ leads, onMarkSeen, onMarkAllSeen }: Props
             return (
               <li
                 key={lead.id}
-                className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3.5 shadow-[0_10px_26px_rgba(70,60,35,0.07)] transition-colors hover:bg-slate-50 dark:border dark:border-white/10 dark:bg-slate-800 dark:shadow-none dark:hover:bg-slate-700/60"
+                className="flex items-center gap-2.5 rounded-2xl bg-white px-3 py-3 shadow-[0_10px_26px_rgba(70,60,35,0.07)] transition-colors hover:bg-slate-50 sm:gap-3 sm:px-4 sm:py-3.5 dark:border dark:border-white/10 dark:bg-slate-800 dark:shadow-none dark:hover:bg-slate-700/60"
               >
                 {/* The card body is a link → opens this lead in the leads tab. */}
                 <Link
                   to={`/leads?highlight=${encodeURIComponent(lead.id)}`}
-                  className="flex min-w-0 flex-1 items-center gap-3 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-leaf"
+                  className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-leaf sm:gap-3"
                   aria-label={`פתיחת הליד של ${name} בלשונית הלידים`}
                 >
                   {/* Initials avatar + green presence dot (visual bottom-right). */}
                   <span aria-hidden="true" className="relative flex-shrink-0">
                     <span
-                      className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold text-white ${avatarColor(name)}`}
+                      className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white sm:h-11 sm:w-11 ${avatarColor(name)}`}
                     >
                       {initials(name)}
                     </span>
@@ -163,7 +165,9 @@ export default function ActivityFeed({ leads, onMarkSeen, onMarkAllSeen }: Props
                     onClick={() => onMarkSeen(lead.id)}
                     title="סמן כנקרא"
                     aria-label={`סמן כנקרא: ${name}`}
-                    className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf dark:hover:bg-slate-700 dark:hover:text-slate-300"
+                    // במובייל הכפתור הוא ריבוע 36px (במקום 22px של `p-1`) כדי
+                    // שיהיה אפשר לפגוע בו באצבע; `sm` מחזיר את הגודל המקורי.
+                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf sm:h-[22px] sm:w-[22px] dark:hover:bg-slate-700 dark:hover:text-slate-300"
                   >
                     <Icon name="x" size={14} />
                   </button>

@@ -215,10 +215,16 @@ export default function BotBuilderPage() {
   return (
     <DashboardLayout>
       <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6">
-        {/* Builder header: title + AI + save */}
+        {/* Builder header: title + AI + save.
+            The four actions add up to ~396px, which does NOT fit the 358px a
+            390px phone leaves after the gutter. The action cluster therefore
+            wraps (flex-wrap) and takes the full row below the title on phones,
+            so the buttons reflow onto two lines instead of overflowing the page
+            sideways. From sm it goes back to a single inline row beside the
+            title, exactly as before. */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold text-slate-900">בונה הבוט</h1>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
             {config ? (
               // Go-live: PUT /api/bot/publish persists immediately (independent of
               // the "שמור שינויים" config save), so we update is_published in place
@@ -232,7 +238,7 @@ export default function BotBuilderPage() {
             ) : null}
             <Link
               to="/try-me"
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800 transition hover:bg-slate-200"
+              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800 transition hover:bg-slate-200 sm:min-h-0"
             >
               <Icon name="player-play" size={16} />
               נסה אותי
@@ -240,12 +246,16 @@ export default function BotBuilderPage() {
             <Button
               variant="primary"
               onClick={() => setAiOpen(true)}
-              className="!bg-leaf text-white hover:!bg-leaf-dark"
+              className="min-h-[44px] !bg-leaf text-white hover:!bg-leaf-dark sm:min-h-0"
             >
               <Icon name="sparkles" size={17} />
               עוזר ה-AI שלך
             </Button>
-            <Button onClick={() => void onSave()} disabled={saving || loading || !config}>
+            <Button
+              onClick={() => void onSave()}
+              disabled={saving || loading || !config}
+              className="min-h-[44px] sm:min-h-0"
+            >
               <Icon name="device-floppy" size={16} />
               {saving ? 'שומר…' : 'שמור שינויים'}
             </Button>
@@ -341,7 +351,7 @@ export default function BotBuilderPage() {
                         variant="ghost"
                         onClick={() => setEditingType(true)}
                         aria-label="שינוי סוג המסלול"
-                        className="ms-auto px-2 py-1 text-slate-500 hover:text-leaf"
+                        className="ms-auto min-h-[44px] min-w-[44px] px-2 py-1 text-slate-500 hover:text-leaf sm:min-h-0 sm:min-w-0"
                       >
                         <Icon name="pencil" size={16} />
                       </Button>

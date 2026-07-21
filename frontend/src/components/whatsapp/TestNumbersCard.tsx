@@ -155,9 +155,12 @@ export default function TestNumbersCard() {
               {rows.map((row, index) => (
                 <li
                   key={row.id}
+                  // Phones stack the number, the name and the remove control;
+                  // from sm they sit on one line as before. min-w-0 on the two
+                  // fields keeps a long typed value from widening the row.
                   className="flex flex-col gap-3 rounded-xl border border-slate-200 p-3 sm:flex-row sm:items-end"
                 >
-                  <div className="flex-1">
+                  <div className="min-w-0 flex-1">
                     <Field
                       label={`מספר ${index + 1}`}
                       hint="פורמט בינלאומי, למשל 972501234567"
@@ -170,7 +173,7 @@ export default function TestNumbersCard() {
                       onChange={(e) => patchRow(row.id, { phone: e.target.value })}
                     />
                   </div>
-                  <div className="flex-1">
+                  <div className="min-w-0 flex-1">
                     <Field
                       label="שם (לא חובה)"
                       placeholder="למשל: רכש"
@@ -182,7 +185,7 @@ export default function TestNumbersCard() {
                   <Button
                     variant="ghost"
                     onClick={() => removeRow(row.id)}
-                    className="text-bad hover:bg-red-50 sm:mb-0.5"
+                    className="min-h-[44px] text-bad hover:bg-red-50 sm:mb-0.5 sm:min-h-0"
                     aria-label={`הסרת מספר ${index + 1}`}
                   >
                     <Icon name="trash" size={16} />
@@ -193,11 +196,20 @@ export default function TestNumbersCard() {
             </ul>
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
-              <Button variant="secondary" onClick={addRow} disabled={atCap}>
+              <Button
+                variant="secondary"
+                onClick={addRow}
+                disabled={atCap}
+                className="min-h-[44px] sm:min-h-0"
+              >
                 <Icon name="plus" size={16} />
                 הוספת מספר
               </Button>
-              <Button onClick={() => void onSave()} disabled={saving}>
+              <Button
+                onClick={() => void onSave()}
+                disabled={saving}
+                className="min-h-[44px] sm:min-h-0"
+              >
                 {saving ? (
                   <>
                     <span

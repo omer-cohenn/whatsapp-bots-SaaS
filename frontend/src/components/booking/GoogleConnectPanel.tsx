@@ -101,9 +101,11 @@ export default function GoogleConnectPanel() {
         <Spinner label="בודק חיבור ל-Google…" className="py-4" />
       ) : status?.connected ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-leaf/30 bg-leaf-soft p-4">
-          <div className="flex items-center gap-2 text-sm text-leaf-ink">
-            <Icon name="brand-google" size={20} />
-            <span>
+          {/* min-w-0 + break-all: a Google address is one long unbreakable token
+              and would otherwise push the "נתק" button out of the box. */}
+          <div className="flex min-w-0 items-center gap-2 text-sm text-leaf-ink">
+            <Icon name="brand-google" size={20} className="shrink-0" />
+            <span className="min-w-0 break-all">
               מחובר{status.email ? ` (${status.email})` : ''}
             </span>
           </div>
@@ -111,7 +113,7 @@ export default function GoogleConnectPanel() {
             type="button"
             onClick={() => void disconnect()}
             disabled={busy}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+            className="min-h-[44px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-60 sm:min-h-0"
           >
             {busy ? 'מנתק…' : 'נתק'}
           </button>

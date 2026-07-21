@@ -89,7 +89,8 @@ export default function BusinessesList() {
 
   return (
     <DashboardLayout>
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-10">
+      {/* gutter של העמוד עצמו — המעטפת לא מרפדת את <main>. */}
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-10">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
             <Icon name="building-store" size={22} className="text-leaf" />
@@ -97,7 +98,7 @@ export default function BusinessesList() {
           </h1>
           <Link
             to="/admin"
-            className="inline-flex items-center gap-1 rounded text-sm font-medium text-leaf-ink underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2"
+            className="inline-flex min-h-11 items-center gap-1 rounded text-sm font-medium text-leaf-ink sm:min-h-0 underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2"
           >
             <Icon name="chevron-right" size={16} />
             חזרה לניהול
