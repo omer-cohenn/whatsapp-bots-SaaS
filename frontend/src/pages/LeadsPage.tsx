@@ -1,12 +1,13 @@
 // Leads page (M7, route /leads). Shows EVERY collected lead with its full
 // decrypted answers (the owner wants no hiding), filterable by status (incl.
-// "חדש" / "פתוח") and by flow type. Below the main list is a separate
-// "מעקב נוטשים" section — abandoned leads with their phone + partial answers, so
-// the owner can follow up.
+// "חדש" / "פתוח") and by flow type, searchable by free text, and exportable to
+// .xlsx (M17).
 //
-// One read: GET /api/leads (filtered server-side by status/period/flow). The
-// abandoned list is derived from a second filtered fetch so each list paginates
-// independently of the chosen status filter. The tenant is server-side only.
+// One read: GET /api/leads (filtered server-side by status/period/flow). A
+// SECOND fetch pulls the abandoned leads on their own. That second list is no
+// longer RENDERED as its own section — it was a permanent duplicate of the
+// "נטשו" status tab — but it is still fetched, because the "ננטשו" KPI count and
+// the flow-filter options are derived from it. The tenant is server-side only.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -118,17 +119,13 @@ export default function LeadsPage() {
     ]
   }, [leads, abandoned])
 
-  // The search narrows the VIEW only — both lists are filtered here, while the
-  // KPI cards below stay on the unfiltered numbers.
+  // The search narrows the VIEW only — the KPI cards below stay on the
+  // unfiltered numbers.
   const trimmedQuery = query.trim()
   const searching = trimmedQuery !== ''
   const visibleLeads = useMemo(
     () => (searching ? (leads ?? []).filter((l) => leadMatches(l, trimmedQuery)) : leads),
     [leads, searching, trimmedQuery],
-  )
-  const visibleAbandoned = useMemo(
-    () => (searching ? abandoned.filter((l) => leadMatches(l, trimmedQuery)) : abandoned),
-    [abandoned, searching, trimmedQuery],
   )
 
   // KPI counts off the full (status=all) picture. Deliberately computed from the
@@ -316,30 +313,12 @@ export default function LeadsPage() {
           קישורי הקבצים בקובץ נפתחים בדפדפן ודורשים להיות מחוברים לחשבון.
         </p>
 
-        {/* Abandoned follow-up list (only when not already filtered to abandoned) */}
-        {!loading && !error && status !== 'abandoned' && visibleAbandoned.length > 0 ? (
-          <section aria-labelledby="abandoned-heading" className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <h2
-                id="abandoned-heading"
-                className="flex items-center gap-2 text-lg font-medium text-slate-900"
-              >
-                <Icon name="user-off" size={20} className="text-[#D85A30]" />
-                מעקב נוטשים
-              </h2>
-              <span className="text-sm text-slate-500">
-                לידים שלא הושלמו — שווה לפנות אליהם
-              </span>
-            </div>
-            <ul className="flex flex-col gap-3">
-              {visibleAbandoned.map((lead) => (
-                <li key={lead.id} id={`lead-${lead.id}`}>
-                  <LeadCard lead={lead} onStatusChange={refresh} onDelete={refresh} />
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
+        {/* The "מעקב נוטשים" section used to live here and render the abandoned
+            list a SECOND time under every other filter. It was permanent clutter:
+            the status bar already has a "ננטשו" tab showing exactly these leads,
+            and the KPI card above still counts them — so nothing was lost by
+            removing it, only a duplicate. `abandoned` is still fetched, because
+            the count and the flow-filter options are both derived from it. */}
       </div>
     </DashboardLayout>
   )
