@@ -30,6 +30,7 @@ from app.api.webhook import router as webhook_router
 from app.core.clients import create_gateway_pool, create_pg_pool, create_redis
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
+from app.core.demo_guard import DemoReadOnlyMiddleware
 from app.core.request_log import install_request_logging
 from app.services import google_calendar
 from app.services.abandoned_sweep import sweep_loop
@@ -126,6 +127,11 @@ def create_app() -> FastAPI:
     # duration). Replaces uvicorn.access, which leaked OAuth code/state + booking
     # tokens via the raw request line. See app/core/request_log.py.
     install_request_logging(app)
+
+    # Demo sessions are READ-ONLY. Registered as middleware, not a per-route
+    # dependency, so it is deny-by-default: a route added later is covered
+    # without anyone remembering to guard it. See app/core/demo_guard.py.
+    app.add_middleware(DemoReadOnlyMiddleware)
 
     # Public routes: /healthz, /webhook/*, /auth/*, and the M11 public booking
     # page (/api/book/*). The /api/* group below is gated (deny-by-default) by a

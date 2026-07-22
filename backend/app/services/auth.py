@@ -147,12 +147,24 @@ async def fetch_userinfo(access_token: str) -> dict[str, Any]:
 # --- Server-side sessions (opaque id in Redis) -----------------------------
 
 async def create_session(
-    redis: aioredis.Redis, user: dict[str, Any], business: dict[str, Any]
+    redis: aioredis.Redis,
+    user: dict[str, Any],
+    business: dict[str, Any],
+    *,
+    is_demo: bool = False,
 ) -> str:
     """Create a server-side session and return its opaque id (the cookie value).
 
     `user` carries the verified profile (id/email/name/picture). `business`
     carries the verified {id, name}. Only this is persisted — no tokens.
+
+    `is_demo` marks a session minted by the public "המשך בתור דמו" button, which
+    has NO credential behind it — anyone on the internet can create one. The flag
+    is stamped SERVER-SIDE into the Redis payload, never taken from the client,
+    and `app/core/demo_guard.py` reads it to refuse every write. The frontend
+    also fakes edits locally so the demo feels alive, but that is UX only: the
+    browser is not a security boundary, and a visitor can call the API directly
+    with their own cookie. The guard is the control.
     """
     sid = secrets.token_urlsafe(32)
     payload = {
@@ -162,6 +174,7 @@ async def create_session(
         "picture": user.get("picture", ""),
         "business_id": str(business["id"]),
         "business_name": business.get("name", ""),
+        "is_demo": bool(is_demo),
         "created_at": int(time.time()),
     }
     await redis.set(

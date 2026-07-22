@@ -41,3 +41,7 @@ class MeResponse(BaseModel):
     # M12: True iff this user's email is on ADMIN_EMAILS (computed LIVE per request,
     # never a stored session flag). The frontend uses it to reveal the admin nav.
     is_admin: bool = False
+    # True only for the public demo session (see /auth/demo). The frontend uses
+    # it to explain that edits are not saved; the SERVER already refuses those
+    # writes regardless, so this flag is presentation, never enforcement.
+    is_demo: bool = False

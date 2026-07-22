@@ -116,12 +116,19 @@ async def test_api_me_valid_session_returns_own_business(client, redis_client):
         assert resp.status_code == 200
         body = resp.json()
         # Frozen contract shape. M12 added is_admin (computed live vs ADMIN_EMAILS;
-        # Avi is NOT an admin, so it must be False here).
-        assert set(body) == {"user", "business", "connection", "is_admin"}
+        # Avi is NOT an admin, so it must be False here). The demo milestone added
+        # is_demo, true only for a session minted by the public /auth/demo button —
+        # Avi logged in through Google, so it must be False.
+        #
+        # Keeping this an EXACT set is the point: it is what caught is_demo being
+        # added, and it is what will catch the next field that quietly widens what
+        # /api/me tells the client about the session.
+        assert set(body) == {"user", "business", "connection", "is_admin", "is_demo"}
         assert body["business"]["id"] == BIZ_A
         assert body["user"]["id"] == AVI_USER
         assert "status" in body["connection"]
         assert body["is_admin"] is False
+        assert body["is_demo"] is False
     finally:
         await redis_client.delete(f"{_SESSION_KEY_PREFIX}{sid}")
 

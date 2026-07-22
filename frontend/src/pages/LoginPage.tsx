@@ -56,6 +56,28 @@ export default function LoginPage() {
                 </span>
                 המשך עם Google
               </a>
+
+              {/* Public demo. Grey and secondary on purpose — it must never
+                  compete with the real sign-in. Also a real navigation, since
+                  /auth/demo answers with a 302 + Set-Cookie exactly like the
+                  Google callback does.
+
+                  The session it mints is READ-ONLY: the server refuses every
+                  write from it (app/core/demo_guard.py). The caption below says
+                  so, because a visitor who edits something and later finds it
+                  gone would rightly feel misled. */}
+              <a
+                href="/auth/demo"
+                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:border-slate-400 hover:bg-slate-200"
+              >
+                <span aria-hidden="true" className="text-base">
+                  👀
+                </span>
+                המשך בתור דמו
+              </a>
+              <p className="mt-2 text-xs text-slate-400">
+                חשבון לדוגמה — אפשר להתנסות בחופשיות, השינויים לא נשמרים.
+              </p>
             </>
           )}
 

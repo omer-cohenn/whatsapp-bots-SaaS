@@ -26,6 +26,26 @@ export class ApiError extends Error {
   get isUnauthorized(): boolean {
     return this.status === 401
   }
+
+  /** The server's own `detail` string, when it sent one. */
+  get detail(): string | null {
+    const b = this.body
+    if (b && typeof b === 'object' && 'detail' in b) {
+      const d = (b as { detail?: unknown }).detail
+      if (typeof d === 'string' && d) return d
+    }
+    return null
+  }
+
+  /**
+   * A write refused because this is the public demo session. The server answers
+   * 403 with a Hebrew explanation (app/core/demo_guard.py); callers use this to
+   * keep their optimistic local change instead of rolling it back, so the demo
+   * still feels editable while nothing persists.
+   */
+  get isDemoBlocked(): boolean {
+    return this.status === 403 && this.detail !== null && this.detail.includes('דמו')
+  }
 }
 
 // Parse the body tolerantly: try JSON, fall back to null (same idea as health.js).

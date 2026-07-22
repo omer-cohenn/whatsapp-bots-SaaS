@@ -143,3 +143,72 @@ async def auth_logout(request: Request, response: Response) -> Response:
     response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
     response.status_code = status.HTTP_204_NO_CONTENT
     return response
+
+
+# --- public demo login -------------------------------------------------------
+
+# The slug of the demo tenant. Resolved SERVER-SIDE: the client never names a
+# business, so this route cannot be pointed at a real customer's data by editing
+# a request. If the row is missing the route 404s rather than falling back to
+# "some business", which is how a demo button turns into a data leak.
+DEMO_BUSINESS_SLUG = "chocolate-kingdom-demo"
+
+
+@router.get("/demo")
+async def demo_login(request: Request) -> RedirectResponse:
+    """Log the visitor into the read-only demo tenant. NO credential required.
+
+    This is deliberately an open door — it is what the "המשך בתור דמו" button on
+    the login screen calls, so anyone can walk in. Three things keep that safe:
+
+      1. The tenant is hard-coded here by slug, never supplied by the caller.
+      2. The session is stamped `is_demo`, and `DemoReadOnlyMiddleware` refuses
+         every write from it. The visitor can click anything; nothing persists.
+      3. The demo user's email is NOT in ADMIN_EMAILS, so `current_admin` keeps
+         the platform back-office closed to it. That check reads the live env on
+         every request, so this cannot drift out of sync.
+
+    Deliberately NOT rate-limited: the only thing a flood creates is Redis keys
+    that expire on their own, and the tenant is fixed, so there is nothing to
+    enumerate. If that changes, this is where a limit belongs.
+    """
+    pool = request.app.state.pg_pool
+    redis = request.app.state.redis
+
+    # `businesses` is RLS-protected and there is no tenant context yet — that is
+    # precisely what this call is deciding — so a plain SELECT sees nothing.
+    # resolve_demo_business is the same minimal SECURITY DEFINER pattern as
+    # resolve_booking_slug: it answers one question and exposes nothing else.
+    row = await pool.fetchrow(
+        "SELECT id, name FROM resolve_demo_business($1)", DEMO_BUSINESS_SLUG
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="demo is not available"
+        )
+
+    sid = await create_session(
+        redis,
+        {
+            "id": f"demo:{DEMO_BUSINESS_SLUG}",
+            # A non-routable example.com address so this can never collide with a
+            # real Google account, and never match an ADMIN_EMAILS entry.
+            "email": "demo@example.com",
+            "name": "אורח/ת דמו",
+            "picture": "",
+        },
+        {"id": str(row["id"]), "name": row["name"]},
+        is_demo=True,
+    )
+
+    redirect = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+    redirect.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=sid,
+        max_age=SESSION_TTL_SECONDS,
+        httponly=True,
+        samesite="lax",
+        secure=cookie_is_secure(),
+        path="/",
+    )
+    return redirect

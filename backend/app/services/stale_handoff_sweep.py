@@ -73,6 +73,30 @@ def _is_stale(last_activity_at: str | None) -> bool:
     return elapsed > STALE_HANDOFF_SECONDS
 
 
+async def _demo_business_ids(pool: asyncpg.Pool) -> set[str]:
+    """Tenants that must never be swept: the public demo fixture.
+
+    The demo is seeded once and has to keep LOOKING alive — chats waiting for a
+    human, leads mid-flow — for every visitor who presses "המשך בתור דמו". The
+    sweep, doing its job correctly, closed 13 of its 15 seeded conversations
+    within an hour, leaving later visitors an empty inbox. Same exclusion as the
+    SQL sweep (migration 0031), keyed off the same `demo_slug` marker so the two
+    can never disagree about which tenant is the fixture.
+
+    Best-effort: a lookup failure returns an EMPTY set, i.e. sweep everything —
+    failing open here just means the demo decays, while failing closed would
+    silently stop sweeping real businesses.
+    """
+    try:
+        rows = await pool.fetch(
+            "SELECT id FROM businesses WHERE demo_slug IS NOT NULL"
+        )
+        return {str(r["id"]) for r in rows}
+    except Exception:  # noqa: BLE001 — never let this break the sweep loop
+        log.warning("demo-tenant lookup failed; sweeping all businesses")
+        return set()
+
+
 async def _business_ids(redis: aioredis.Redis) -> list[str]:
     """Every business id that currently has a conversation index set in Redis."""
     ids: list[str] = []
@@ -97,7 +121,11 @@ async def run_sweep_once(pool: asyncpg.Pool, redis: aioredis.Redis) -> int:
     the business prefix.
     """
     closed = 0
+    demo_ids = await _demo_business_ids(pool)
     for business_id in await _business_ids(redis):
+        # The demo fixture is skipped entirely — see _demo_business_ids.
+        if business_id in demo_ids:
+            continue
         try:
             convs = await conversation_state.list_conversations(redis, business_id)
         except Exception:

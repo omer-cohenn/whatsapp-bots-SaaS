@@ -95,6 +95,7 @@ async def me(
         business=MeBusiness(id=business_id, name=session.get("business_name", "")),
         connection=MeConnection(status=status_value),
         is_admin=is_admin,
+        is_demo=bool(session.get("is_demo")),
     )
 
 

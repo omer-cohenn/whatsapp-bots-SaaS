@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react'
 import type { PublicService } from '../../../dashboard/appointmentTypes'
 import type { BusinessImage } from '../../../dashboard/businessPageTypes'
 import { getBookingSettings, getServices } from '../../../lib/bookingClient'
+import { ApiError } from '../../../lib/apiClient'
 import { updateBusinessPage } from '../../../lib/businessPageClient'
 import { toFriendlyError } from '../../../lib/friendlyError'
 import Alert from '../../ui/Alert'
@@ -26,6 +27,8 @@ export default function DesignPanel() {
   const { page, setPage, loading, error } = useBusinessPage()
   const [themeSaving, setThemeSaving] = useState(false)
   const [themeError, setThemeError] = useState<string | null>(null)
+  // Demo-mode note: informational, not an error — see selectPalette.
+  const [themeNotice, setThemeNotice] = useState<string | null>(null)
 
   // The preview renders the owner's REAL services and welcome message, not
   // sample content — a preview built from invented data is exactly how the old
@@ -86,8 +89,18 @@ export default function DesignPanel() {
       })
       setPage(updated)
     } catch (err) {
-      setThemeError(toFriendlyError(err, 'שמירת הצבעים נכשלה. נסו שוב.'))
-      setPage((prev) => (prev && previous ? { ...prev, page_theme: previous } : prev))
+      // In the public demo the server refuses every write by design. KEEP the
+      // optimistic change instead of rolling it back: the visitor picked a
+      // palette, the preview should show it, and the whole point of the demo is
+      // that it feels editable. Nothing was persisted, which is intended. Any
+      // OTHER failure is a real one and must still revert, or the owner would be
+      // looking at colours that were never saved.
+      if (err instanceof ApiError && err.isDemoBlocked) {
+        setThemeNotice(err.detail)
+      } else {
+        setThemeError(toFriendlyError(err, 'שמירת הצבעים נכשלה. נסו שוב.'))
+        setPage((prev) => (prev && previous ? { ...prev, page_theme: previous } : prev))
+      }
     } finally {
       setThemeSaving(false)
     }
@@ -118,6 +131,12 @@ export default function DesignPanel() {
         {themeError ? (
           <Alert tone="error" className="mb-3">
             {themeError}
+          </Alert>
+        ) : null}
+
+        {themeNotice ? (
+          <Alert tone="info" className="mb-3">
+            {themeNotice}
           </Alert>
         ) : null}
 
