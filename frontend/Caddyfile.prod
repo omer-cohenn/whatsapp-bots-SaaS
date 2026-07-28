@@ -1,0 +1,30 @@
+# Frontend static server (baked into Dockerfile.prod, serving /srv on :80).
+#
+# The cache split is the whole point of this file:
+#   * /assets/* are content-hashed by Vite (index-BXpepoC-.js). A new build ⇒ a
+#     new filename, so the OLD file never needs to change — cache it a year,
+#     immutable. Repeat visits pay nothing.
+#   * Everything else — index.html above all — is NOT hashed. The browser must
+#     re-check it every load, or it keeps serving a stale index.html that points
+#     at a bundle we already replaced, and the user sees the old app after a
+#     deploy (exactly the "the button isn't there" report that prompted this).
+#
+# `no-cache` does NOT mean "don't cache" — it means "revalidate before use", so
+# the browser still gets a fast 304 when nothing changed. That is what we want
+# for index.html: never stale, rarely re-downloaded.
+
+:80 {
+	root * /srv
+	encode gzip
+
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+
+	# Anything that is not a hashed asset (index.html, the SPA fallback, the
+	# favicon) must be revalidated so a deploy is picked up immediately.
+	@nonasset not path /assets/*
+	header @nonasset Cache-Control "no-cache"
+
+	try_files {path} /index.html
+	file_server
+}

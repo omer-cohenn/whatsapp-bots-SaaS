@@ -28,8 +28,9 @@ RUN npm run build
 # --- serve stage: static files only, internal :80 --------------------------
 FROM caddy:2-alpine
 COPY --from=build /app/dist /srv
-# Minimal SPA config: serve /srv on :80 (internal), fall back to index.html for
-# client-side routes, gzip on. This service is NEVER published to the host.
-RUN printf ':80 {\n\troot * /srv\n\ttry_files {path} /index.html\n\tfile_server\n\tencode gzip\n}\n' \
-    > /etc/caddy/Caddyfile
+# SPA config with a hashed-assets / no-cache-html split (see the file's header):
+# a real Caddyfile now, not a printf one-liner — readable, and it dodges the
+# shell-escaping trap that a growing config invites.
+COPY Caddyfile.prod /etc/caddy/Caddyfile
+RUN caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 EXPOSE 80
