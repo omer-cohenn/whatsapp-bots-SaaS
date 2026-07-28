@@ -53,7 +53,15 @@ export default function HeroSection() {
         <div className="bx-logo">
           <img src="/botik-icon.png" alt="Botik" className="bx-logo-img" />
         </div>
-        <a className="bx-nav-cta" href="/auth/google">התחברות</a>
+        <div className="bx-nav-actions">
+          {/* Demo first: this is a demo product, and the landing page's whole job
+              is to get a visitor INTO it. The button used to live only on /login,
+              which the "התחברות" CTA skips (it goes straight to Google) — so a
+              visitor could never reach the demo. Real navigations, not fetches:
+              /auth/demo and /auth/google both answer with a 302 + Set-Cookie. */}
+          <a className="bx-nav-demo" href="/auth/demo">צפייה בדמו</a>
+          <a className="bx-nav-cta" href="/auth/google">התחברות</a>
+        </div>
       </header>
 
       <div className="bx-main">

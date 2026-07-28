@@ -37,8 +37,14 @@ export const CSS = `
 .bx-logo-text{display:flex;flex-direction:column;line-height:1.05;}
 .bx-logo-text strong{font-family:'Rubik';font-weight:800;font-size:19px;color:#1b3a28;}
 .bx-logo-text small{font-size:11.5px;color:#7c8a7f;}
-.bx-nav-cta{font-size:14px;font-weight:700;color:#2c5a3c;text-decoration:none;padding:9px 18px;border:1.5px solid #d3cdbd;border-radius:999px;background:transparent;transition:.2s;}
+.bx-nav-actions{display:flex;align-items:center;gap:10px;}
+.bx-nav-cta{font-size:14px;font-weight:700;color:#2c5a3c;text-decoration:none;padding:9px 18px;border:1.5px solid #d3cdbd;border-radius:999px;background:transparent;transition:.2s;white-space:nowrap;}
 .bx-nav-cta:hover{border-color:#bcd9b8;color:#2f7a44;background:rgba(63,154,57,.06);}
+/* The demo is the primary call on the landing page, so it gets the filled green;
+   "התחברות" stays the quiet outline beside it. */
+.bx-nav-demo{font-size:14px;font-weight:700;color:#fff;text-decoration:none;padding:9px 20px;border:1.5px solid transparent;border-radius:999px;background:#3f9a39;box-shadow:0 4px 14px rgba(63,154,57,.28);transition:.2s;white-space:nowrap;}
+.bx-nav-demo:hover{background:#367f31;box-shadow:0 6px 18px rgba(63,154,57,.34);}
+@media (max-width:480px){.bx-nav-demo,.bx-nav-cta{padding:8px 14px;font-size:13px;}}
 .bx-main{flex:1;display:flex;align-items:flex-start;justify-content:center;gap:54px;width:100%;max-width:1180px;margin:0 auto;padding:0 40px 20px;}
 
 /* Hero entrance order: the PHONE lands first, then the words arrive on top of it.
