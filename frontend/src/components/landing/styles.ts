@@ -37,7 +37,8 @@ export const CSS = `
 .bx-logo-text{display:flex;flex-direction:column;line-height:1.05;}
 .bx-logo-text strong{font-family:'Rubik';font-weight:800;font-size:19px;color:#1b3a28;}
 .bx-logo-text small{font-size:11.5px;color:#7c8a7f;}
-.bx-nav-actions{display:flex;align-items:center;gap:10px;}
+.bx-nav-actions{display:flex;flex-direction:column;align-items:stretch;gap:8px;}
+.bx-nav-actions a{text-align:center;}
 .bx-nav-cta{font-size:14px;font-weight:700;color:#2c5a3c;text-decoration:none;padding:9px 18px;border:1.5px solid #d3cdbd;border-radius:999px;background:transparent;transition:.2s;white-space:nowrap;}
 .bx-nav-cta:hover{border-color:#bcd9b8;color:#2f7a44;background:rgba(63,154,57,.06);}
 /* The demo is the primary call on the landing page, so it gets the filled green;
