@@ -66,7 +66,13 @@ from app.services import conversation_state as cs
 from app.services import file_storage
 from app.services import leads as leads_service
 
-BID = "fab99cce-f844-4fd4-8f95-c5ef2f6eda10"
+# The demo tenant's id differs per environment — each database marks its OWN
+# demo row, which is the whole point of `demo_slug` (migration 0030). Hardcoding
+# the local uuid meant this script silently targeted a nonexistent tenant on the
+# server. Resolve it the same way /auth/demo does, and fail loudly if it is
+# missing rather than seeding into the void.
+DEMO_SLUG = "chocolate-kingdom-demo"
+BID = os.environ.get("CK_BUSINESS_ID", "")
 
 # Every conversation id this script mints starts with this, so `cache_chat_ref`
 # carries a marker narrower than the tenant itself (see the cleanup note above).

@@ -1,16 +1,31 @@
-# Auto-deploy: every push to main SSHes into the production server and runs
-# ~/deploy.sh (git pull + docker compose up --build + prune).
+# Auto-deploy: every push to main SSHes into the production server and runs the
+# deploy script (git pull + docker compose up --build + prune).
 #
-# Requires three repository secrets (Settings → Secrets → Actions):
-#   DEPLOY_HOST     — the server's public IP
-#   DEPLOY_USER     — the SSH user (root)
-#   DEPLOY_SSH_KEY  — the PRIVATE key whose public half is in the server's
-#                     ~/.ssh/authorized_keys (a dedicated deploy key, nothing else)
+# Requires three repository secrets (Settings → Secrets and variables → Actions):
+#   DEPLOY_HOST     — botik-dev.duckdns.org (or the static IP)
+#   DEPLOY_USER     — ubuntu
+#   DEPLOY_SSH_KEY  — the PRIVATE half of a DEDICATED deploy key, the WHOLE file
+#                     including the "-----BEGIN ...-----" and "-----END ...-----"
+#                     lines and the trailing newline. Pasting only the middle is
+#                     the usual cause of "ssh.ParsePrivateKey: ssh: no key found".
+#
+# Two things this file got wrong until 2026-07-22, either of which would have
+# kept it red even once the secret was set:
+#
+#   * DEPLOY_USER was documented as `root`. AWS disables direct root login on
+#     this image — it answers "Please login as the user ubuntu" and drops the
+#     connection. The user is `ubuntu`.
+#   * The script ran `~/deploy.sh`. As `ubuntu` that path does not exist: the
+#     script lives at /root/deploy.sh inside a 0700 directory, so it needs an
+#     absolute path and sudo.
 name: Deploy to production
 
 on:
   push:
     branches: [main]
+  # Lets a failed deploy be re-run from the Actions tab without pushing an empty
+  # commit — most deploy failures are environmental, not code.
+  workflow_dispatch:
 
 # Never run two deploys at once; a new push waits for the current one to finish.
 concurrency:
@@ -28,4 +43,8 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           command_timeout: 20m
-          script: ~/deploy.sh
+          # `set -e` so a failed pull or build fails the JOB loudly, instead of
+          # reporting a green deploy that never actually happened.
+          script: |
+            set -e
+            sudo bash /root/deploy.sh
