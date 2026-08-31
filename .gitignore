@@ -36,3 +36,6 @@ Thumbs.db
 # --- Claude working files (local tooling — not part of the shipped app) ---
 .claude/
 CLAUDE.md
+
+# --- Internal docs (kept local, not published) ---
+docs/
